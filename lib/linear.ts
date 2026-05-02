@@ -2,14 +2,14 @@ import type { LinearIssue } from '@/types';
 
 const API = 'https://api.linear.app/graphql';
 
-async function gql(query: string): Promise<Record<string, unknown>> {
+async function gql(query: string, variables: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
   const res = await fetch(API, {
     method: 'POST',
     headers: {
       Authorization: process.env.LINEAR_API_KEY!,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, variables }),
     next: { revalidate: 60 },
   });
   const json = await res.json();
@@ -19,9 +19,9 @@ async function gql(query: string): Promise<Record<string, unknown>> {
 
 export async function getIssuesForUser(linearUserId: string): Promise<LinearIssue[]> {
   const data = await gql(`
-    query {
+    query GetUserIssues($userId: ID!) {
       issues(filter: {
-        assignee: { id: { eq: "${linearUserId}" } }
+        assignee: { id: { eq: $userId } }
         state: { type: { nin: ["completed", "cancelled"] } }
       }, orderBy: priority) {
         nodes { id identifier title priority
@@ -30,7 +30,7 @@ export async function getIssuesForUser(linearUserId: string): Promise<LinearIssu
         }
       }
     }
-  `);
+  `, { userId: linearUserId });
   return (data.issues as { nodes: LinearIssue[] }).nodes;
 }
 
@@ -50,10 +50,10 @@ export async function getAllActiveIssues(): Promise<LinearIssue[]> {
 
 export async function setIssueStatus(issueId: string, stateId: string): Promise<void> {
   await gql(`
-    mutation {
-      issueUpdate(id: "${issueId}", input: { stateId: "${stateId}" }) { success }
+    mutation UpdateIssueStatus($id: String!, $stateId: String!) {
+      issueUpdate(id: $id, input: { stateId: $stateId }) { success }
     }
-  `);
+  `, { id: issueId, stateId });
 }
 
 export async function createIssue(
@@ -61,22 +61,23 @@ export async function createIssue(
   title: string,
   assigneeId?: string
 ): Promise<LinearIssue> {
-  const assigneePart = assigneeId ? `assigneeId: "${assigneeId}"` : '';
   const data = await gql(`
-    mutation {
+    mutation CreateIssue($teamId: String!, $title: String!, $assigneeId: String) {
       issueCreate(input: {
-        teamId: "${teamId}"
-        title: "${title.replace(/"/g, '\\"')}"
-        ${assigneePart}
+        teamId: $teamId
+        title: $title
+        ${assigneeId ? 'assigneeId: $assigneeId' : ''}
       }) {
         issue { id identifier title priority state { name type } assignee { id name } }
       }
     }
-  `);
+  `, { teamId, title, assigneeId: assigneeId ?? null });
   return (data.issueCreate as { issue: LinearIssue }).issue;
 }
 
 export async function getLinearTeamId(): Promise<string> {
   const data = await gql(`query { teams { nodes { id name } } }`);
-  return (data.teams as { nodes: Array<{ id: string }> }).nodes[0].id;
+  const nodes = (data.teams as { nodes: Array<{ id: string }> }).nodes;
+  if (!nodes[0]) throw new Error('No Linear team found');
+  return nodes[0].id;
 }

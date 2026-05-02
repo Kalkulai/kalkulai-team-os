@@ -11,7 +11,10 @@ export function MeetingList({ meetings }: { meetings: CalendarEvent[] }) {
       {meetings.map((m) => (
         <li key={m.id} className="flex items-center gap-3 text-sm">
           <span className="font-mono text-muted-foreground w-12 shrink-0">
-            {format(parseISO(m.start), 'HH:mm', { locale: de })}
+            {(() => {
+              try { return format(parseISO(m.start), 'HH:mm', { locale: de }); }
+              catch { return '--:--'; }
+            })()}
           </span>
           <span className="flex-1">{m.summary}</span>
           {m.isSalesCall && (

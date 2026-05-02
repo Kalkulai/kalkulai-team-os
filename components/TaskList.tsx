@@ -14,11 +14,19 @@ export function TaskList({ tasks }: { tasks: LinearIssue[] }) {
 
   async function handleCheck(id: string) {
     setDone((prev) => new Set(prev).add(id));
-    await fetch('/api/tasks/complete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ issueId: id }),
-    });
+    try {
+      const res = await fetch('/api/tasks/complete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? ''}`,
+        },
+        body: JSON.stringify({ issueId: id }),
+      });
+      if (!res.ok) throw new Error('Fehler beim Abschließen');
+    } catch {
+      setDone((prev) => { const next = new Set(prev); next.delete(id); return next; });
+    }
   }
 
   if (tasks.length === 0)

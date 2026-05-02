@@ -18,7 +18,10 @@ export function TeamBranchView({ branches, members }: { branches: GitHubBranch[]
             <span className="flex-1 font-mono text-xs truncate">{b.name}</span>
             {b.lastCommitDate && (
               <span className="text-muted-foreground text-xs shrink-0">
-                {formatDistanceToNow(parseISO(b.lastCommitDate), { locale: de, addSuffix: true })}
+                {(() => {
+                  try { return formatDistanceToNow(parseISO(b.lastCommitDate), { locale: de, addSuffix: true }); }
+                  catch { return 'unbekannt'; }
+                })()}
               </span>
             )}
           </li>
