@@ -43,7 +43,7 @@ export default async function DashboardPage() {
           {me.role === 'dev' && briefing.weekTargets.bugs_target > 0 && (
             <KpiBar label="Bugs gefixt" actual={briefing.weekActuals.bugs_fixed} target={briefing.weekTargets.bugs_target} />
           )}
-          {me.role === 'sales' && (
+          {me.role === 'sales' && briefing.weekTargets.calls_target > 0 && (
             <KpiBar label="Calls / Gespräche" actual={briefing.weekActuals.calls_made} target={briefing.weekTargets.calls_target} />
           )}
           {briefing.unprocessedInsights > 0 && (
