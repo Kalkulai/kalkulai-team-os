@@ -8,8 +8,19 @@ import { getAllMembers } from '@/lib/supabase';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 
+export const dynamic = 'force-dynamic';
+
 export default async function DashboardPage() {
   const members = await getAllMembers();
+
+  if (!members.length) {
+    return (
+      <div className="space-y-6">
+        <p className="text-muted-foreground">Keine Teammitglieder konfiguriert. Bitte die Supabase-Tabelle befüllen.</p>
+      </div>
+    );
+  }
+
   const me = members[0];
   const briefing = await buildDailyBriefing(me);
 
