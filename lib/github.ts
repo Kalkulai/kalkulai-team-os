@@ -38,7 +38,11 @@ export async function getActiveBranches(): Promise<GitHubBranch[]> {
             authorLogin: commit.author?.login,
           };
         } catch {
-          return { ...b };
+          return {
+            ...b,
+            lastCommitDate: undefined,
+            authorLogin: undefined,
+          };
         }
       })
   );
