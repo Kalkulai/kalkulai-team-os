@@ -1,4 +1,5 @@
 import type { HubSpotCall } from '@/types';
+import { startOfWeek } from 'date-fns';
 
 async function hsFetch<T>(path: string): Promise<T> {
   const res = await fetch(`https://api.hubapi.com${path}`, {
@@ -10,8 +11,7 @@ async function hsFetch<T>(path: string): Promise<T> {
 }
 
 export async function getCallsThisWeek(hubspotOwnerId: string): Promise<HubSpotCall[]> {
-  const monday = new Date();
-  monday.setDate(monday.getDate() - monday.getDay() + 1);
+  const monday = startOfWeek(new Date(), { weekStartsOn: 1 });
   monday.setHours(0, 0, 0, 0);
 
   const data = await hsFetch<{

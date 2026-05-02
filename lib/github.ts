@@ -1,4 +1,5 @@
 import type { GitHubBranch } from '@/types';
+import { startOfWeek } from 'date-fns';
 
 const REPO = process.env.GITHUB_REPO!;
 const TOKEN = process.env.GITHUB_TOKEN!;
@@ -53,9 +54,7 @@ export async function getActiveBranches(): Promise<GitHubBranch[]> {
 }
 
 export async function getCommitsThisWeek(githubUsername: string): Promise<number> {
-  const since = new Date();
-  since.setDate(since.getDate() - since.getDay() + 1);
-  since.setHours(0, 0, 0, 0);
+  const since = startOfWeek(new Date(), { weekStartsOn: 1 });
 
   const commits = await ghFetch<unknown[]>(
     `/repos/${REPO}/commits?author=${githubUsername}&since=${since.toISOString()}&per_page=100`
