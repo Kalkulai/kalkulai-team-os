@@ -11,6 +11,8 @@ export interface TeamMember {
   github_username: string | null;
   hubspot_owner_id: string | null;
   google_calendar_id: string | null;
+  google_refresh_token: string | null;
+  google_calendar_email: string | null;
   role: UserRole;
 }
 

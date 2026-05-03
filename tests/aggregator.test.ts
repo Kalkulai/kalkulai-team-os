@@ -49,6 +49,8 @@ function makeMember(overrides: Partial<TeamMember> = {}): TeamMember {
     github_username: 'felix-gh',
     hubspot_owner_id: null,
     google_calendar_id: null,
+    google_refresh_token: null,
+    google_calendar_email: null,
     role: 'dev',
     ...overrides,
   };
@@ -87,14 +89,16 @@ describe('buildDailyBriefing', () => {
     expect(getIssuesForUser).not.toHaveBeenCalled();
   });
 
-  it('skips Calendar when google_calendar_id is null (Felix/Paul case)', async () => {
-    await buildDailyBriefing(makeMember({ google_calendar_id: null }));
-    expect(getTodayEvents).not.toHaveBeenCalled();
+  it('always calls Calendar with the member object (token selection happens inside)', async () => {
+    const member = makeMember({ google_calendar_id: null });
+    await buildDailyBriefing(member);
+    expect(getTodayEvents).toHaveBeenCalledWith(member);
   });
 
-  it('calls Calendar with the configured calendar id', async () => {
-    await buildDailyBriefing(makeMember({ google_calendar_id: 'primary' }));
-    expect(getTodayEvents).toHaveBeenCalledWith('primary');
+  it('passes the full member into Calendar when calendar id is set', async () => {
+    const member = makeMember({ google_calendar_id: 'primary' });
+    await buildDailyBriefing(member);
+    expect(getTodayEvents).toHaveBeenCalledWith(member);
   });
 
   it('adds GitHub commits in-memory for dev role only', async () => {

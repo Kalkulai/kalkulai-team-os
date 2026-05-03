@@ -20,7 +20,7 @@ export async function buildDailyBriefing(member: TeamMember): Promise<DailyBrief
 
   const results = await Promise.allSettled([
     member.linear_user_id ? getIssuesForUser(member.linear_user_id) : Promise.resolve([]),
-    member.google_calendar_id ? getTodayEvents(member.google_calendar_id) : Promise.resolve([]),
+    getTodayEvents(member),
     getActiveBranches(),
     getWeekTargets(member.id, weekStart),
     countUnprocessedInsights(),
@@ -45,7 +45,7 @@ export async function buildDailyBriefing(member: TeamMember): Promise<DailyBrief
   const bugsFixed = results[7].status === 'fulfilled' ? results[7].value : 0;
 
   // Sync: Sales-Calls aus Kalender in kpi_daily persistieren
-  if (member.role === 'sales' && member.google_calendar_id) {
+  if (member.role === 'sales' && meetings.length > 0) {
     const salesCallsToday = countSalesCallsToday(meetings);
     if (salesCallsToday > 0) {
       const { error } = await supabaseAdmin.from('kpi_daily').upsert(

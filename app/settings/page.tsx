@@ -160,6 +160,37 @@ export default function SettingsPage() {
           </Button>
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Google Calendar</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {selectedMember ? (
+            <>
+              <p className="text-sm text-muted-foreground">
+                {selectedMember.google_calendar_email
+                  ? `Verbunden mit ${selectedMember.google_calendar_email}`
+                  : 'Noch nicht verbunden — Briefing nutzt Fallback-Kalender.'}
+              </p>
+              <a
+                href={`/api/oauth/google/start?userId=${selectedMember.id}`}
+                className="inline-block"
+              >
+                <Button variant="secondary" type="button">
+                  {selectedMember.google_calendar_email
+                    ? 'Anderen Account verbinden'
+                    : 'Mit Google Calendar verbinden'}
+                </Button>
+              </a>
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Person auswählen, um Calendar zu verbinden.
+            </p>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

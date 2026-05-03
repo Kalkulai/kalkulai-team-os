@@ -12,6 +12,8 @@ function makeMember(overrides: Partial<TeamMember> = {}): TeamMember {
     github_username: null,
     hubspot_owner_id: null,
     google_calendar_id: null,
+    google_refresh_token: null,
+    google_calendar_email: null,
     role: 'dev',
     ...overrides,
   };
