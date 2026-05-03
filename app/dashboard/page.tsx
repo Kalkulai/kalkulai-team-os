@@ -4,6 +4,7 @@ import { TaskList } from '@/components/TaskList';
 import { MeetingList } from '@/components/MeetingList';
 import { KpiBar } from '@/components/KpiBar';
 import { MemberSwitcher } from '@/components/MemberSwitcher';
+import { SalesLogger } from '@/components/SalesLogger';
 import { buildDailyBriefing } from '@/lib/aggregator';
 import { getAllMembers } from '@/lib/supabase';
 import { format } from 'date-fns';
@@ -64,6 +65,15 @@ export default async function DashboardPage({
           )}
           {me.role === 'sales' && briefing.weekTargets.calls_target > 0 && (
             <KpiBar label="Calls / Gespräche" actual={briefing.weekActuals.calls_made} target={briefing.weekTargets.calls_target} />
+          )}
+          {me.role === 'sales' && (
+            <>
+              <Separator />
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Call loggen</p>
+                <SalesLogger userId={me.id} />
+              </div>
+            </>
           )}
           {briefing.unprocessedInsights > 0 && (
             <>

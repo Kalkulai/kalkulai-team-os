@@ -22,6 +22,7 @@ vi.mock('@/lib/notion', () => ({
 vi.mock('@/lib/supabase', () => ({
   getWeekTargets: vi.fn(),
   getWeekActuals: vi.fn(),
+  getSalesCallsThisWeek: vi.fn(),
   currentWeekStart: vi.fn(() => '2026-04-27'),
   supabaseAdmin: {
     from: vi.fn(() => ({
@@ -36,7 +37,7 @@ import { getTodayEvents, countSalesCallsToday } from '@/lib/calendar';
 import { getActiveBranches, getCommitsThisWeek } from '@/lib/github';
 import { getCallsThisWeek } from '@/lib/hubspot';
 import { countUnprocessedInsights } from '@/lib/notion';
-import { getWeekTargets, getWeekActuals, supabaseAdmin } from '@/lib/supabase';
+import { getWeekTargets, getWeekActuals, supabaseAdmin, getSalesCallsThisWeek } from '@/lib/supabase';
 
 function makeMember(overrides: Partial<TeamMember> = {}): TeamMember {
   return {
@@ -66,6 +67,7 @@ describe('buildDailyBriefing', () => {
     vi.mocked(getCommitsThisWeek).mockResolvedValue(0);
     vi.mocked(getBugsFixedThisWeek).mockResolvedValue(0);
     vi.mocked(getCallsThisWeek).mockResolvedValue([]);
+    vi.mocked(getSalesCallsThisWeek).mockResolvedValue(0);
     vi.mocked(countUnprocessedInsights).mockResolvedValue(0);
     vi.mocked(getWeekTargets).mockResolvedValue(baseTargets);
     vi.mocked(getWeekActuals).mockResolvedValue(baseActuals);
@@ -105,15 +107,16 @@ describe('buildDailyBriefing', () => {
     expect(sales.weekActuals.commits_count).toBe(0);
   });
 
-  it('adds HubSpot calls in-memory for sales role only', async () => {
-    vi.mocked(getCallsThisWeek).mockResolvedValue([
-      { id: 'c1', timestamp: '', duration: 0, ownerId: 'hs-1' },
-      { id: 'c2', timestamp: '', duration: 0, ownerId: 'hs-1' },
-    ]);
-    const sales = await buildDailyBriefing(
-      makeMember({ role: 'sales', hubspot_owner_id: 'hs-1' })
-    );
+  it('adds sales_logs cold-calls in-memory for sales role only', async () => {
+    vi.mocked(getSalesCallsThisWeek).mockResolvedValue(2);
+    const sales = await buildDailyBriefing(makeMember({ role: 'sales' }));
     expect(sales.weekActuals.calls_made).toBe(0 + 2);
+    expect(getSalesCallsThisWeek).toHaveBeenCalledWith('mem-1');
+  });
+
+  it('does not call getSalesCallsThisWeek for dev members', async () => {
+    await buildDailyBriefing(makeMember({ role: 'dev' }));
+    expect(getSalesCallsThisWeek).not.toHaveBeenCalled();
   });
 
   it('finds the active branch by github_username', async () => {

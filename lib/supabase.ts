@@ -59,3 +59,15 @@ export async function upsertKpiTargets(
 export function currentWeekStart(): string {
   return format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 }
+
+export async function getSalesCallsThisWeek(userId: string): Promise<number> {
+  const since = startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString();
+  const { count, error } = await supabaseAdmin
+    .from('sales_logs')
+    .select('*', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('type', 'cold-call')
+    .gte('logged_at', since);
+  if (error) throw error;
+  return count ?? 0;
+}
