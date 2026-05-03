@@ -3,6 +3,7 @@ import { Separator } from '@/components/ui/separator';
 import { TaskList } from '@/components/TaskList';
 import { MeetingList } from '@/components/MeetingList';
 import { KpiBar } from '@/components/KpiBar';
+import { MemberSwitcher } from '@/components/MemberSwitcher';
 import { buildDailyBriefing } from '@/lib/aggregator';
 import { getAllMembers } from '@/lib/supabase';
 import { format } from 'date-fns';
@@ -10,7 +11,11 @@ import { de } from 'date-fns/locale';
 
 export const dynamic = 'force-dynamic';
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: { member?: string };
+}) {
   const members = await getAllMembers();
 
   if (!members.length) {
@@ -21,25 +26,28 @@ export default async function DashboardPage() {
     );
   }
 
-  const me = members[0];
+  const me = members.find((m) => m.id === searchParams.member) ?? members[0];
   const briefing = await buildDailyBriefing(me);
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Guten Morgen, {me.name}</h1>
-        <p className="text-muted-foreground">{format(new Date(), 'EEEE, d. MMMM', { locale: de })}</p>
-        {briefing.activeBranch && (
-          <p className="text-xs text-muted-foreground mt-1">
-            Aktiver Branch: <code className="bg-muted px-1 rounded">{briefing.activeBranch}</code>
-          </p>
-        )}
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Guten Morgen, {me.name}</h1>
+          <p className="text-muted-foreground">{format(new Date(), 'EEEE, d. MMMM', { locale: de })}</p>
+          {briefing.activeBranch && (
+            <p className="text-xs text-muted-foreground mt-1">
+              Aktiver Branch: <code className="bg-muted px-1 rounded">{briefing.activeBranch}</code>
+            </p>
+          )}
+        </div>
+        <MemberSwitcher members={members} currentId={me.id} />
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>Deine Tasks</CardTitle></CardHeader>
-          <CardContent><TaskList tasks={briefing.tasks} /></CardContent>
+          <CardContent><TaskList tasks={briefing.tasks} userId={me.id} /></CardContent>
         </Card>
         <Card>
           <CardHeader><CardTitle>Meetings heute</CardTitle></CardHeader>

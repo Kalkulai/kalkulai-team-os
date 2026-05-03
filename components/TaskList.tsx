@@ -9,7 +9,7 @@ const PRIORITY_VARIANT: Record<number, 'destructive' | 'default' | 'secondary' |
   1: 'destructive', 2: 'default', 3: 'secondary', 4: 'outline',
 };
 
-export function TaskList({ tasks }: { tasks: LinearIssue[] }) {
+export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: string }) {
   const [done, setDone] = useState<Set<string>>(new Set());
 
   async function handleCheck(id: string) {
@@ -21,7 +21,7 @@ export function TaskList({ tasks }: { tasks: LinearIssue[] }) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? ''}`,
         },
-        body: JSON.stringify({ issueId: id }),
+        body: JSON.stringify({ issueId: id, userId }),
       });
       if (!res.ok) throw new Error('Fehler beim Abschließen');
     } catch {
