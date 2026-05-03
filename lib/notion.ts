@@ -20,20 +20,20 @@ export async function getUnprocessedInsights(): Promise<NotionInsight[]> {
       id: string;
       created_time: string;
       properties: {
-        Name?: { title?: Array<{ plain_text: string }> };
-        Processed?: { checkbox: boolean };
+        Conversation?: { title?: Array<{ plain_text: string }> };
+        Summary?: { rich_text: Array<{ plain_text: string }> };
       };
     }>;
   }>(`/databases/${process.env.NOTION_TRANSCRIPTS_DB_ID!}/query`, {
-    filter: { property: 'Processed', checkbox: { equals: false } },
+    filter: { property: 'Summary', rich_text: { is_empty: true } },
     page_size: 50,
   });
 
   return (data.results ?? []).map((page) => ({
     id: page.id,
-    title: page.properties.Name?.title?.[0]?.plain_text ?? '(kein Titel)',
+    title: page.properties.Conversation?.title?.[0]?.plain_text ?? '(kein Titel)',
     createdAt: page.created_time,
-    processed: page.properties.Processed?.checkbox ?? false,
+    processed: false,
   }));
 }
 
