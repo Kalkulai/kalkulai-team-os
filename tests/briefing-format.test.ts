@@ -42,7 +42,7 @@ function makeBriefing(overrides: Partial<DailyBriefing> = {}): DailyBriefing {
     activeBranch: null,
     weekTargets: { tasks_target: 5, calls_target: 0, bugs_target: 0 },
     weekActuals: { tasks_completed: 0, calls_made: 0, bugs_fixed: 0, commits_count: 0 },
-    unprocessedInsights: 0,
+    unprocessedInsights: [],
     ...overrides,
   };
 }
@@ -58,13 +58,12 @@ describe('formatBriefingMarkdown', () => {
     expect(out).not.toContain('*Deine Tasks*');
   });
 
-  it('renders priority emojis only for urgent and high', () => {
+  it('renders priority emojis only for urgent and high in top 3', () => {
     const briefing = makeBriefing({
       tasks: [
         makeIssue('KAL-1', 'urgent task', 1),
         makeIssue('KAL-2', 'high task', 2),
         makeIssue('KAL-3', 'medium task', 3),
-        makeIssue('KAL-4', 'no priority', 0),
       ],
     });
     const out = formatBriefingMarkdown(briefing);
@@ -72,16 +71,45 @@ describe('formatBriefingMarkdown', () => {
     expect(out).toContain('⚡ KAL-2 — high task');
     expect(out).toContain('• KAL-3 — medium task');
     expect(out).not.toContain('🔥 KAL-3');
-    expect(out).toContain('• KAL-4 — no priority');
   });
 
-  it('truncates the task list at 5 items and shows the count of the remainder', () => {
-    const tasks = Array.from({ length: 8 }, (_, i) => makeIssue(`KAL-${i}`, `task ${i}`));
+  it('treats priority 0 (no priority) as lowest rank', () => {
+    const briefing = makeBriefing({
+      tasks: [
+        makeIssue('KAL-none', 'no priority', 0),
+        makeIssue('KAL-low', 'low task', 4),
+        makeIssue('KAL-med', 'medium task', 3),
+      ],
+    });
+    const out = formatBriefingMarkdown(briefing);
+    const noneIdx = out.indexOf('KAL-none');
+    const medIdx = out.indexOf('KAL-med');
+    expect(medIdx).toBeLessThan(noneIdx);
+  });
+
+  it('truncates the task list at 3 items and shows remainder count', () => {
+    const tasks = Array.from({ length: 8 }, (_, i) => makeIssue(`KAL-${i}`, `task ${i}`, 3));
     const out = formatBriefingMarkdown(makeBriefing({ tasks }));
+    expect(out).toContain('*Top 3 heute*');
     expect(out).toContain('KAL-0');
-    expect(out).toContain('KAL-4');
-    expect(out).not.toContain('KAL-5');
-    expect(out).toContain('…und 3 weitere');
+    expect(out).toContain('KAL-2');
+    expect(out).not.toContain('KAL-3');
+    expect(out).toContain('…und 5 weitere offen');
+  });
+
+  it('puts urgent and high priority tasks before lower ones', () => {
+    const tasks = [
+      makeIssue('KAL-low', 'low task', 4),
+      makeIssue('KAL-medium', 'medium task', 3),
+      makeIssue('KAL-urgent', 'urgent task', 1),
+      makeIssue('KAL-high', 'high task', 2),
+    ];
+    const out = formatBriefingMarkdown(makeBriefing({ tasks }));
+    const urgentIdx = out.indexOf('KAL-urgent');
+    const highIdx = out.indexOf('KAL-high');
+    const mediumIdx = out.indexOf('KAL-medium');
+    expect(urgentIdx).toBeLessThan(highIdx);
+    expect(highIdx).toBeLessThan(mediumIdx);
   });
 
   it('formats meeting times in HH:mm and marks Sales calls', () => {
@@ -142,12 +170,21 @@ describe('formatBriefingMarkdown', () => {
     expect(out).not.toContain('Bugs:');
   });
 
-  it('appends notion insights footer only when count > 0', () => {
-    const empty = formatBriefingMarkdown(makeBriefing({ unprocessedInsights: 0 }));
-    expect(empty).not.toContain('Notion-Insights');
+  it('renders notion insight headlines when array has entries', () => {
+    const empty = formatBriefingMarkdown(makeBriefing({ unprocessedInsights: [] }));
+    expect(empty).not.toContain('Customer-Insights');
 
-    const some = formatBriefingMarkdown(makeBriefing({ unprocessedInsights: 3 }));
-    expect(some).toContain('💡 3 neue Notion-Insights');
+    const some = formatBriefingMarkdown(
+      makeBriefing({
+        unprocessedInsights: [
+          { id: 'n1', title: 'Däumer Final Pilot', createdAt: '2026-05-02T10:00:00Z', processed: false },
+          { id: 'n2', title: 'Kraft Pilotphase', createdAt: '2026-05-01T09:00:00Z', processed: false },
+        ],
+      })
+    );
+    expect(some).toContain('*Neue Customer-Insights*');
+    expect(some).toContain('💡 Däumer Final Pilot');
+    expect(some).toContain('💡 Kraft Pilotphase');
   });
 
   it('includes the active branch when present', () => {

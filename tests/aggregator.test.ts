@@ -4,6 +4,7 @@ import type { TeamMember, CalendarEvent, GitHubBranch } from '@/types';
 vi.mock('@/lib/linear', () => ({
   getIssuesForUser: vi.fn(),
   getBugsFixedThisWeek: vi.fn(),
+  getTasksCompletedThisWeek: vi.fn(),
 }));
 vi.mock('@/lib/calendar', () => ({
   getTodayEvents: vi.fn(),
@@ -17,7 +18,7 @@ vi.mock('@/lib/hubspot', () => ({
   getCallsThisWeek: vi.fn(),
 }));
 vi.mock('@/lib/notion', () => ({
-  countUnprocessedInsights: vi.fn(),
+  getTopUnprocessedInsights: vi.fn(),
 }));
 vi.mock('@/lib/supabase', () => ({
   getWeekTargets: vi.fn(),
@@ -32,11 +33,11 @@ vi.mock('@/lib/supabase', () => ({
 }));
 
 import { buildDailyBriefing } from '@/lib/aggregator';
-import { getIssuesForUser, getBugsFixedThisWeek } from '@/lib/linear';
+import { getIssuesForUser, getBugsFixedThisWeek, getTasksCompletedThisWeek } from '@/lib/linear';
 import { getTodayEvents, countSalesCallsToday } from '@/lib/calendar';
 import { getActiveBranches, getCommitsThisWeek } from '@/lib/github';
 import { getCallsThisWeek } from '@/lib/hubspot';
-import { countUnprocessedInsights } from '@/lib/notion';
+import { getTopUnprocessedInsights } from '@/lib/notion';
 import { getWeekTargets, getWeekActuals, supabaseAdmin, getSalesCallsThisWeek } from '@/lib/supabase';
 
 function makeMember(overrides: Partial<TeamMember> = {}): TeamMember {
@@ -68,9 +69,10 @@ describe('buildDailyBriefing', () => {
     vi.mocked(getActiveBranches).mockResolvedValue([]);
     vi.mocked(getCommitsThisWeek).mockResolvedValue(0);
     vi.mocked(getBugsFixedThisWeek).mockResolvedValue(0);
+    vi.mocked(getTasksCompletedThisWeek).mockResolvedValue(0);
     vi.mocked(getCallsThisWeek).mockResolvedValue([]);
     vi.mocked(getSalesCallsThisWeek).mockResolvedValue(0);
-    vi.mocked(countUnprocessedInsights).mockResolvedValue(0);
+    vi.mocked(getTopUnprocessedInsights).mockResolvedValue([]);
     vi.mocked(getWeekTargets).mockResolvedValue(baseTargets);
     vi.mocked(getWeekActuals).mockResolvedValue(baseActuals);
   });
@@ -80,7 +82,8 @@ describe('buildDailyBriefing', () => {
     expect(result.member.name).toBe('Felix');
     expect(result.tasks).toEqual([]);
     expect(result.weekTargets).toEqual(baseTargets);
-    expect(result.weekActuals.tasks_completed).toBe(1);
+    // tasks_completed comes from Linear (mocked to 0 in beforeEach), no longer from kpi_daily
+    expect(result.weekActuals.tasks_completed).toBe(0);
     expect(result.activeBranch).toBeNull();
   });
 
@@ -184,10 +187,27 @@ describe('buildDailyBriefing', () => {
     expect(upsert).not.toHaveBeenCalled();
   });
 
-  it('forwards unprocessed Notion-Insights count', async () => {
-    vi.mocked(countUnprocessedInsights).mockResolvedValue(3);
+  it('forwards top unprocessed Notion insights as array', async () => {
+    vi.mocked(getTopUnprocessedInsights).mockResolvedValue([
+      { id: 'n1', title: 'Insight A', createdAt: '2026-05-01T00:00:00Z', processed: false },
+      { id: 'n2', title: 'Insight B', createdAt: '2026-04-30T00:00:00Z', processed: false },
+    ]);
     const result = await buildDailyBriefing(makeMember());
-    expect(result.unprocessedInsights).toBe(3);
+    expect(result.unprocessedInsights).toHaveLength(2);
+    expect(result.unprocessedInsights[0].title).toBe('Insight A');
+  });
+
+  it('uses Linear completedAt as source of truth for tasks_completed', async () => {
+    vi.mocked(getTasksCompletedThisWeek).mockResolvedValue(7);
+    const result = await buildDailyBriefing(makeMember({ linear_user_id: 'lin-1' }));
+    expect(result.weekActuals.tasks_completed).toBe(7);
+    expect(getTasksCompletedThisWeek).toHaveBeenCalledWith('lin-1');
+  });
+
+  it('falls back to 0 tasks_completed when no linear_user_id', async () => {
+    const result = await buildDailyBriefing(makeMember({ linear_user_id: null }));
+    expect(result.weekActuals.tasks_completed).toBe(0);
+    expect(getTasksCompletedThisWeek).not.toHaveBeenCalled();
   });
 
   it('adds bugs_fixed in-memory for dev role with linear_user_id', async () => {

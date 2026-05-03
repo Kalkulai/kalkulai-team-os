@@ -75,12 +75,17 @@ export default async function DashboardPage({
               </div>
             </>
           )}
-          {briefing.unprocessedInsights > 0 && (
+          {briefing.unprocessedInsights.length > 0 && (
             <>
               <Separator />
-              <p className="text-sm text-muted-foreground">
-                {briefing.unprocessedInsights} neue Interview-Insights in Notion warten
-              </p>
+              <p className="text-sm font-medium">Neue Customer-Insights</p>
+              <ul className="space-y-1">
+                {briefing.unprocessedInsights.map((ins) => (
+                  <li key={ins.id} className="text-sm text-muted-foreground">
+                    💡 {ins.title}
+                  </li>
+                ))}
+              </ul>
             </>
           )}
         </CardContent>

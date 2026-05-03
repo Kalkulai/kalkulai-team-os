@@ -13,7 +13,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
-import { getBugsFixedThisWeek } from '@/lib/linear';
+import { getBugsFixedThisWeek, getTasksCompletedThisWeek } from '@/lib/linear';
 
 function gqlOk(nodeCount: number) {
   const nodes = Array.from({ length: nodeCount }, (_, i) => ({ id: `bug-${i}` }));
@@ -55,5 +55,26 @@ describe('getBugsFixedThisWeek', () => {
       json: async () => ({ errors: [{ message: 'Linear down' }] }),
     } as Response);
     await expect(getBugsFixedThisWeek('user-1')).rejects.toThrow(/Linear down/);
+  });
+});
+
+describe('getTasksCompletedThisWeek', () => {
+  it('returns the count of tasks completed this week', async () => {
+    fetchMock.mockResolvedValueOnce(gqlOk(7));
+    expect(await getTasksCompletedThisWeek('user-1')).toBe(7);
+  });
+
+  it('returns 0 when no tasks were completed', async () => {
+    fetchMock.mockResolvedValueOnce(gqlOk(0));
+    expect(await getTasksCompletedThisWeek('user-1')).toBe(0);
+  });
+
+  it('passes user id and an ISO date for monday into the query', async () => {
+    fetchMock.mockResolvedValueOnce(gqlOk(1));
+    await getTasksCompletedThisWeek('user-99');
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+    expect(body.variables.userId).toBe('user-99');
+    expect(body.variables.since).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(body.query).toContain('completed');
   });
 });

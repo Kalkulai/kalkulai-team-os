@@ -74,5 +74,5 @@ export interface DailyBriefing {
   activeBranch: string | null;
   weekTargets: KpiTargets;
   weekActuals: KpiDaily;
-  unprocessedInsights: number;
+  unprocessedInsights: NotionInsight[];
 }

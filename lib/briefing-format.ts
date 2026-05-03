@@ -1,4 +1,4 @@
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { de } from 'date-fns/locale';
 import type { DailyBriefing } from '@/types';
 
@@ -15,12 +15,22 @@ export function formatBriefingMarkdown(b: DailyBriefing): string {
   }
 
   if (b.tasks.length > 0) {
-    lines.push('*Deine Tasks*');
-    for (const t of b.tasks.slice(0, 5)) {
+    // Priority 1 (urgent) + 2 (high) first, then rest by numeric priority. Top 3 in briefing.
+    // Linear: 0 = no-priority (treat as lowest), 1 = urgent, 2 = high, 3 = medium, 4 = low.
+    const rank = (p: number) => (p === 0 ? 99 : p);
+    const sorted = [...b.tasks].sort((a, c) => {
+      const aHigh = a.priority >= 1 && a.priority <= 2 ? 0 : 1;
+      const cHigh = c.priority >= 1 && c.priority <= 2 ? 0 : 1;
+      if (aHigh !== cHigh) return aHigh - cHigh;
+      return rank(a.priority) - rank(c.priority);
+    });
+    const top = sorted.slice(0, 3);
+    lines.push('*Top 3 heute*');
+    for (const t of top) {
       const prio = t.priority === 1 ? '🔥 ' : t.priority === 2 ? '⚡ ' : '';
       lines.push(`• ${prio}${t.identifier} — ${t.title}`);
     }
-    if (b.tasks.length > 5) lines.push(`  …und ${b.tasks.length - 5} weitere`);
+    if (b.tasks.length > 3) lines.push(`  …und ${b.tasks.length - 3} weitere offen`);
     lines.push('');
   }
 
@@ -46,9 +56,18 @@ export function formatBriefingMarkdown(b: DailyBriefing): string {
     lines.push(`Bugs: ${b.weekActuals.bugs_fixed}/${b.weekTargets.bugs_target}`);
   }
 
-  if (b.unprocessedInsights > 0) {
+  if (b.unprocessedInsights.length > 0) {
     lines.push('');
-    lines.push(`💡 ${b.unprocessedInsights} neue Notion-Insights`);
+    lines.push('*Neue Customer-Insights*');
+    for (const ins of b.unprocessedInsights) {
+      let when = '';
+      try {
+        when = ` — ${formatDistanceToNow(parseISO(ins.createdAt), { locale: de, addSuffix: true })}`;
+      } catch {
+        // ignore
+      }
+      lines.push(`💡 ${ins.title}${when}`);
+    }
   }
 
   return lines.join('\n');

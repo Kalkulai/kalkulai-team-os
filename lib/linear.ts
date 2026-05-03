@@ -83,6 +83,21 @@ export async function getLinearTeamId(): Promise<string> {
   return nodes[0].id;
 }
 
+export async function getTasksCompletedThisWeek(linearUserId: string): Promise<number> {
+  const since = startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString();
+  const data = await gql(
+    `query CountCompletedTasks($userId: ID!, $since: DateTimeOrDuration!) {
+      issues(filter: {
+        assignee: { id: { eq: $userId } }
+        state: { type: { eq: "completed" } }
+        completedAt: { gte: $since }
+      }) { nodes { id } }
+    }`,
+    { userId: linearUserId, since }
+  );
+  return (data.issues as { nodes: unknown[] }).nodes.length;
+}
+
 export async function getBugsFixedThisWeek(linearUserId: string): Promise<number> {
   const since = startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString();
   const data = await gql(

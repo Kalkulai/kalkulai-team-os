@@ -41,3 +41,10 @@ export async function countUnprocessedInsights(): Promise<number> {
   const insights = await getUnprocessedInsights();
   return insights.length;
 }
+
+export async function getTopUnprocessedInsights(limit = 2): Promise<NotionInsight[]> {
+  const insights = await getUnprocessedInsights();
+  return insights
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, limit);
+}
