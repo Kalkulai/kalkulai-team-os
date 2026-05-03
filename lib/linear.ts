@@ -1,4 +1,5 @@
 import type { LinearIssue } from '@/types';
+import { startOfWeek } from 'date-fns';
 
 const API = 'https://api.linear.app/graphql';
 
@@ -80,4 +81,20 @@ export async function getLinearTeamId(): Promise<string> {
   const nodes = (data.teams as { nodes: Array<{ id: string }> }).nodes;
   if (!nodes[0]) throw new Error('No Linear team found');
   return nodes[0].id;
+}
+
+export async function getBugsFixedThisWeek(linearUserId: string): Promise<number> {
+  const since = startOfWeek(new Date(), { weekStartsOn: 1 }).toISOString();
+  const data = await gql(
+    `query CountFixedBugs($userId: ID!, $since: DateTimeOrDuration!) {
+      issues(filter: {
+        assignee: { id: { eq: $userId } }
+        state: { type: { eq: "completed" } }
+        labels: { name: { eq: "Bug" } }
+        completedAt: { gte: $since }
+      }) { nodes { id } }
+    }`,
+    { userId: linearUserId, since }
+  );
+  return (data.issues as { nodes: unknown[] }).nodes.length;
 }

@@ -3,6 +3,7 @@ import type { TeamMember, CalendarEvent, GitHubBranch } from '@/types';
 
 vi.mock('@/lib/linear', () => ({
   getIssuesForUser: vi.fn(),
+  getBugsFixedThisWeek: vi.fn(),
 }));
 vi.mock('@/lib/calendar', () => ({
   getTodayEvents: vi.fn(),
@@ -30,7 +31,7 @@ vi.mock('@/lib/supabase', () => ({
 }));
 
 import { buildDailyBriefing } from '@/lib/aggregator';
-import { getIssuesForUser } from '@/lib/linear';
+import { getIssuesForUser, getBugsFixedThisWeek } from '@/lib/linear';
 import { getTodayEvents, countSalesCallsToday } from '@/lib/calendar';
 import { getActiveBranches, getCommitsThisWeek } from '@/lib/github';
 import { getCallsThisWeek } from '@/lib/hubspot';
@@ -63,6 +64,7 @@ describe('buildDailyBriefing', () => {
     vi.mocked(countSalesCallsToday).mockReturnValue(0);
     vi.mocked(getActiveBranches).mockResolvedValue([]);
     vi.mocked(getCommitsThisWeek).mockResolvedValue(0);
+    vi.mocked(getBugsFixedThisWeek).mockResolvedValue(0);
     vi.mocked(getCallsThisWeek).mockResolvedValue([]);
     vi.mocked(countUnprocessedInsights).mockResolvedValue(0);
     vi.mocked(getWeekTargets).mockResolvedValue(baseTargets);
@@ -179,5 +181,28 @@ describe('buildDailyBriefing', () => {
     vi.mocked(countUnprocessedInsights).mockResolvedValue(3);
     const result = await buildDailyBriefing(makeMember());
     expect(result.unprocessedInsights).toBe(3);
+  });
+
+  it('adds bugs_fixed in-memory for dev role with linear_user_id', async () => {
+    vi.mocked(getBugsFixedThisWeek).mockResolvedValue(4);
+    const dev = await buildDailyBriefing(makeMember({ role: 'dev', linear_user_id: 'lin-1' }));
+    expect(dev.weekActuals.bugs_fixed).toBe(4);
+    expect(getBugsFixedThisWeek).toHaveBeenCalledWith('lin-1');
+  });
+
+  it('does not call getBugsFixedThisWeek for sales members', async () => {
+    await buildDailyBriefing(makeMember({ role: 'sales', linear_user_id: 'lin-1' }));
+    expect(getBugsFixedThisWeek).not.toHaveBeenCalled();
+  });
+
+  it('skips bugs_fixed when linear_user_id is null', async () => {
+    await buildDailyBriefing(makeMember({ role: 'dev', linear_user_id: null }));
+    expect(getBugsFixedThisWeek).not.toHaveBeenCalled();
+  });
+
+  it('keeps bugs_fixed at 0 when the Linear bug query fails', async () => {
+    vi.mocked(getBugsFixedThisWeek).mockRejectedValue(new Error('linear down'));
+    const result = await buildDailyBriefing(makeMember({ role: 'dev', linear_user_id: 'lin-1' }));
+    expect(result.weekActuals.bugs_fixed).toBe(0);
   });
 });

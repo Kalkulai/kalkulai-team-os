@@ -1,6 +1,6 @@
 // lib/aggregator.ts
 import type { TeamMember, DailyBriefing, KpiDaily } from '@/types';
-import { getIssuesForUser } from './linear';
+import { getIssuesForUser, getBugsFixedThisWeek } from './linear';
 import { getTodayEvents, countSalesCallsToday } from './calendar';
 import { getActiveBranches, getCommitsThisWeek } from './github';
 import { getCallsThisWeek } from './hubspot';
@@ -24,6 +24,9 @@ export async function buildDailyBriefing(member: TeamMember): Promise<DailyBrief
     member.role === 'dev' && member.github_username
       ? getCommitsThisWeek(member.github_username)
       : Promise.resolve(0),
+    member.role === 'dev' && member.linear_user_id
+      ? getBugsFixedThisWeek(member.linear_user_id)
+      : Promise.resolve(0),
   ]);
 
   const tasks = results[0].status === 'fulfilled' ? results[0].value : [];
@@ -35,6 +38,7 @@ export async function buildDailyBriefing(member: TeamMember): Promise<DailyBrief
   const unprocessedInsights = results[4].status === 'fulfilled' ? results[4].value : 0;
   const hubspotCalls = results[5].status === 'fulfilled' ? results[5].value : [];
   const githubCommits = results[6].status === 'fulfilled' ? results[6].value : 0;
+  const bugsFixed = results[7].status === 'fulfilled' ? results[7].value : 0;
 
   // Sync: Sales-Calls aus Kalender in kpi_daily persistieren
   if (member.role === 'sales' && member.google_calendar_id) {
@@ -56,6 +60,9 @@ export async function buildDailyBriefing(member: TeamMember): Promise<DailyBrief
 
   // GitHub commits: not persisted, added in-memory only
   weekActuals.commits_count += typeof githubCommits === 'number' ? githubCommits : 0;
+
+  // Linear bugs fixed (Bug-label issues completed this week): in-memory only
+  weekActuals.bugs_fixed += typeof bugsFixed === 'number' ? bugsFixed : 0;
 
   const activeBranch =
     branches.find((b) => b.authorLogin === member.github_username)?.name ?? null;
