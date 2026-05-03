@@ -14,9 +14,9 @@ export const dynamic = 'force-dynamic';
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: { member?: string };
+  searchParams: Promise<{ member?: string }>;
 }) {
-  const members = await getAllMembers();
+  const [members, params] = await Promise.all([getAllMembers(), searchParams]);
 
   if (!members.length) {
     return (
@@ -26,7 +26,7 @@ export default async function DashboardPage({
     );
   }
 
-  const me = members.find((m) => m.id === searchParams.member) ?? members[0];
+  const me = members.find((m) => m.id === params.member) ?? members[0];
   const briefing = await buildDailyBriefing(me);
 
   return (
