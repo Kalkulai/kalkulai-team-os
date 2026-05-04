@@ -41,36 +41,38 @@ Dieses Dokument fasst zusammen, wo wir gerade stehen, damit du nach einem Claude
 ### Kritisch — sofort
 
 **1. GitHub-Push fixen.**
-`git push origin master` schlägt mit "Repository not found" fehl. Wahrscheinlich Auth-Cache abgelaufen. Optionen:
-```
-# Variante A: Credentials neu eintragen
-git config --global credential.helper manager
-git push origin master   # → Browser-Login
+`git push origin master` schlägt mit "Repository not found" fehl. **Grund identifiziert:**
+- gh CLI ist eingeloggt als `lp-kai` (persönlicher Account)
+- Repo liegt im `Kalkulai`-Org → `lp-kai` hat keinen Schreibzugriff
 
-# Variante B: Personal Access Token
-# 1) https://github.com/settings/tokens → Generate new token (classic) → repo + workflow
-# 2) git remote set-url origin https://USERNAME:TOKEN@github.com/Kalkulai/kalkulai-team-os.git
-# 3) git push origin master
-```
-Lokaler Commit `780d040` enthält 9 Files / 125 Insertions / 20 Deletions — geht nicht verloren.
+**Lösung A — lp-kai Collaborator machen** (einfacher, dauerhaft):
+1. github.com/Kalkulai/kalkulai-team-os/settings/access → "Add people"
+2. `lp-kai` einladen mit "Write" oder "Maintain"
+3. Einladung mit lp-kai-Account annehmen
+4. `git push origin master`
+
+**Lösung B — Account wechseln** (einmalig):
+1. `gh auth logout`
+2. `gh auth login` → Account `Kalkulai` (oder kalkulai.tech@gmail.com) wählen
+3. `git push origin master`
+
+**Was wartet:**
+- `780d040` — feat(dashboard): time-aware greeting, clickable insights, sorted tasks, hubspot re-enabled
+- `1ba9fbd` — chore: magic mcp config + session handoff doc
+
+Lokale Commits gehen NICHT verloren.
 
 ### Hoch — UI-Refactor (mit Magic-MCP)
 
-**2. Magic-MCP konfigurieren.** API-Key vorhanden (User hat ihn lokal). Ergänze in `.mcp.json` oder `~/.claude/settings.json`:
+**2. Magic-MCP — bereits konfiguriert.** `.mcp.json` ist im Repo.
+
+**Vor dem Restart:** Setze in PowerShell **EINMAL** die Env-Var dauerhaft (Windows User-Scope):
+```powershell
+[System.Environment]::SetEnvironmentVariable("MAGIC_API_KEY", "DEIN_21ST_DEV_KEY", "User")
 ```
-{
-  "mcpServers": {
-    "magic": {
-      "command": "npx",
-      "args": ["-y", "@21st-dev/magic@latest"],
-      "env": {
-        "API_KEY": "DEIN_KEY"
-      }
-    }
-  }
-}
-```
-Claude Code neu starten.
+Dann **PowerShell + Claude Code neu starten** (damit beide die neue Env-Var sehen).
+
+`.mcp.json` interpoliert `${MAGIC_API_KEY}` — Key bleibt außerhalb des Repos.
 
 **3. UI-Refactor — Reihenfolge:**
 - `app/dashboard/page.tsx` — Bento-Grid statt 2-Col, Glass-Cards, animierte KPI-Bars
