@@ -12,11 +12,17 @@ const TYPES = [
 
 type SalesType = (typeof TYPES)[number]['value'];
 
-export function SalesLogger({ userId }: { userId: string }) {
+export function SalesLogger({
+  userId,
+  initialCounts = {},
+}: {
+  userId: string;
+  initialCounts?: Record<string, number>;
+}) {
   const [counts, setCounts] = useState<Record<SalesType, number>>({
-    'cold-call': 0,
-    'demo': 0,
-    'follow-up': 0,
+    'cold-call': (initialCounts['cold-call'] ?? 0),
+    'demo': (initialCounts['demo'] ?? 0),
+    'follow-up': (initialCounts['follow-up'] ?? 0),
   });
   const [note, setNote] = useState('');
   const [pending, setPending] = useState<SalesType | null>(null);

@@ -33,6 +33,18 @@ export default function SettingsPage() {
       .catch(() => setError('Teammitglieder konnten nicht geladen werden'));
   }, []);
 
+  useEffect(() => {
+    if (!selectedId) return;
+    fetch(`/api/kpi/set-target?userId=${selectedId}`)
+      .then((r) => r.json())
+      .then((t: { tasks_target: number; calls_target: number; bugs_target: number }) => {
+        setTasksTarget(t.tasks_target);
+        setCallsTarget(t.calls_target);
+        setBugsTarget(t.bugs_target);
+      })
+      .catch(() => {});
+  }, [selectedId]);
+
   const selectedMember = members.find((m) => m.id === selectedId);
 
   async function handleSave() {

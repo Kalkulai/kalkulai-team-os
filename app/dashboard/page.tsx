@@ -6,7 +6,7 @@ import { KpiBar } from '@/components/KpiBar';
 import { MemberSwitcher } from '@/components/MemberSwitcher';
 import { SalesLogger } from '@/components/SalesLogger';
 import { buildDailyBriefing } from '@/lib/aggregator';
-import { getAllMembers } from '@/lib/supabase';
+import { getAllMembers, getSalesLogsTodayByType } from '@/lib/supabase';
 import { format } from 'date-fns';
 import { de } from 'date-fns/locale';
 
@@ -28,7 +28,10 @@ export default async function DashboardPage({
   }
 
   const me = members.find((m) => m.id === params.member) ?? members[0];
-  const briefing = await buildDailyBriefing(me);
+  const [briefing, todaySalesLogs] = await Promise.all([
+    buildDailyBriefing(me),
+    me.role === 'sales' ? getSalesLogsTodayByType(me.id) : Promise.resolve({}),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -66,12 +69,17 @@ export default async function DashboardPage({
           {me.role === 'sales' && briefing.weekTargets.calls_target > 0 && (
             <KpiBar label="Calls / Gespräche" actual={briefing.weekActuals.calls_made} target={briefing.weekTargets.calls_target} />
           )}
+          {me.role === 'dev' && briefing.weekActuals.commits_count > 0 && (
+            <p className="text-sm text-muted-foreground">
+              Commits diese Woche: <span className="font-medium text-foreground">{briefing.weekActuals.commits_count}</span>
+            </p>
+          )}
           {me.role === 'sales' && (
             <>
               <Separator />
               <div className="space-y-2">
                 <p className="text-sm font-medium">Call loggen</p>
-                <SalesLogger userId={me.id} />
+                <SalesLogger userId={me.id} initialCounts={todaySalesLogs} />
               </div>
             </>
           )}

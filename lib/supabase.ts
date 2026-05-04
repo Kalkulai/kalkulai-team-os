@@ -71,3 +71,19 @@ export async function getSalesCallsThisWeek(userId: string): Promise<number> {
   if (error) throw error;
   return count ?? 0;
 }
+
+export async function getSalesLogsTodayByType(userId: string): Promise<Record<string, number>> {
+  const today = format(new Date(), 'yyyy-MM-dd');
+  const { data, error } = await supabaseAdmin
+    .from('sales_logs')
+    .select('type')
+    .eq('user_id', userId)
+    .gte('logged_at', `${today}T00:00:00.000Z`)
+    .lt('logged_at', `${today}T23:59:59.999Z`);
+  if (error) throw error;
+  const counts: Record<string, number> = {};
+  for (const row of data ?? []) {
+    counts[row.type] = (counts[row.type] ?? 0) + 1;
+  }
+  return counts;
+}

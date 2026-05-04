@@ -14,12 +14,18 @@ export default async function TeamPage() {
   ]);
 
   const cards = await Promise.all(
-    members.map(async (m) => ({
-      member: m,
-      targets: await getWeekTargets(m.id, weekStart),
-      actuals: await getWeekActuals(m.id, weekStart),
-      activeTasks: activeIssues.filter((i) => i.assignee?.id === m.linear_user_id).length,
-    }))
+    members.map(async (m) => {
+      const [targets, actuals] = await Promise.all([
+        getWeekTargets(m.id, weekStart),
+        getWeekActuals(m.id, weekStart),
+      ]);
+      return {
+        member: m,
+        targets,
+        actuals,
+        activeTasks: activeIssues.filter((i) => i.assignee?.id === m.linear_user_id).length,
+      };
+    })
   );
 
   return (

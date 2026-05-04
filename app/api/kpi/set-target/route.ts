@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { upsertKpiTargets, currentWeekStart } from '@/lib/supabase';
+import { upsertKpiTargets, getWeekTargets, currentWeekStart } from '@/lib/supabase';
 import { requireApiAuth } from '@/lib/api-auth';
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const userId = searchParams.get('userId');
+  if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 });
+  const weekStart = searchParams.get('weekStart') ?? currentWeekStart();
+  const targets = await getWeekTargets(userId, weekStart);
+  return NextResponse.json(targets);
+}
 
 export async function POST(req: NextRequest) {
   if (!requireApiAuth(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
