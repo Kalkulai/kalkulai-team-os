@@ -12,6 +12,23 @@ import { de } from 'date-fns/locale';
 
 export const dynamic = 'force-dynamic';
 
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 11) return 'Guten Morgen';
+  if (h < 18) return 'Guten Tag';
+  return 'Guten Abend';
+}
+
+function sortByPriority<T extends { priority: number }>(tasks: T[]): T[] {
+  const rank = (p: number) => (p === 0 ? 99 : p);
+  return [...tasks].sort((a, b) => {
+    const aHigh = a.priority >= 1 && a.priority <= 2 ? 0 : 1;
+    const bHigh = b.priority >= 1 && b.priority <= 2 ? 0 : 1;
+    if (aHigh !== bHigh) return aHigh - bHigh;
+    return rank(a.priority) - rank(b.priority);
+  });
+}
+
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -37,7 +54,7 @@ export default async function DashboardPage({
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Guten Morgen, {me.name}</h1>
+          <h1 className="text-2xl font-bold">{greeting()}, {me.name}</h1>
           <p className="text-muted-foreground">{format(new Date(), 'EEEE, d. MMMM', { locale: de })}</p>
           {briefing.activeBranch && (
             <p className="text-xs text-muted-foreground mt-1">
@@ -51,7 +68,7 @@ export default async function DashboardPage({
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader><CardTitle>Deine Tasks</CardTitle></CardHeader>
-          <CardContent><TaskList tasks={briefing.tasks} userId={me.id} /></CardContent>
+          <CardContent><TaskList tasks={sortByPriority(briefing.tasks)} userId={me.id} /></CardContent>
         </Card>
         <Card>
           <CardHeader><CardTitle>Meetings heute</CardTitle></CardHeader>
@@ -89,8 +106,19 @@ export default async function DashboardPage({
               <p className="text-sm font-medium">Neue Customer-Insights</p>
               <ul className="space-y-1">
                 {briefing.unprocessedInsights.map((ins) => (
-                  <li key={ins.id} className="text-sm text-muted-foreground">
-                    💡 {ins.title}
+                  <li key={ins.id} className="text-sm">
+                    {ins.url ? (
+                      <a
+                        href={ins.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-foreground hover:underline"
+                      >
+                        💡 {ins.title}
+                      </a>
+                    ) : (
+                      <span className="text-muted-foreground">💡 {ins.title}</span>
+                    )}
                   </li>
                 ))}
               </ul>

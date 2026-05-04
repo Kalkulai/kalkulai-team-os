@@ -203,6 +203,75 @@ export default function SettingsPage() {
           )}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Verbindungs-Status</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {members.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Lädt…</p>
+          ) : (
+            <ul className="space-y-3">
+              {members.map((m) => {
+                const checks: { label: string; ok: boolean; hint?: string }[] = [
+                  { label: 'Telegram', ok: !!m.telegram_chat_id, hint: 'Person muss /start an den Bot schicken' },
+                  { label: 'Linear', ok: !!m.linear_user_id, hint: 'Du in DB: linear_user_id setzen' },
+                  { label: 'GitHub', ok: !!m.github_username, hint: 'Du in DB: github_username setzen' },
+                  {
+                    label: 'Calendar',
+                    ok: !!m.google_refresh_token || !!m.google_calendar_email,
+                    hint: 'Person klickt "Mit Google Calendar verbinden"',
+                  },
+                ];
+                if (m.role === 'sales') {
+                  checks.push({
+                    label: 'HubSpot',
+                    ok: !!m.hubspot_owner_id,
+                    hint: 'Optional — nur für VoIP-Calls',
+                  });
+                }
+                const open = checks.filter((c) => !c.ok);
+                return (
+                  <li key={m.id} className="border rounded-md p-3 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-sm">
+                        {m.name}
+                        <span className="ml-2 text-xs text-muted-foreground">({m.role})</span>
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {checks.filter((c) => c.ok).length}/{checks.length}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {checks.map((c) => (
+                        <span
+                          key={c.label}
+                          className={`text-xs px-2 py-0.5 rounded ${
+                            c.ok ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                          }`}
+                          title={c.ok ? `${c.label} verbunden` : c.hint}
+                        >
+                          {c.ok ? '✓' : '✗'} {c.label}
+                        </span>
+                      ))}
+                    </div>
+                    {open.length > 0 && (
+                      <ul className="text-xs text-muted-foreground mt-1 space-y-0.5">
+                        {open.map((c) => (
+                          <li key={c.label}>
+                            {c.label}: {c.hint}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

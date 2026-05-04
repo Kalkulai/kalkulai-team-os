@@ -70,7 +70,8 @@ export function SalesLogger({
             className="flex flex-col h-auto py-2"
           >
             <span className="text-xs">{t.label}</span>
-            <span className="text-lg font-bold">+{counts[t.value]}</span>
+            <span className="text-lg font-bold">{counts[t.value]}</span>
+            <span className="text-[10px] text-muted-foreground">heute</span>
           </Button>
         ))}
       </div>

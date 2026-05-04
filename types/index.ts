@@ -52,6 +52,7 @@ export interface NotionInsight {
   title: string;
   createdAt: string;
   processed: boolean;
+  url?: string;
 }
 
 export interface KpiTargets {

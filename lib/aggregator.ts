@@ -7,7 +7,7 @@ import {
 } from './linear';
 import { getTodayEvents, countSalesCallsToday } from './calendar';
 import { getActiveBranches, getCommitsThisWeek } from './github';
-import { getCallsThisWeek } from './hubspot'; // unused after Plan-B Phase 2; kept for potential VoIP re-enable
+import { getCallsThisWeek } from './hubspot';
 import { getTopUnprocessedInsights } from './notion';
 import {
   getWeekTargets,
@@ -29,6 +29,9 @@ export async function buildDailyBriefing(member: TeamMember): Promise<DailyBrief
     getWeekTargets(member.id, weekStart),
     getTopUnprocessedInsights(2),
     member.role === 'sales' ? getSalesCallsThisWeek(member.id) : Promise.resolve(0),
+    member.role === 'sales' && member.hubspot_owner_id
+      ? getCallsThisWeek(member.hubspot_owner_id).then((calls) => calls.length)
+      : Promise.resolve(0),
     member.role === 'dev' && member.github_username
       ? getCommitsThisWeek(member.github_username)
       : Promise.resolve(0),
@@ -48,9 +51,10 @@ export async function buildDailyBriefing(member: TeamMember): Promise<DailyBrief
     : { tasks_target: 5, calls_target: 0, bugs_target: 0 };
   const unprocessedInsights = results[4].status === 'fulfilled' ? results[4].value : [];
   const salesLogCalls = results[5].status === 'fulfilled' ? (results[5].value as number) : 0;
-  const githubCommits = results[6].status === 'fulfilled' ? results[6].value : 0;
-  const bugsFixed = results[7].status === 'fulfilled' ? results[7].value : 0;
-  const tasksCompleted = results[8].status === 'fulfilled' ? results[8].value : 0;
+  const hubspotCalls = results[6].status === 'fulfilled' ? (results[6].value as number) : 0;
+  const githubCommits = results[7].status === 'fulfilled' ? results[7].value : 0;
+  const bugsFixed = results[8].status === 'fulfilled' ? results[8].value : 0;
+  const tasksCompleted = results[9].status === 'fulfilled' ? results[9].value : 0;
 
   // Sync: Sales-Calls aus Kalender in kpi_daily persistieren
   if (member.role === 'sales' && meetings.length > 0) {
@@ -70,8 +74,9 @@ export async function buildDailyBriefing(member: TeamMember): Promise<DailyBrief
   // Tasks completed: Linear is the source of truth (overrides any kpi_daily counter)
   weekActuals.tasks_completed = typeof tasksCompleted === 'number' ? tasksCompleted : 0;
 
-  // Sales-log cold calls (own table, replaces HubSpot for handy-call workflow): in-memory
+  // Calls = HubSpot CRM-Calls + custom sales_logs cold-calls (handy workflow): in-memory
   weekActuals.calls_made += typeof salesLogCalls === 'number' ? salesLogCalls : 0;
+  weekActuals.calls_made += typeof hubspotCalls === 'number' ? hubspotCalls : 0;
 
   // GitHub commits: not persisted, added in-memory only
   weekActuals.commits_count += typeof githubCommits === 'number' ? githubCommits : 0;

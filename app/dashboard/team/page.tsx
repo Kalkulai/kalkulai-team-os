@@ -3,10 +3,10 @@ import { TeamBranchView } from '@/components/TeamBranchView';
 import { KpiBar } from '@/components/KpiBar';
 import { getActiveBranches } from '@/lib/github';
 import { getAllActiveIssues } from '@/lib/linear';
-import { getAllMembers, getWeekTargets, getWeekActuals, currentWeekStart } from '@/lib/supabase';
+import { getAllMembers } from '@/lib/supabase';
+import { buildDailyBriefing } from '@/lib/aggregator';
 
 export default async function TeamPage() {
-  const weekStart = currentWeekStart();
   const [branches, activeIssues, members] = await Promise.all([
     getActiveBranches(),
     getAllActiveIssues(),
@@ -15,14 +15,11 @@ export default async function TeamPage() {
 
   const cards = await Promise.all(
     members.map(async (m) => {
-      const [targets, actuals] = await Promise.all([
-        getWeekTargets(m.id, weekStart),
-        getWeekActuals(m.id, weekStart),
-      ]);
+      const briefing = await buildDailyBriefing(m);
       return {
         member: m,
-        targets,
-        actuals,
+        targets: briefing.weekTargets,
+        actuals: briefing.weekActuals,
         activeTasks: activeIssues.filter((i) => i.assignee?.id === m.linear_user_id).length,
       };
     })
@@ -48,6 +45,9 @@ export default async function TeamPage() {
               <KpiBar label="Tasks" actual={actuals.tasks_completed} target={targets.tasks_target} />
               {member.role === 'sales' && targets.calls_target > 0 && (
                 <KpiBar label="Calls" actual={actuals.calls_made} target={targets.calls_target} />
+              )}
+              {member.role === 'dev' && targets.bugs_target > 0 && (
+                <KpiBar label="Bugs" actual={actuals.bugs_fixed} target={targets.bugs_target} />
               )}
               <p className="text-xs text-muted-foreground">{activeTasks} Tasks aktiv in Linear</p>
             </CardContent>

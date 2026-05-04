@@ -34,6 +34,7 @@ export async function getUnprocessedInsights(): Promise<NotionInsight[]> {
     title: page.properties.Conversation?.title?.[0]?.plain_text ?? '(kein Titel)',
     createdAt: page.created_time,
     processed: false,
+    url: `https://www.notion.so/${page.id.replace(/-/g, '')}`,
   }));
 }
 
