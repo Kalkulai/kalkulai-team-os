@@ -30,6 +30,7 @@ function makeMember(overrides: Partial<TeamMember> = {}): TeamMember {
     google_calendar_id: null,
     google_refresh_token: null,
     google_calendar_email: null,
+    notion_user_id: null,
     role: 'dev',
     ...overrides,
   };

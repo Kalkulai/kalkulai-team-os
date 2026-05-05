@@ -9,7 +9,9 @@ export function MemberSwitcher({ members, currentId }: { members: TeamMember[]; 
   return (
     <Select value={currentId} onValueChange={(id) => router.push(`/dashboard?member=${id}`)}>
       <SelectTrigger className="w-40">
-        <SelectValue />
+        <SelectValue placeholder="Person…">
+          {members.find((m) => m.id === currentId)?.name ?? 'Person…'}
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
         {members.map((m) => (

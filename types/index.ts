@@ -13,6 +13,7 @@ export interface TeamMember {
   google_calendar_id: string | null;
   google_refresh_token: string | null;
   google_calendar_email: string | null;
+  notion_user_id: string | null;
   role: UserRole;
 }
 
