@@ -1,6 +1,6 @@
 import { TaskList } from '@/components/TaskList';
 import { MeetingList } from '@/components/MeetingList';
-import { KpiBar } from '@/components/KpiBar';
+import { KpiTracker } from '@/components/KpiTracker';
 import { MemberSwitcher } from '@/components/MemberSwitcher';
 import { SalesLogger } from '@/components/SalesLogger';
 import { buildDailyBriefing } from '@/lib/aggregator';
@@ -54,11 +54,8 @@ export default async function DashboardPage({
     me.role === 'sales' ? getSalesLogsTodayByType(me.id) : Promise.resolve({}),
   ]);
 
-  const showBugsKpi = me.role === 'dev' && briefing.weekTargets.bugs_target > 0;
-  const showCallsKpi = me.role === 'sales' && briefing.weekTargets.calls_target > 0;
-  const showCommits = me.role === 'dev' && briefing.weekActuals.commits_count > 0;
   const showSalesLogger = me.role === 'sales';
-  const showInsights = briefing.unprocessedInsights.length > 0;
+  const kpiColSpan = showSalesLogger ? 'md:col-span-3' : 'md:col-span-6';
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-6">
@@ -102,101 +99,27 @@ export default async function DashboardPage({
         <MeetingList meetings={briefing.meetings} />
       </section>
 
-      <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-3`}>
-        <header className="mb-4">
+      <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 ${kpiColSpan}`}>
+        <header className="mb-4 flex items-baseline justify-between">
           <h2 className="text-sm font-semibold tracking-tight">Diese Woche</h2>
+          <a
+            href="/settings"
+            className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          >
+            anpassen
+          </a>
         </header>
-        <div className="space-y-5">
-          <KpiBar
-            label="Features / Tasks"
-            actual={briefing.weekActuals.tasks_completed}
-            target={briefing.weekTargets.tasks_target}
-          />
-          {showBugsKpi && (
-            <KpiBar
-              label="Bugs gefixt"
-              actual={briefing.weekActuals.bugs_fixed}
-              target={briefing.weekTargets.bugs_target}
-            />
-          )}
-          {showCallsKpi && (
-            <KpiBar
-              label="Calls / Gespräche"
-              actual={briefing.weekActuals.calls_made}
-              target={briefing.weekTargets.calls_target}
-            />
-          )}
-          {showCommits && (
-            <div className="flex items-baseline justify-between border-t border-foreground/[0.06] pt-3">
-              <span className="text-xs uppercase tracking-wide text-muted-foreground">Commits</span>
-              <span className="text-sm font-medium tabular-nums">{briefing.weekActuals.commits_count}</span>
-            </div>
-          )}
-        </div>
+        <KpiTracker userId={me.id} />
       </section>
 
-      {showSalesLogger ? (
+      {showSalesLogger && (
         <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-3`}>
           <header className="mb-4">
             <h2 className="text-sm font-semibold tracking-tight">Call loggen</h2>
           </header>
           <SalesLogger userId={me.id} initialCounts={todaySalesLogs} />
         </section>
-      ) : showInsights ? (
-        <InsightsCard
-          insights={briefing.unprocessedInsights}
-          className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-3`}
-        />
-      ) : null}
-
-      {showSalesLogger && showInsights && (
-        <InsightsCard
-          insights={briefing.unprocessedInsights}
-          dense
-          className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-6`}
-        />
       )}
     </div>
-  );
-}
-
-function InsightsCard({
-  insights,
-  className,
-  dense = false,
-}: {
-  insights: { id: string; title: string; url?: string }[];
-  className: string;
-  dense?: boolean;
-}) {
-  return (
-    <section className={className}>
-      <header className="mb-4 flex items-baseline justify-between">
-        <h2 className="text-sm font-semibold tracking-tight">Customer-Insights</h2>
-        <span className="text-xs tabular-nums text-muted-foreground">{insights.length}</span>
-      </header>
-      <ul className={dense ? 'grid gap-2 sm:grid-cols-2' : 'space-y-2'}>
-        {insights.map((ins) => (
-          <li key={ins.id} className="text-sm">
-            {ins.url ? (
-              <a
-                href={ins.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="-mx-2 flex items-start gap-2 rounded-lg px-2 py-1.5 text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
-              >
-                <span className="text-amber-500">💡</span>
-                <span className="leading-snug">{ins.title}</span>
-              </a>
-            ) : (
-              <span className="flex items-start gap-2 px-2 py-1.5 text-muted-foreground">
-                <span className="text-amber-500">💡</span>
-                <span className="leading-snug">{ins.title}</span>
-              </span>
-            )}
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }

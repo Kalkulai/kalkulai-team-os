@@ -78,3 +78,18 @@ export interface DailyBriefing {
   weekActuals: KpiDaily;
   unprocessedInsights: NotionInsight[];
 }
+
+export interface Kpi {
+  id: string;
+  user_id: string;
+  parent_id: string | null;
+  name: string;
+  unit: string;
+  position: number;
+  created_at: string;
+}
+
+export interface KpiWithWeek extends Kpi {
+  target: number;
+  actual: number;
+}

@@ -1,8 +1,5 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -10,6 +7,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { KpiManager } from '@/components/KpiManager';
 import type { TeamMember } from '@/types';
 
 const GLASS =
@@ -31,11 +30,6 @@ function initials(name: string): string {
 export default function SettingsPage() {
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [selectedId, setSelectedId] = useState('');
-  const [tasksTarget, setTasksTarget] = useState(5);
-  const [callsTarget, setCallsTarget] = useState(10);
-  const [bugsTarget, setBugsTarget] = useState(3);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -48,54 +42,7 @@ export default function SettingsPage() {
       .catch(() => setError('Teammitglieder konnten nicht geladen werden'));
   }, []);
 
-  useEffect(() => {
-    if (!selectedId) return;
-    fetch(`/api/kpi/set-target?userId=${selectedId}`)
-      .then((r) => r.json())
-      .then((t: { tasks_target: number; calls_target: number; bugs_target: number }) => {
-        setTasksTarget(t.tasks_target);
-        setCallsTarget(t.calls_target);
-        setBugsTarget(t.bugs_target);
-      })
-      .catch(() => {});
-  }, [selectedId]);
-
   const selectedMember = members.find((m) => m.id === selectedId);
-
-  async function handleSave() {
-    if (!selectedId) return;
-    setError(null);
-    setSaving(true);
-    try {
-      const res = await fetch('/api/kpi/set-target', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? ''}`,
-        },
-        body: JSON.stringify({
-          userId: selectedId,
-          tasks_target: tasksTarget,
-          calls_target: callsTarget,
-          bugs_target: bugsTarget,
-        }),
-      });
-      if (!res.ok) throw new Error('Speichern fehlgeschlagen');
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unbekannter Fehler');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  function handleNumberInput(setter: (n: number) => void) {
-    return (e: React.ChangeEvent<HTMLInputElement>) => {
-      const n = Number(e.target.value);
-      if (!Number.isNaN(n)) setter(n);
-    };
-  }
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-6">
@@ -104,9 +51,14 @@ export default function SettingsPage() {
         <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Einstellungen</h1>
       </header>
 
-      <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-3`}>
-        <h2 className="mb-4 text-sm font-semibold tracking-tight">KPI-Ziele diese Woche</h2>
-        <div className="space-y-4">
+      <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-6`}>
+        <header className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-sm font-semibold tracking-tight">KPIs diese Woche</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Eigene KPIs anlegen, Ziele setzen, im Dashboard manuell hochzählen.
+            </p>
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor="member-select" className="text-xs uppercase tracking-wide text-muted-foreground">
               Person
@@ -116,8 +68,10 @@ export default function SettingsPage() {
               onValueChange={(v) => { if (v !== null) setSelectedId(v); }}
               disabled={members.length === 0}
             >
-              <SelectTrigger id="member-select" className="min-h-[44px]">
-                <SelectValue placeholder={members.length === 0 ? 'Lade Teammitglieder…' : 'Person auswählen…'} />
+              <SelectTrigger id="member-select" className="min-h-[44px] w-full sm:w-56">
+                <SelectValue placeholder={members.length === 0 ? 'Lade…' : 'Person auswählen…'}>
+                  {selectedMember?.name ?? 'Person…'}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {members.map((m) => (
@@ -129,45 +83,14 @@ export default function SettingsPage() {
               </SelectContent>
             </Select>
           </div>
+        </header>
 
-          <NumberRow
-            id="tasks-target"
-            label="Tasks / Features"
-            value={tasksTarget}
-            onChange={handleNumberInput(setTasksTarget)}
-          />
+        {error && <p className="mb-3 text-sm text-rose-600 dark:text-rose-400">{error}</p>}
 
-          {selectedMember?.role === 'sales' && (
-            <NumberRow
-              id="calls-target"
-              label="Sales Calls"
-              value={callsTarget}
-              onChange={handleNumberInput(setCallsTarget)}
-            />
-          )}
-
-          {selectedMember?.role === 'dev' && (
-            <NumberRow
-              id="bugs-target"
-              label="Bugs gefixt"
-              value={bugsTarget}
-              onChange={handleNumberInput(setBugsTarget)}
-            />
-          )}
-
-          {error && <p className="text-sm text-rose-600 dark:text-rose-400">{error}</p>}
-
-          <Button
-            onClick={handleSave}
-            className="min-h-[44px] w-full"
-            disabled={saving || !selectedId}
-          >
-            {saving ? 'Wird gespeichert…' : saved ? 'Gespeichert ✓' : 'Speichern'}
-          </Button>
-        </div>
+        {selectedId && <KpiManager userId={selectedId} />}
       </section>
 
-      <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-3`}>
+      <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-6`}>
         <h2 className="mb-4 text-sm font-semibold tracking-tight">Google Calendar</h2>
         {selectedMember ? (
           <div className="space-y-4">
@@ -180,7 +103,7 @@ export default function SettingsPage() {
             </p>
             <a
               href={`/api/oauth/google/start?userId=${selectedMember.id}`}
-              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg border border-foreground/[0.08] bg-card/60 px-4 text-sm font-medium backdrop-blur-md transition-colors hover:border-foreground/[0.16] hover:bg-card/80"
+              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg border border-foreground/[0.08] bg-card/60 px-4 text-sm font-medium backdrop-blur-md transition-colors hover:border-foreground/[0.16] hover:bg-card/80 sm:w-auto"
             >
               {selectedMember.google_calendar_email ? 'Anderen Account verbinden' : 'Mit Google Calendar verbinden'}
             </a>
@@ -258,33 +181,6 @@ export default function SettingsPage() {
           </ul>
         )}
       </section>
-    </div>
-  );
-}
-
-function NumberRow({
-  id,
-  label,
-  value,
-  onChange,
-}: {
-  id: string;
-  label: string;
-  value: number;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4">
-      <Label htmlFor={id} className="flex-1 text-sm">{label}</Label>
-      <Input
-        id={id}
-        type="number"
-        inputMode="numeric"
-        min={0}
-        value={value}
-        onChange={onChange}
-        className="min-h-[44px] w-24 text-base sm:text-sm"
-      />
     </div>
   );
 }
