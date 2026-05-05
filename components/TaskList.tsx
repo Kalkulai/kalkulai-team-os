@@ -33,19 +33,30 @@ export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: stri
     return <p className="text-sm text-muted-foreground">Keine offenen Tasks — gut gemacht!</p>;
 
   return (
-    <ul className="space-y-2">
-      {tasks.map((t) => (
-        <li key={t.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted">
-          <Checkbox checked={done.has(t.id)} onCheckedChange={() => handleCheck(t.id)} />
-          <span className={`flex-1 text-sm ${done.has(t.id) ? 'line-through text-muted-foreground' : ''}`}>
-            <span className="text-muted-foreground mr-1 text-xs">{t.identifier}</span>
-            {t.title}
-          </span>
-          {t.priority > 0 && (
-            <Badge variant={PRIORITY_VARIANT[t.priority]}>{PRIORITY_LABEL[t.priority]}</Badge>
-          )}
-        </li>
-      ))}
+    <ul className="-mx-2 space-y-0.5">
+      {tasks.map((t) => {
+        const isDone = done.has(t.id);
+        return (
+          <li key={t.id}>
+            <label className="flex min-h-[44px] cursor-pointer items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-foreground/[0.04] active:bg-foreground/[0.06]">
+              <Checkbox
+                checked={isDone}
+                onCheckedChange={() => handleCheck(t.id)}
+                className="size-5"
+              />
+              <span className={`flex-1 text-sm leading-snug ${isDone ? 'text-muted-foreground line-through' : ''}`}>
+                <span className="mr-1 text-xs tabular-nums text-muted-foreground">{t.identifier}</span>
+                {t.title}
+              </span>
+              {t.priority > 0 && (
+                <Badge variant={PRIORITY_VARIANT[t.priority]} className="shrink-0 text-[10px]">
+                  {PRIORITY_LABEL[t.priority]}
+                </Badge>
+              )}
+            </label>
+          </li>
+        );
+      })}
     </ul>
   );
 }

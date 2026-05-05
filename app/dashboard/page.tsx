@@ -1,5 +1,3 @@
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
 import { TaskList } from '@/components/TaskList';
 import { MeetingList } from '@/components/MeetingList';
 import { KpiBar } from '@/components/KpiBar';
@@ -29,6 +27,12 @@ function sortByPriority<T extends { priority: number }>(tasks: T[]): T[] {
   });
 }
 
+const GLASS =
+  'rounded-2xl bg-card/70 backdrop-blur-xl ring-1 ring-foreground/5 ' +
+  'shadow-[0_1px_0_0_rgba(255,255,255,0.6)_inset,0_8px_24px_-12px_rgba(0,0,0,0.12)] ' +
+  'dark:shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset,0_8px_24px_-12px_rgba(0,0,0,0.5)] ' +
+  'animate-[card-rise_400ms_cubic-bezier(0.22,1,0.36,1)_both]';
+
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -50,82 +54,149 @@ export default async function DashboardPage({
     me.role === 'sales' ? getSalesLogsTodayByType(me.id) : Promise.resolve({}),
   ]);
 
+  const showBugsKpi = me.role === 'dev' && briefing.weekTargets.bugs_target > 0;
+  const showCallsKpi = me.role === 'sales' && briefing.weekTargets.calls_target > 0;
+  const showCommits = me.role === 'dev' && briefing.weekActuals.commits_count > 0;
+  const showSalesLogger = me.role === 'sales';
+  const showInsights = briefing.unprocessedInsights.length > 0;
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{greeting()}, {me.name}</h1>
-          <p className="text-muted-foreground">{format(new Date(), 'EEEE, d. MMMM', { locale: de })}</p>
-          {briefing.activeBranch && (
-            <p className="text-xs text-muted-foreground mt-1">
-              Aktiver Branch: <code className="bg-muted px-1 rounded">{briefing.activeBranch}</code>
+    <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-6">
+      <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-6`}>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">
+              {format(new Date(), 'EEEE, d. MMMM', { locale: de })}
             </p>
+            <h1 className="mt-1 truncate text-2xl font-semibold tracking-tight sm:text-3xl">
+              {greeting()}, {me.name}
+            </h1>
+            {briefing.activeBranch && (
+              <p className="mt-2 text-xs text-muted-foreground">
+                Aktiver Branch:{' '}
+                <code className="rounded bg-foreground/[0.06] px-1.5 py-0.5 font-mono text-[11px] text-foreground/80">
+                  {briefing.activeBranch}
+                </code>
+              </p>
+            )}
+          </div>
+          <div className="shrink-0">
+            <MemberSwitcher members={members} currentId={me.id} />
+          </div>
+        </div>
+      </section>
+
+      <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-4`}>
+        <header className="mb-4 flex items-baseline justify-between">
+          <h2 className="text-sm font-semibold tracking-tight">Deine Tasks</h2>
+          <span className="text-xs tabular-nums text-muted-foreground">{briefing.tasks.length}</span>
+        </header>
+        <TaskList tasks={sortByPriority(briefing.tasks)} userId={me.id} />
+      </section>
+
+      <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-2`}>
+        <header className="mb-4 flex items-baseline justify-between">
+          <h2 className="text-sm font-semibold tracking-tight">Meetings heute</h2>
+          <span className="text-xs tabular-nums text-muted-foreground">{briefing.meetings.length}</span>
+        </header>
+        <MeetingList meetings={briefing.meetings} />
+      </section>
+
+      <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-3`}>
+        <header className="mb-4">
+          <h2 className="text-sm font-semibold tracking-tight">Diese Woche</h2>
+        </header>
+        <div className="space-y-5">
+          <KpiBar
+            label="Features / Tasks"
+            actual={briefing.weekActuals.tasks_completed}
+            target={briefing.weekTargets.tasks_target}
+          />
+          {showBugsKpi && (
+            <KpiBar
+              label="Bugs gefixt"
+              actual={briefing.weekActuals.bugs_fixed}
+              target={briefing.weekTargets.bugs_target}
+            />
+          )}
+          {showCallsKpi && (
+            <KpiBar
+              label="Calls / Gespräche"
+              actual={briefing.weekActuals.calls_made}
+              target={briefing.weekTargets.calls_target}
+            />
+          )}
+          {showCommits && (
+            <div className="flex items-baseline justify-between border-t border-foreground/[0.06] pt-3">
+              <span className="text-xs uppercase tracking-wide text-muted-foreground">Commits</span>
+              <span className="text-sm font-medium tabular-nums">{briefing.weekActuals.commits_count}</span>
+            </div>
           )}
         </div>
-        <MemberSwitcher members={members} currentId={me.id} />
-      </div>
+      </section>
 
-      <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader><CardTitle>Deine Tasks</CardTitle></CardHeader>
-          <CardContent><TaskList tasks={sortByPriority(briefing.tasks)} userId={me.id} /></CardContent>
-        </Card>
-        <Card>
-          <CardHeader><CardTitle>Meetings heute</CardTitle></CardHeader>
-          <CardContent><MeetingList meetings={briefing.meetings} /></CardContent>
-        </Card>
-      </div>
+      {showSalesLogger ? (
+        <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-3`}>
+          <header className="mb-4">
+            <h2 className="text-sm font-semibold tracking-tight">Call loggen</h2>
+          </header>
+          <SalesLogger userId={me.id} initialCounts={todaySalesLogs} />
+        </section>
+      ) : showInsights ? (
+        <InsightsCard
+          insights={briefing.unprocessedInsights}
+          className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-3`}
+        />
+      ) : null}
 
-      <Card>
-        <CardHeader><CardTitle>Diese Woche</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
-          <KpiBar label="Features / Tasks" actual={briefing.weekActuals.tasks_completed} target={briefing.weekTargets.tasks_target} />
-          {me.role === 'dev' && briefing.weekTargets.bugs_target > 0 && (
-            <KpiBar label="Bugs gefixt" actual={briefing.weekActuals.bugs_fixed} target={briefing.weekTargets.bugs_target} />
-          )}
-          {me.role === 'sales' && briefing.weekTargets.calls_target > 0 && (
-            <KpiBar label="Calls / Gespräche" actual={briefing.weekActuals.calls_made} target={briefing.weekTargets.calls_target} />
-          )}
-          {me.role === 'dev' && briefing.weekActuals.commits_count > 0 && (
-            <p className="text-sm text-muted-foreground">
-              Commits diese Woche: <span className="font-medium text-foreground">{briefing.weekActuals.commits_count}</span>
-            </p>
-          )}
-          {me.role === 'sales' && (
-            <>
-              <Separator />
-              <div className="space-y-2">
-                <p className="text-sm font-medium">Call loggen</p>
-                <SalesLogger userId={me.id} initialCounts={todaySalesLogs} />
-              </div>
-            </>
-          )}
-          {briefing.unprocessedInsights.length > 0 && (
-            <>
-              <Separator />
-              <p className="text-sm font-medium">Neue Customer-Insights</p>
-              <ul className="space-y-1">
-                {briefing.unprocessedInsights.map((ins) => (
-                  <li key={ins.id} className="text-sm">
-                    {ins.url ? (
-                      <a
-                        href={ins.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-muted-foreground hover:text-foreground hover:underline"
-                      >
-                        💡 {ins.title}
-                      </a>
-                    ) : (
-                      <span className="text-muted-foreground">💡 {ins.title}</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </CardContent>
-      </Card>
+      {showSalesLogger && showInsights && (
+        <InsightsCard
+          insights={briefing.unprocessedInsights}
+          dense
+          className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-6`}
+        />
+      )}
     </div>
+  );
+}
+
+function InsightsCard({
+  insights,
+  className,
+  dense = false,
+}: {
+  insights: { id: string; title: string; url?: string }[];
+  className: string;
+  dense?: boolean;
+}) {
+  return (
+    <section className={className}>
+      <header className="mb-4 flex items-baseline justify-between">
+        <h2 className="text-sm font-semibold tracking-tight">Customer-Insights</h2>
+        <span className="text-xs tabular-nums text-muted-foreground">{insights.length}</span>
+      </header>
+      <ul className={dense ? 'grid gap-2 sm:grid-cols-2' : 'space-y-2'}>
+        {insights.map((ins) => (
+          <li key={ins.id} className="text-sm">
+            {ins.url ? (
+              <a
+                href={ins.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="-mx-2 flex items-start gap-2 rounded-lg px-2 py-1.5 text-muted-foreground transition-colors hover:bg-foreground/[0.04] hover:text-foreground"
+              >
+                <span className="text-amber-500">💡</span>
+                <span className="leading-snug">{ins.title}</span>
+              </a>
+            ) : (
+              <span className="flex items-start gap-2 px-2 py-1.5 text-muted-foreground">
+                <span className="text-amber-500">💡</span>
+                <span className="leading-snug">{ins.title}</span>
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
