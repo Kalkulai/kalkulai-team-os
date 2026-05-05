@@ -1,13 +1,40 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { format, startOfWeek } from 'date-fns';
 import type { TeamMember, KpiTargets, KpiDaily } from '@/types';
 
-const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const service = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+let _anonClient: SupabaseClient | null = null;
+let _adminClient: SupabaseClient | null = null;
 
-export const supabase = createClient(url, anon);
-export const supabaseAdmin = createClient(url, service);
+function buildAnon(): SupabaseClient {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anon) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL und NEXT_PUBLIC_SUPABASE_ANON_KEY müssen gesetzt sein');
+  }
+  return createClient(url, anon);
+}
+
+function buildAdmin(): SupabaseClient {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !service) {
+    throw new Error('NEXT_PUBLIC_SUPABASE_URL und SUPABASE_SERVICE_ROLE_KEY müssen gesetzt sein');
+  }
+  return createClient(url, service);
+}
+
+function lazyProxy(resolve: () => SupabaseClient): SupabaseClient {
+  return new Proxy({} as SupabaseClient, {
+    get(_, prop) {
+      const target = resolve();
+      const value = Reflect.get(target, prop);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
+
+export const supabase: SupabaseClient = lazyProxy(() => (_anonClient ??= buildAnon()));
+export const supabaseAdmin: SupabaseClient = lazyProxy(() => (_adminClient ??= buildAdmin()));
 
 export async function getAllMembers(): Promise<TeamMember[]> {
   const { data, error } = await supabaseAdmin.from('team_members').select('*');
