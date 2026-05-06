@@ -79,6 +79,8 @@ export interface DailyBriefing {
   unprocessedInsights: NotionInsight[];
 }
 
+export type KpiType = 'counter' | 'project' | 'step';
+
 export interface Kpi {
   id: string;
   user_id: string;
@@ -86,6 +88,9 @@ export interface Kpi {
   name: string;
   unit: string;
   position: number;
+  type: KpiType;
+  due_date: string | null;
+  completed: boolean;
   created_at: string;
 }
 

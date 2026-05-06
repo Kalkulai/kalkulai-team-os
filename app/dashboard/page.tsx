@@ -1,6 +1,7 @@
 import { TaskList } from '@/components/TaskList';
 import { MeetingList } from '@/components/MeetingList';
 import { KpiTracker } from '@/components/KpiTracker';
+import { ProjectsTracker } from '@/components/ProjectsTracker';
 import { MemberSwitcher } from '@/components/MemberSwitcher';
 import { SalesLogger } from '@/components/SalesLogger';
 import { buildDailyBriefing } from '@/lib/aggregator';
@@ -55,7 +56,6 @@ export default async function DashboardPage({
   ]);
 
   const showSalesLogger = me.role === 'sales';
-  const kpiColSpan = showSalesLogger ? 'md:col-span-3' : 'md:col-span-6';
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-6">
@@ -99,9 +99,22 @@ export default async function DashboardPage({
         <MeetingList meetings={briefing.meetings} />
       </section>
 
-      <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 ${kpiColSpan}`}>
+      <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-3`}>
         <header className="mb-4 flex items-baseline justify-between">
-          <h2 className="text-sm font-semibold tracking-tight">Diese Woche</h2>
+          <h2 className="text-sm font-semibold tracking-tight">Projekte</h2>
+          <a
+            href="/settings"
+            className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+          >
+            anpassen
+          </a>
+        </header>
+        <ProjectsTracker userId={me.id} />
+      </section>
+
+      <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-3`}>
+        <header className="mb-4 flex items-baseline justify-between">
+          <h2 className="text-sm font-semibold tracking-tight">KPIs diese Woche</h2>
           <a
             href="/settings"
             className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
@@ -113,7 +126,7 @@ export default async function DashboardPage({
       </section>
 
       {showSalesLogger && (
-        <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-3`}>
+        <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-6`}>
           <header className="mb-4">
             <h2 className="text-sm font-semibold tracking-tight">Call loggen</h2>
           </header>

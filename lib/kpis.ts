@@ -1,5 +1,5 @@
 import { supabaseAdmin } from './supabase';
-import type { Kpi, KpiWithWeek } from '@/types';
+import type { Kpi, KpiWithWeek, KpiType } from '@/types';
 
 interface KpiRow {
   id: string;
@@ -8,6 +8,9 @@ interface KpiRow {
   name: string;
   unit: string;
   position: number;
+  type: KpiType;
+  due_date: string | null;
+  completed: boolean;
   created_at: string;
 }
 
@@ -28,15 +31,18 @@ export async function listUserKpis(userId: string, weekStart: string): Promise<K
   const definitions = (defs ?? []) as KpiRow[];
   if (!definitions.length) return [];
 
-  const { data: weeks, error: weekErr } = await supabaseAdmin
-    .from('kpi_weeks')
-    .select('kpi_id, target, actual')
-    .eq('week_start', weekStart)
-    .in('kpi_id', definitions.map((d) => d.id));
-  if (weekErr) throw weekErr;
-
+  const counterIds = definitions.filter((d) => d.type === 'counter').map((d) => d.id);
   const weekByKpi = new Map<string, WeekRow>();
-  for (const w of (weeks ?? []) as WeekRow[]) weekByKpi.set(w.kpi_id, w);
+
+  if (counterIds.length > 0) {
+    const { data: weeks, error: weekErr } = await supabaseAdmin
+      .from('kpi_weeks')
+      .select('kpi_id, target, actual')
+      .eq('week_start', weekStart)
+      .in('kpi_id', counterIds);
+    if (weekErr) throw weekErr;
+    for (const w of (weeks ?? []) as WeekRow[]) weekByKpi.set(w.kpi_id, w);
+  }
 
   return definitions.map((d) => ({
     ...d,
@@ -52,7 +58,11 @@ export async function createKpi(input: {
   unit?: string;
   target?: number;
   week_start: string;
+  type?: KpiType;
+  due_date?: string | null;
 }): Promise<KpiWithWeek> {
+  const type: KpiType = input.type ?? 'counter';
+
   const { data: maxRow } = await supabaseAdmin
     .from('kpis')
     .select('position')
@@ -70,26 +80,37 @@ export async function createKpi(input: {
       name: input.name,
       unit: input.unit ?? '',
       position: nextPosition,
+      type,
+      due_date: input.due_date ?? null,
     })
     .select()
     .single();
   if (kpiErr) throw kpiErr;
 
   const target = input.target ?? 0;
-  const { error: weekErr } = await supabaseAdmin.from('kpi_weeks').insert({
-    kpi_id: kpi.id,
-    week_start: input.week_start,
-    target,
-    actual: 0,
-  });
-  if (weekErr) throw weekErr;
+  if (type === 'counter') {
+    const { error: weekErr } = await supabaseAdmin.from('kpi_weeks').insert({
+      kpi_id: kpi.id,
+      week_start: input.week_start,
+      target,
+      actual: 0,
+    });
+    if (weekErr) throw weekErr;
+  }
 
   return { ...(kpi as Kpi), target, actual: 0 };
 }
 
 export async function updateKpiDefinition(
   id: string,
-  patch: { name?: string; unit?: string; parent_id?: string | null; position?: number }
+  patch: {
+    name?: string;
+    unit?: string;
+    parent_id?: string | null;
+    position?: number;
+    due_date?: string | null;
+    completed?: boolean;
+  }
 ): Promise<void> {
   const { error } = await supabaseAdmin.from('kpis').update(patch).eq('id', id);
   if (error) throw error;

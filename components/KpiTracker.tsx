@@ -21,7 +21,7 @@ export function KpiTracker({ userId }: { userId: string }) {
     });
     if (!res.ok) return;
     const data = (await res.json()) as KpiWithWeek[];
-    setKpis(data);
+    setKpis(data.filter((k) => k.type === 'counter'));
   }, [userId]);
 
   useEffect(() => {

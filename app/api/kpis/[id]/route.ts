@@ -9,10 +9,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: 'body required' }, { status: 400 });
 
-  const defPatch: { name?: string; unit?: string; parent_id?: string | null } = {};
+  const defPatch: {
+    name?: string;
+    unit?: string;
+    parent_id?: string | null;
+    due_date?: string | null;
+    completed?: boolean;
+  } = {};
   if (typeof body.name === 'string' && body.name.trim()) defPatch.name = body.name.trim();
   if (typeof body.unit === 'string') defPatch.unit = body.unit.trim();
   if ('parent_id' in body) defPatch.parent_id = body.parent_id ?? null;
+  if ('due_date' in body) defPatch.due_date = body.due_date ? String(body.due_date) : null;
+  if (typeof body.completed === 'boolean') defPatch.completed = body.completed;
 
   if (Object.keys(defPatch).length > 0) await updateKpiDefinition(id, defPatch);
 

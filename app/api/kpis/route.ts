@@ -18,6 +18,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'user_id and name required' }, { status: 400 });
   }
   const target = typeof body.target === 'number' && body.target >= 0 ? body.target : 0;
+  const type = body.type === 'project' || body.type === 'step' ? body.type : 'counter';
+  const due_date = typeof body.due_date === 'string' && body.due_date.length > 0 ? body.due_date : null;
   const kpi = await createKpi({
     user_id: body.user_id,
     parent_id: body.parent_id ?? null,
@@ -25,6 +27,8 @@ export async function POST(req: NextRequest) {
     unit: typeof body.unit === 'string' ? body.unit.trim() : '',
     target,
     week_start: currentWeekStart(),
+    type,
+    due_date,
   });
   return NextResponse.json(kpi, { status: 201 });
 }
