@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+const SCOPE = [
+  'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/userinfo.email',
+  'openid',
+].join(' ');
 
 export async function GET(req: NextRequest) {
   const userId = req.nextUrl.searchParams.get('userId');
