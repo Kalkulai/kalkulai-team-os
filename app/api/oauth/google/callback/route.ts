@@ -6,7 +6,10 @@ export async function GET(req: NextRequest) {
   const state = req.nextUrl.searchParams.get('state');
   const oauthError = req.nextUrl.searchParams.get('error');
 
+  console.log('[oauth-cb] entered', { hasCode: !!code, hasState: !!state, oauthError });
+
   if (oauthError) {
+    console.log('[oauth-cb] google-error', oauthError);
     return NextResponse.redirect(
       new URL(
         `/settings?calendar=error&reason=${encodeURIComponent(oauthError)}`,
@@ -15,12 +18,14 @@ export async function GET(req: NextRequest) {
     );
   }
   if (!code || !state) {
+    console.log('[oauth-cb] missing-params', { hasCode: !!code, hasState: !!state });
     return NextResponse.json({ error: 'code and state required' }, { status: 400 });
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret) {
+    console.log('[oauth-cb] env-missing', { hasId: !!clientId, hasSecret: !!clientSecret });
     return NextResponse.json({ error: 'Google OAuth env not configured' }, { status: 500 });
   }
 
@@ -38,10 +43,14 @@ export async function GET(req: NextRequest) {
     }),
   });
 
+  console.log('[oauth-cb] token-exchange', { status: tokenRes.status });
+
   if (!tokenRes.ok) {
+    const body = await tokenRes.text().catch(() => '');
+    console.log('[oauth-cb] token-exchange-fail', { status: tokenRes.status, body: body.slice(0, 300) });
     return NextResponse.redirect(
       new URL(
-        `/settings?calendar=error&reason=${encodeURIComponent('token-exchange-' + tokenRes.status)}`,
+        `/settings?calendar=error&reason=token-exchange-${tokenRes.status}`,
         req.nextUrl.origin
       )
     );
@@ -53,7 +62,10 @@ export async function GET(req: NextRequest) {
     id_token?: string;
   };
 
+  console.log('[oauth-cb] tokens', { hasRefresh: !!tokens.refresh_token, hasAccess: !!tokens.access_token });
+
   if (!tokens.refresh_token) {
+    console.log('[oauth-cb] no-refresh-token-redirect', { state });
     return NextResponse.redirect(
       new URL('/settings?calendar=error&reason=no-refresh-token', req.nextUrl.origin)
     );
@@ -70,6 +82,8 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  console.log('[oauth-cb] db-update', { state, hasEmail: !!email });
+
   const { error: dbError } = await supabaseAdmin
     .from('team_members')
     .update({
@@ -79,10 +93,12 @@ export async function GET(req: NextRequest) {
     .eq('id', state);
 
   if (dbError) {
+    console.log('[oauth-cb] db-error', { msg: dbError.message, code: dbError.code, details: dbError.details });
     return NextResponse.redirect(
       new URL('/settings?calendar=error&reason=db', req.nextUrl.origin)
     );
   }
 
+  console.log('[oauth-cb] success', { state, email });
   return NextResponse.redirect(new URL('/settings?calendar=connected', req.nextUrl.origin));
 }
