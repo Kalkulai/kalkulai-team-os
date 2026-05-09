@@ -101,6 +101,6 @@ export async function GET(req: NextRequest) {
 
   console.log('[oauth-cb] success', { state, email });
   return NextResponse.redirect(
-    new URL(`/settings?calendar=connected&userId=${state}`, req.nextUrl.origin)
+    new URL(`/settings?calendar=connected&member=${state}`, req.nextUrl.origin)
   );
 }
