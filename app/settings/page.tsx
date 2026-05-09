@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Select,
   SelectContent,
@@ -10,6 +11,8 @@ import {
 import { Label } from '@/components/ui/label';
 import { KpiManager } from '@/components/KpiManager';
 import type { TeamMember } from '@/types';
+
+const ACTIVE_USER_KEY = 'team-os-active-user';
 
 const GLASS =
   'rounded-2xl bg-card/70 backdrop-blur-xl ring-1 ring-foreground/5 ' +
@@ -28,6 +31,7 @@ function initials(name: string): string {
 }
 
 export default function SettingsPage() {
+  const searchParams = useSearchParams();
   const [members, setMembers] = useState<TeamMember[]>([]);
   const [selectedId, setSelectedId] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -37,10 +41,24 @@ export default function SettingsPage() {
       .then((r) => r.json())
       .then((data: TeamMember[]) => {
         setMembers(data);
-        if (data.length > 0) setSelectedId(data[0].id);
+        if (data.length === 0) return;
+        const fromUrl = searchParams.get('userId');
+        const fromStorage =
+          typeof window !== 'undefined' ? window.localStorage.getItem(ACTIVE_USER_KEY) : null;
+        const ids = new Set(data.map((m) => m.id));
+        const preferred =
+          (fromUrl && ids.has(fromUrl) && fromUrl) ||
+          (fromStorage && ids.has(fromStorage) && fromStorage) ||
+          data[0].id;
+        setSelectedId(preferred);
       })
       .catch(() => setError('Teammitglieder konnten nicht geladen werden'));
-  }, []);
+  }, [searchParams]);
+
+  const persistSelected = (id: string) => {
+    setSelectedId(id);
+    if (typeof window !== 'undefined') window.localStorage.setItem(ACTIVE_USER_KEY, id);
+  };
 
   const selectedMember = members.find((m) => m.id === selectedId);
 
@@ -65,7 +83,7 @@ export default function SettingsPage() {
             </Label>
             <Select
               value={selectedId}
-              onValueChange={(v) => { if (v !== null) setSelectedId(v); }}
+              onValueChange={(v) => { if (v !== null) persistSelected(v); }}
               disabled={members.length === 0}
             >
               <SelectTrigger id="member-select" className="min-h-[44px] w-full sm:w-56">
