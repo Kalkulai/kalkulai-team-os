@@ -1,18 +1,8 @@
 'use client';
-import { Suspense, useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Label } from '@/components/ui/label';
+import { Suspense } from 'react';
+import { useActiveMember } from '@/lib/active-member';
 import { KpiManager } from '@/components/KpiManager';
 import type { TeamMember } from '@/types';
-
-const ACTIVE_USER_KEY = 'team-os-active-user';
 
 const GLASS =
   'rounded-2xl bg-card/70 backdrop-blur-xl ring-1 ring-foreground/5 ' +
@@ -39,103 +29,56 @@ export default function SettingsPage() {
 }
 
 function SettingsContent() {
-  const searchParams = useSearchParams();
-  const [members, setMembers] = useState<TeamMember[]>([]);
-  const [selectedId, setSelectedId] = useState('');
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetch('/api/members')
-      .then((r) => r.json())
-      .then((data: TeamMember[]) => {
-        setMembers(data);
-        if (data.length === 0) return;
-        const fromUrl = searchParams.get('userId');
-        const fromStorage =
-          typeof window !== 'undefined' ? window.localStorage.getItem(ACTIVE_USER_KEY) : null;
-        const ids = new Set(data.map((m) => m.id));
-        const preferred =
-          (fromUrl && ids.has(fromUrl) && fromUrl) ||
-          (fromStorage && ids.has(fromStorage) && fromStorage) ||
-          data[0].id;
-        setSelectedId(preferred);
-      })
-      .catch(() => setError('Teammitglieder konnten nicht geladen werden'));
-  }, [searchParams]);
-
-  const persistSelected = (id: string) => {
-    setSelectedId(id);
-    if (typeof window !== 'undefined') window.localStorage.setItem(ACTIVE_USER_KEY, id);
-  };
-
-  const selectedMember = members.find((m) => m.id === selectedId);
+  const { members, activeId, activeMember } = useActiveMember();
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-6">
       <header className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-6`}>
         <p className="text-xs uppercase tracking-wider text-muted-foreground">Konfiguration</p>
         <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Einstellungen</h1>
+        {activeMember && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Aktiv:{' '}
+            <span className="font-medium text-foreground">{activeMember.name}</span>
+            <span className="ml-1.5">— Person oben rechts wechseln.</span>
+          </p>
+        )}
       </header>
 
       <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-6`}>
-        <header className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 className="text-sm font-semibold tracking-tight">KPIs diese Woche</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Eigene KPIs anlegen, Ziele setzen, im Dashboard manuell hochzählen.
-            </p>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="member-select" className="text-xs uppercase tracking-wide text-muted-foreground">
-              Person
-            </Label>
-            <Select
-              value={selectedId}
-              onValueChange={(v) => { if (v !== null) persistSelected(v); }}
-              disabled={members.length === 0}
-            >
-              <SelectTrigger id="member-select" className="min-h-[44px] w-full sm:w-56">
-                <SelectValue placeholder={members.length === 0 ? 'Lade…' : 'Person auswählen…'}>
-                  {selectedMember?.name ?? 'Person…'}
-                </SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                {members.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>
-                    {m.name}
-                    <span className="ml-2 text-xs text-muted-foreground">({m.role})</span>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        <header className="mb-4">
+          <h2 className="text-sm font-semibold tracking-tight">KPIs diese Woche</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Eigene KPIs anlegen, Ziele setzen, im Dashboard manuell hochzählen.
+          </p>
         </header>
-
-        {error && <p className="mb-3 text-sm text-rose-600 dark:text-rose-400">{error}</p>}
-
-        {selectedId && <KpiManager userId={selectedId} />}
+        {activeId ? (
+          <KpiManager userId={activeId} />
+        ) : (
+          <p className="text-sm text-muted-foreground">Lädt…</p>
+        )}
       </section>
 
       <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-6`}>
         <h2 className="mb-4 text-sm font-semibold tracking-tight">Google Calendar</h2>
-        {selectedMember ? (
+        {activeMember ? (
           <div className="space-y-4">
             <p className="text-sm leading-snug text-muted-foreground">
-              {selectedMember.google_calendar_email ? (
-                <>Verbunden mit <span className="font-medium text-foreground">{selectedMember.google_calendar_email}</span></>
+              {activeMember.google_calendar_email ? (
+                <>Verbunden mit <span className="font-medium text-foreground">{activeMember.google_calendar_email}</span></>
               ) : (
                 'Noch nicht verbunden — Briefing nutzt Fallback-Kalender.'
               )}
             </p>
             <a
-              href={`/api/oauth/google/start?userId=${selectedMember.id}`}
+              href={`/api/oauth/google/start?userId=${activeMember.id}`}
               className="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg border border-foreground/[0.08] bg-card/60 px-4 text-sm font-medium backdrop-blur-md transition-colors hover:border-foreground/[0.16] hover:bg-card/80 sm:w-auto"
             >
-              {selectedMember.google_calendar_email ? 'Anderen Account verbinden' : 'Mit Google Calendar verbinden'}
+              {activeMember.google_calendar_email ? 'Anderen Account verbinden' : 'Mit Google Calendar verbinden'}
             </a>
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground">Person auswählen, um Calendar zu verbinden.</p>
+          <p className="text-sm text-muted-foreground">Lädt…</p>
         )}
       </section>
 

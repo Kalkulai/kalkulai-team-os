@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import Link from 'next/link';
+import { GlobalMemberSwitcher } from '@/components/GlobalMemberSwitcher';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -18,7 +19,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <span className="mr-2 font-semibold tracking-tight">Team OS</span>
           <Link href="/dashboard" className="text-muted-foreground transition-colors hover:text-foreground">Mein Tag</Link>
           <Link href="/dashboard/team" className="text-muted-foreground transition-colors hover:text-foreground">Team</Link>
-          <Link href="/settings" className="ml-auto text-muted-foreground transition-colors hover:text-foreground">Einstellungen</Link>
+          <div className="ml-auto flex items-center gap-4">
+            <Link href="/settings" className="text-muted-foreground transition-colors hover:text-foreground">Einstellungen</Link>
+            <GlobalMemberSwitcher />
+          </div>
         </nav>
         <main className="mx-auto w-full max-w-6xl px-4 py-5 sm:px-6 sm:py-8">{children}</main>
       </body>

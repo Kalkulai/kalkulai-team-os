@@ -2,7 +2,6 @@ import { TaskList } from '@/components/TaskList';
 import { MeetingList } from '@/components/MeetingList';
 import { KpiTracker } from '@/components/KpiTracker';
 import { ProjectsTracker } from '@/components/ProjectsTracker';
-import { MemberSwitcher } from '@/components/MemberSwitcher';
 import { SalesLogger } from '@/components/SalesLogger';
 import { buildDailyBriefing } from '@/lib/aggregator';
 import { getAllMembers, getSalesLogsTodayByType } from '@/lib/supabase';
@@ -76,9 +75,6 @@ export default async function DashboardPage({
                 </code>
               </p>
             )}
-          </div>
-          <div className="shrink-0">
-            <MemberSwitcher members={members} currentId={me.id} />
           </div>
         </div>
       </section>
