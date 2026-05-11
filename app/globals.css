@@ -437,6 +437,21 @@ html.light .btn-step { background: rgba(255, 255, 255, 0.7); border-color: rgba(
 .btn-step.pri:hover { filter: brightness(1.1); }
 .btn-step:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* Primary action button — used for settings actions, error retry, etc. */
+.btn-action {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 8px; height: 38px; padding: 0 16px;
+  font: 500 13px/1 var(--font); color: #fff; text-decoration: none;
+  border-radius: 9px; border: 1px solid transparent;
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  box-shadow: 0 4px 14px -4px var(--brand), 0 0 0 1px rgba(255, 255, 255, 0.25) inset;
+  transition: filter 0.14s, transform 0.14s;
+  cursor: pointer;
+}
+.btn-action:hover { filter: brightness(1.1); }
+.btn-action:active { transform: translateY(1px); }
+.btn-action:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }
+
 /* ─── Project rows ─── */
 .proj {
   border: 1px solid var(--line-1); border-radius: 11px; overflow: hidden; margin-bottom: 9px;

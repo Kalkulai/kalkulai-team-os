@@ -30,7 +30,7 @@ export default function ErrorBoundary({
       <button
         type="button"
         onClick={reset}
-        className="btn-step pri mt-4 inline-flex h-10 w-auto items-center px-4 text-[13px] font-medium"
+        className="btn-action mt-4"
       >
         Nochmal versuchen
       </button>

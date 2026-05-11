@@ -89,7 +89,7 @@ function SettingsContent() {
               </p>
               <a
                 href={`/api/oauth/google/start?userId=${activeMember.id}`}
-                className="btn-step pri inline-flex h-10 w-auto items-center px-4 text-[13px] font-medium"
+                className="btn-action"
               >
                 {activeMember.google_calendar_email ? 'Anderen Account verbinden' : 'Mit Google Calendar verbinden'}
               </a>
