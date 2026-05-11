@@ -43,3 +43,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# claude code session state (per-machine)
+.claude/
+
+# design source caches (locally synced, large)
+.design-cache/
+.design-cache-v2/
+
+# local task notes (not authoritative)
+/tasks/
