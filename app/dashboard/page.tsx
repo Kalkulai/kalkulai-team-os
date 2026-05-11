@@ -2,36 +2,43 @@ import { TaskList } from '@/components/TaskList';
 import { MeetingList } from '@/components/MeetingList';
 import { KpiTracker } from '@/components/KpiTracker';
 import { ProjectsTracker } from '@/components/ProjectsTracker';
-import { SalesLogger } from '@/components/SalesLogger';
+import { SalesFab } from '@/components/SalesFab';
+import { HorizonCard, HorizonSection } from '@/components/dashboard/HorizonCard';
+import { ActivityTimeline } from '@/components/dashboard/ActivityTimeline';
 import { buildDailyBriefing } from '@/lib/aggregator';
+import { buildActivityFeed } from '@/lib/activity';
+import { getRecentlyMergedPRs } from '@/lib/github';
 import { getAllMembers, getSalesLogsTodayByType } from '@/lib/supabase';
-import { format } from 'date-fns';
+import { differenceInCalendarDays, format, getISOWeek, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
+import { GitBranch } from 'lucide-react';
 
 export const dynamic = 'force-dynamic';
 
-function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 11) return 'Guten Morgen';
-  if (h < 18) return 'Guten Tag';
-  return 'Guten Abend';
-}
-
-function sortByPriority<T extends { priority: number }>(tasks: T[]): T[] {
-  const rank = (p: number) => (p === 0 ? 99 : p);
+/**
+ * Sort: overdue first, then due-today, then by Linear priority.
+ * Tie-breaker for same urgency-bucket: lower priority number = more urgent.
+ */
+function sortTasks<T extends { priority: number; dueDate?: string | null }>(tasks: T[]): T[] {
+  const now = new Date();
+  function urgencyBucket(t: T): number {
+    if (!t.dueDate) return 2; // no due-date = lowest urgency bucket
+    try {
+      const days = differenceInCalendarDays(parseISO(t.dueDate), now);
+      if (days < 0) return 0; // overdue
+      if (days === 0) return 1; // today
+      return 2; // future
+    } catch {
+      return 2;
+    }
+  }
+  const prioRank = (p: number) => (p === 0 ? 99 : p);
   return [...tasks].sort((a, b) => {
-    const aHigh = a.priority >= 1 && a.priority <= 2 ? 0 : 1;
-    const bHigh = b.priority >= 1 && b.priority <= 2 ? 0 : 1;
-    if (aHigh !== bHigh) return aHigh - bHigh;
-    return rank(a.priority) - rank(b.priority);
+    const ub = urgencyBucket(a) - urgencyBucket(b);
+    if (ub !== 0) return ub;
+    return prioRank(a.priority) - prioRank(b.priority);
   });
 }
-
-const GLASS =
-  'rounded-2xl bg-card/70 backdrop-blur-xl ring-1 ring-foreground/5 ' +
-  'shadow-[0_1px_0_0_rgba(255,255,255,0.6)_inset,0_8px_24px_-12px_rgba(0,0,0,0.12)] ' +
-  'dark:shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset,0_8px_24px_-12px_rgba(0,0,0,0.5)] ' +
-  'animate-[card-rise_400ms_cubic-bezier(0.22,1,0.36,1)_both]';
 
 export default async function DashboardPage({
   searchParams,
@@ -42,93 +49,81 @@ export default async function DashboardPage({
 
   if (!members.length) {
     return (
-      <div className="space-y-6">
-        <p className="text-muted-foreground">Keine Teammitglieder konfiguriert. Bitte die Supabase-Tabelle befüllen.</p>
-      </div>
+      <p className="text-[13px] text-[var(--ink-3)]">
+        Keine Teammitglieder konfiguriert. Bitte die Supabase-Tabelle befüllen.
+      </p>
     );
   }
 
   const me = members.find((m) => m.id === params.member) ?? members[0];
-  const [briefing, todaySalesLogs] = await Promise.all([
-    buildDailyBriefing(me),
+  const briefing = await buildDailyBriefing(me);
+  const mergedPRs = await getRecentlyMergedPRs(2);
+  const [activityDays, todaySalesLogs] = await Promise.all([
+    buildActivityFeed(me, briefing.meetings, mergedPRs),
     me.role === 'sales' ? getSalesLogsTodayByType(me.id) : Promise.resolve({}),
   ]);
 
-  const showSalesLogger = me.role === 'sales';
+  const now = new Date();
+  const dayShort = format(now, 'd. MMM', { locale: de });
+  const heuteTitle = format(now, 'EEEE · d. MMMM', { locale: de });
+  const weekNo = getISOWeek(now);
+  const tasksSorted = sortTasks(briefing.tasks);
+  const showSalesFab = me.role === 'sales';
+  const activityCount = activityDays.reduce((n, d) => n + d.events.length, 0);
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-6">
-      <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-6`}>
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">
-              {format(new Date(), 'EEEE, d. MMMM', { locale: de })}
-            </p>
-            <h1 className="mt-1 truncate text-2xl font-semibold tracking-tight sm:text-3xl">
-              {greeting()}, {me.name}
-            </h1>
-            {briefing.activeBranch && (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Aktiver Branch:{' '}
-                <code className="rounded bg-foreground/[0.06] px-1.5 py-0.5 font-mono text-[11px] text-foreground/80">
-                  {briefing.activeBranch}
-                </code>
-              </p>
-            )}
-          </div>
+    <>
+      {briefing.activeBranch && (
+        <div className="mb-5 flex items-center gap-2.5">
+          <span className="inline-flex items-center gap-1.5 rounded-[7px] border border-[var(--line-1)] bg-white/[0.06] px-2.5 py-1 text-[11.5px] font-medium text-[var(--ink-2)] mono">
+            <GitBranch size={11} className="text-[var(--ink-3)]" aria-hidden />
+            {briefing.activeBranch}
+          </span>
+          <span className="text-[12px] text-[var(--ink-3)]">aktiver Branch · {me.name}</span>
         </div>
-      </section>
-
-      <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-4`}>
-        <header className="mb-4 flex items-baseline justify-between">
-          <h2 className="text-sm font-semibold tracking-tight">Deine Tasks</h2>
-          <span className="text-xs tabular-nums text-muted-foreground">{briefing.tasks.length}</span>
-        </header>
-        <TaskList tasks={sortByPriority(briefing.tasks)} userId={me.id} />
-      </section>
-
-      <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-2`}>
-        <header className="mb-4 flex items-baseline justify-between">
-          <h2 className="text-sm font-semibold tracking-tight">Meetings heute</h2>
-          <span className="text-xs tabular-nums text-muted-foreground">{briefing.meetings.length}</span>
-        </header>
-        <MeetingList meetings={briefing.meetings} />
-      </section>
-
-      <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-3`}>
-        <header className="mb-4 flex items-baseline justify-between">
-          <h2 className="text-sm font-semibold tracking-tight">Projekte</h2>
-          <a
-            href="/settings"
-            className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-          >
-            anpassen
-          </a>
-        </header>
-        <ProjectsTracker userId={me.id} />
-      </section>
-
-      <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-3`}>
-        <header className="mb-4 flex items-baseline justify-between">
-          <h2 className="text-sm font-semibold tracking-tight">KPIs diese Woche</h2>
-          <a
-            href="/settings"
-            className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-          >
-            anpassen
-          </a>
-        </header>
-        <KpiTracker userId={me.id} />
-      </section>
-
-      {showSalesLogger && (
-        <section className={`${GLASS} col-span-1 px-5 py-5 sm:px-6 sm:py-6 md:col-span-6`}>
-          <header className="mb-4">
-            <h2 className="text-sm font-semibold tracking-tight">Call loggen</h2>
-          </header>
-          <SalesLogger userId={me.id} initialCounts={todaySalesLogs} />
-        </section>
       )}
-    </div>
+
+      <div className="grid grid-cols-1 gap-[18px] lg:grid-cols-3 max-lg:grid-cols-2 max-[760px]:grid-cols-1">
+        <HorizonCard number={1} title={heuteTitle} meta={dayShort} delayMs={40}>
+          <HorizonSection label="Termine" end={<span className="mono">{briefing.meetings.length} heute</span>}>
+            <MeetingList meetings={briefing.meetings} />
+          </HorizonSection>
+          <TaskList tasks={tasksSorted} userId={me.id} />
+        </HorizonCard>
+
+        <HorizonCard number={2} title="Diese Woche" meta={<span className="mono">KW {weekNo}</span>} delayMs={120}>
+          <HorizonSection
+            label="KPIs"
+            end={
+              <a href="/settings" className="hover:text-[var(--ink-1)]">
+                anpassen
+              </a>
+            }
+          >
+            <KpiTracker userId={me.id} />
+          </HorizonSection>
+          <HorizonSection
+            label="Projekte"
+            end={
+              <a href="/settings" className="hover:text-[var(--ink-1)]">
+                anpassen
+              </a>
+            }
+          >
+            <ProjectsTracker userId={me.id} />
+          </HorizonSection>
+        </HorizonCard>
+
+        <HorizonCard number={3} title="Aktivität" meta={<span className="mono">{activityCount} Events</span>} delayMs={200}>
+          <HorizonSection label="Stream">
+            <ActivityTimeline days={activityDays} />
+          </HorizonSection>
+        </HorizonCard>
+      </div>
+
+      {showSalesFab && (
+        <SalesFab userId={me.id} initialCounts={todaySalesLogs} dayShort={dayShort} />
+      )}
+    </>
   );
 }
