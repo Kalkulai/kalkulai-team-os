@@ -99,6 +99,27 @@ export async function getSalesCallsThisWeek(userId: string): Promise<number> {
   return count ?? 0;
 }
 
+export interface SalesLog {
+  id?: string;
+  user_id: string;
+  type: string;
+  logged_at: string;
+}
+
+export async function getSalesLogsSince(
+  userId: string,
+  sinceISO: string,
+): Promise<SalesLog[]> {
+  const { data, error } = await supabaseAdmin
+    .from('sales_logs')
+    .select('user_id, type, logged_at')
+    .eq('user_id', userId)
+    .gte('logged_at', sinceISO)
+    .order('logged_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as SalesLog[];
+}
+
 export async function getSalesLogsTodayByType(userId: string): Promise<Record<string, number>> {
   const today = format(new Date(), 'yyyy-MM-dd');
   const { data, error } = await supabaseAdmin

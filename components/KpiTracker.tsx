@@ -1,13 +1,44 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
+import { Plus, Minus } from 'lucide-react';
 import type { KpiWithWeek } from '@/types';
 
 const SECRET = process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? '';
 
-function toneFor(pct: number) {
-  if (pct >= 100) return { text: 'text-emerald-600 dark:text-emerald-400', bar: 'from-emerald-500 to-emerald-400' };
-  if (pct >= 60) return { text: 'text-amber-600 dark:text-amber-400', bar: 'from-amber-500 to-amber-400' };
-  return { text: 'text-rose-600 dark:text-rose-400', bar: 'from-rose-500 to-rose-400' };
+function barClass(pct: number): string {
+  if (pct >= 100) return 'bar ok';
+  return 'bar';
+}
+
+function strokeTone(pct: number): string {
+  if (pct >= 100) return 'var(--ok)';
+  return 'var(--brand)';
+}
+
+function sparkPath(pct: number): string {
+  const yEnd = Math.max(3, Math.min(21, 21 - (pct / 100) * 18));
+  const yMid = yEnd + (21 - yEnd) * 0.55;
+  return `M2,21 L26,${yMid} L50,${yEnd + 3} L78,${yEnd}`;
+}
+
+/**
+ * Build SVG polyline from real daily history. y is normalised against the
+ * higher of `target` or `max(history)` so a series exceeding target still
+ * stays inside the 24px SVG canvas.
+ */
+function sparkPathFromHistory(history: number[], target: number): string {
+  const max = Math.max(target, ...history, 1);
+  const n = history.length;
+  if (n < 2) return `M2,21 L78,21`;
+  const xStart = 2;
+  const xEnd = 78;
+  const step = (xEnd - xStart) / (n - 1);
+  const points = history.map((v, i) => {
+    const x = xStart + step * i;
+    const y = Math.max(3, 21 - (v / max) * 18);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  return `M${points.join(' L')}`;
 }
 
 export function KpiTracker({ userId }: { userId: string }) {
@@ -25,39 +56,37 @@ export function KpiTracker({ userId }: { userId: string }) {
   }, [userId]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch on mount
     void load();
   }, [load]);
 
   async function adjust(id: string, delta: number) {
     setBusy((prev) => new Set(prev).add(id));
     setKpis((prev) =>
-      prev
-        ? prev.map((k) =>
-            k.id === id ? { ...k, actual: Math.max(0, k.actual + delta) } : k
-          )
-        : prev
+      prev ? prev.map((k) => (k.id === id ? { ...k, actual: Math.max(0, k.actual + delta) } : k)) : prev,
     );
     try {
       await fetch(`/api/kpis/${id}/adjust`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${SECRET}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
         body: JSON.stringify({ delta }),
       });
     } finally {
-      setBusy((prev) => { const next = new Set(prev); next.delete(id); return next; });
+      setBusy((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
     }
   }
 
-  if (kpis === null) return <p className="text-sm text-muted-foreground">Lade KPIs…</p>;
+  if (kpis === null) return <p className="text-[13px] text-[var(--ink-3)]">Lade KPIs…</p>;
 
   if (kpis.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="text-[13px] text-[var(--ink-3)]">
         Noch keine KPIs angelegt. Geh zu{' '}
-        <a href="/settings" className="text-foreground underline underline-offset-2">
+        <a href="/settings" className="text-[var(--ink-1)] underline underline-offset-2">
           Einstellungen
         </a>{' '}
         und leg deine ersten an.
@@ -66,51 +95,66 @@ export function KpiTracker({ userId }: { userId: string }) {
   }
 
   return (
-    <ul className="space-y-5">
+    <ul>
       {kpis.map((k) => {
         const pct = k.target > 0 ? Math.min(Math.round((k.actual / k.target) * 100), 100) : 0;
-        const tone = toneFor(pct);
         const isBusy = busy.has(k.id);
+        const stroke = strokeTone(pct);
         return (
-          <li key={k.id} className="space-y-2">
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <li key={k.id} className="kpi">
+            <div className="kpi-row">
+              <span className="kpi-name">
                 {k.name}
-                {k.unit && <span className="ml-1 text-muted-foreground/60">· {k.unit}</span>}
+                {k.unit && <span className="text-[12px] text-[var(--ink-3)]">· {k.unit}</span>}
+                <span className="pill pill-blue">Manual</span>
               </span>
-              <span className={`text-xs tabular-nums ${tone.text}`}>{pct}%</span>
+              <span className="kpi-actions">
+                <button
+                  type="button"
+                  onClick={() => adjust(k.id, -1)}
+                  disabled={isBusy || k.actual === 0}
+                  aria-label="Eins weniger"
+                  className="btn-step"
+                >
+                  <Minus size={12} aria-hidden />
+                </button>
+                <span className="kpi-num">
+                  <span className="v">{k.actual}</span>
+                  <span className="t">/ {k.target || '∞'}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => adjust(k.id, +1)}
+                  disabled={isBusy}
+                  aria-label="Eins mehr"
+                  className="btn-step pri"
+                >
+                  <Plus size={12} aria-hidden />
+                </button>
+              </span>
             </div>
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => adjust(k.id, -1)}
-                disabled={isBusy || k.actual === 0}
-                aria-label="Eins weniger"
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-foreground/[0.08] bg-card/60 text-base backdrop-blur-md transition-colors hover:border-foreground/[0.2] hover:bg-card/80 disabled:cursor-not-allowed disabled:opacity-30"
-              >
-                −
-              </button>
-              <div className="flex-1 space-y-1">
-                <div className="flex items-baseline gap-1">
-                  <span className={`text-2xl font-semibold tabular-nums ${tone.text}`}>{k.actual}</span>
-                  <span className="text-sm text-muted-foreground tabular-nums">/ {k.target || '∞'}</span>
-                </div>
-                <div className="relative h-1.5 overflow-hidden rounded-full bg-foreground/[0.06] dark:bg-foreground/[0.08]">
-                  <div
-                    className={`h-full rounded-full bg-gradient-to-r ${tone.bar} transition-[width] duration-500 ease-out`}
-                    style={{ width: `${pct}%` }}
-                  />
-                </div>
+            <div className="kpi-bar">
+              <div className={barClass(pct)}>
+                <i
+                  ref={(el) => {
+                    if (el) el.style.width = `${pct}%`;
+                  }}
+                />
               </div>
-              <button
-                type="button"
-                onClick={() => adjust(k.id, +1)}
-                disabled={isBusy}
-                aria-label="Eins mehr"
-                className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-foreground/[0.08] bg-foreground text-base font-medium text-background backdrop-blur-md transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-30"
-              >
-                +
-              </button>
+              <svg className="spark" width="74" height="20" viewBox="0 0 80 24" aria-hidden>
+                <path
+                  d={
+                    k.history && k.history.length >= 2
+                      ? sparkPathFromHistory(k.history, k.target)
+                      : sparkPath(pct)
+                  }
+                  fill="none"
+                  stroke={stroke}
+                  strokeWidth="1.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
             </div>
           </li>
         );

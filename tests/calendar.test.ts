@@ -73,7 +73,12 @@ describe('getTodayEvents — token selection', () => {
   });
 
   it('returns empty list when access_token exchange fails', async () => {
-    fetchMock.mockResolvedValueOnce({ ok: false, json: async () => ({}) } as Response);
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 400,
+      json: async () => ({}),
+      text: async () => 'invalid_grant',
+    } as Response);
     const events = await getTodayEvents(makeMember({ google_refresh_token: 'broken' }));
     expect(events).toEqual([]);
   });
