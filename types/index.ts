@@ -17,6 +17,8 @@ export interface TeamMember {
   role: UserRole;
 }
 
+export type TaskSource = 'linear' | 'notion' | 'hermes' | 'local';
+
 export interface LinearIssue {
   id: string;
   identifier: string;
@@ -24,6 +26,10 @@ export interface LinearIssue {
   priority: number;
   state: { name: string; type: string };
   assignee: { id: string; name: string } | null;
+  /** ISO 8601 due date from Linear, if set. */
+  dueDate?: string | null;
+  /** Origin label (computed from Linear labels). Default: 'linear'. */
+  source?: TaskSource;
 }
 
 export interface GitHubBranch {
@@ -31,6 +37,15 @@ export interface GitHubBranch {
   commit: { sha: string; url: string };
   lastCommitDate?: string;
   authorLogin?: string;
+  /** PR metadata, only populated when getActiveBranches({ withPRMeta: true }) is used. */
+  prNumber?: number;
+  prAuthor?: string;
+  prAssignee?: string;
+  prRequestedReviewer?: string;
+  /** true when the commit author or branch name matches a known bot pattern. */
+  isBot?: boolean;
+  /** Repo this branch lives in, e.g. "Kalkulai/kalkulai". Populated when multi-repo tracking is enabled. */
+  repo?: string;
 }
 
 export interface CalendarEvent {
@@ -39,6 +54,8 @@ export interface CalendarEvent {
   start: string;
   end: string;
   isSalesCall: boolean;
+  /** Direct Google-Calendar URL for opening the event in a new tab. */
+  htmlLink?: string;
 }
 
 export interface HubSpotCall {
@@ -97,4 +114,6 @@ export interface Kpi {
 export interface KpiWithWeek extends Kpi {
   target: number;
   actual: number;
+  /** Daily actual snapshots from kpi_history, oldest → newest. Length matches HISTORY_DAYS. */
+  history?: number[];
 }
