@@ -15,24 +15,42 @@ Wenn du dich für **Felix** oder **Paul** ausgeben willst (KPIs/Branches/Tasks p
 
 ---
 
-## Was du einmalig zusätzlich tun solltest
+## Aktueller Stand (Mai 2026)
 
-### 1. Telegram-Bot starten (für das tägliche Morgen-Briefing)
-- Telegram öffnen → **https://t.me/Kalkulai_team_os_bot**
-- **Start** drücken.
-- Sag Leon Bescheid, er trägt deine `chat_id` in die DB ein.
-- Ab dem nächsten Morgen bekommst du um **06:00** dein Team-OS-Briefing (Tasks + Termine + Wochenstand). (Cron muss noch aktiviert werden — kommt mit Hermes.)
+**Felix & Paul:**
+- ✅ Telegram-`chat_id` ist eingetragen
+- ✅ Linear-User-ID + GitHub-Username + Notion-User-ID sind eingetragen
+- ❌ Google Calendar noch nicht verbunden ← **das musst du noch machen**
+- ❌ (nur Paul) HubSpot-Owner-ID fehlt ← optional, nur für Sales-Call-Tracking aus dem CRM
 
-### 2. Google Calendar verbinden (nur Dev/Sales, für Termin-Sync)
-- Login zum Dashboard.
+**Cron-Status:**
+- Das automatische 06:00-Telegram-Briefing ist **aktuell nicht aktiviert** (`vercel.json` hat `"crons": []`). Wird mit dem Hermes-Setup nachgezogen. Bis dahin: Telegram bleibt stumm, das Dashboard aber live.
+
+---
+
+## Was du als Felix oder Paul jetzt konkret tun musst
+
+### 1. Google Calendar verbinden (5 min)
+- Auf https://kalkulai-team-os.vercel.app einloggen (Passwort von Leon).
 - Oben rechts auf deinen Avatar → "Settings" wählen (oder direkt: `/settings`).
 - Im Block **"Google Calendar"** → **"Mit Google Calendar verbinden"** klicken.
 - Mit **deiner @kalkulai.de Mail** anmelden (NICHT private Mail), Zugriff bestätigen.
-- Effekt: Deine Termine erscheinen jetzt im Dashboard und in deinem Morgen-Briefing.
+- Effekt: Deine Termine erscheinen jetzt im Dashboard. Wenn der 06:00-Cron später aktiviert wird, kommen sie auch ins Telegram-Briefing.
 
-### 3. (Optional, nur Paul/Sales) HubSpot-Owner-ID
+### 2. (nur Paul) HubSpot-Owner-ID an Leon geben — optional
 - Sales-Calls aus HubSpot werden nur aggregiert wenn `hubspot_owner_id` gesetzt ist.
-- Sag Leon deine HubSpot-User-ID — er trägt sie nach.
+- Sag Leon deine HubSpot-User-ID (HubSpot → Settings → My Account → User-ID).
+- Er trägt sie in die `team_members`-Tabelle.
+
+---
+
+## Falls du eine neue Person bist (nicht Felix oder Paul)
+
+Dann fehlt dir initial alles. Onboarding-Reihenfolge:
+1. Leon bittet dich, dem Bot https://t.me/Kalkulai_team_os_bot ein `/start` zu schicken → er trägt deine `chat_id` ein.
+2. Leon trägt deine Linear-User-ID, GitHub-Handle, Notion-User-ID nach.
+3. Du loggst dich am Dashboard mit dem Team-Passwort ein.
+4. Du verbindest deinen Google Calendar (siehe oben).
 
 ---
 
