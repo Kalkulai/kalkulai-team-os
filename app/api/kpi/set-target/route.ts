@@ -3,6 +3,7 @@ import { upsertKpiTargets, getWeekTargets, currentWeekStart } from '@/lib/supaba
 import { requireApiAuth } from '@/lib/api-auth';
 
 export async function GET(req: NextRequest) {
+  if (!requireApiAuth(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { searchParams } = new URL(req.url);
   const userId = searchParams.get('userId');
   if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 });
