@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import {
+  BarChart3,
   Check,
   FilePlus,
   GitBranch,
@@ -22,6 +23,7 @@ export type ActivityKind =
   | 'dep'        // Dependabot-PR gemerged
   | 'create'     // Linear-Task erstellt (normal, ohne Hermes-Label)
   | 'step-done'  // Projekt-Teilschritt erledigt
+  | 'counter'    // KPI-Counter hochgezählt
   | 'call'       // Telefonat / Demo
   | 'hermes'     // Hermes-erstellt
   | 'standup';   // Termin
@@ -49,6 +51,7 @@ const KIND_CLASS: Record<ActivityKind, string> = {
   dep: 'tl-dep',
   create: 'tl-branch',
   'step-done': 'tl-ok',
+  counter: 'tl-ok',
   call: 'tl-call',
   hermes: 'tl-hermes',
   standup: '',
@@ -64,6 +67,7 @@ function IconFor({ kind }: { kind: ActivityKind }) {
     case 'dep':        return <Package />;
     case 'create':     return <FilePlus />;
     case 'step-done':  return <SquareCheck />;
+    case 'counter':    return <BarChart3 />;
     case 'call':       return <Phone />;
     case 'hermes':     return <Sparkles />;
     case 'standup':    return <Users />;

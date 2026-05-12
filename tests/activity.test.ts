@@ -3,7 +3,7 @@ import type { TeamMember, CalendarEvent, GitHubBranch, HubSpotCall } from '@/typ
 import type { MergedPR, OpenedPR } from '@/lib/github';
 import type { CompletedIssue, CreatedIssue } from '@/lib/linear';
 import type { SalesLog } from '@/lib/supabase';
-import type { CompletedStep } from '@/lib/kpis';
+import type { CompletedStep, CounterActivity } from '@/lib/kpis';
 
 vi.mock('@/lib/github', () => ({
   getActiveBranches: vi.fn(),
@@ -21,6 +21,7 @@ vi.mock('@/lib/supabase', () => ({
 }));
 vi.mock('@/lib/kpis', () => ({
   getRecentlyCompletedSteps: vi.fn(),
+  getRecentCounterActivity: vi.fn(),
 }));
 
 import { buildActivityFeed } from '@/lib/activity';
@@ -28,7 +29,7 @@ import { getActiveBranches, getRecentlyOpenedPRs } from '@/lib/github';
 import { getCompletedIssuesSince, getCreatedIssuesSince } from '@/lib/linear';
 import { getCallsThisWeek } from '@/lib/hubspot';
 import { getSalesLogsSince } from '@/lib/supabase';
-import { getRecentlyCompletedSteps } from '@/lib/kpis';
+import { getRecentlyCompletedSteps, getRecentCounterActivity } from '@/lib/kpis';
 
 function makeMember(overrides: Partial<TeamMember> = {}): TeamMember {
   return {
@@ -78,6 +79,7 @@ function resetMocks() {
   vi.mocked(getCallsThisWeek).mockResolvedValue([] as HubSpotCall[]);
   vi.mocked(getSalesLogsSince).mockResolvedValue([] as SalesLog[]);
   vi.mocked(getRecentlyCompletedSteps).mockResolvedValue([] as CompletedStep[]);
+  vi.mocked(getRecentCounterActivity).mockResolvedValue([] as CounterActivity[]);
 }
 
 describe('buildActivityFeed', () => {
@@ -455,5 +457,48 @@ describe('buildActivityFeed', () => {
     ]);
     const days = await buildActivityFeed(makeMember(), []);
     expect(days.find((d) => d.label === 'Gestern')).toBeDefined();
+  });
+
+  // --- Counter -----------------------------------------------------------
+
+  it('renders today counter delta as +N {unit} event', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    vi.mocked(getRecentCounterActivity).mockResolvedValue([
+      { kpi_id: 'k1', kpi_name: 'Sales Calls', unit: 'Anrufe', day: today, delta: 3 },
+    ]);
+    const days = await buildActivityFeed(makeMember(), []);
+    const ev = days.find((d) => d.label === 'Heute')!.events.find((e) => e.kind === 'counter');
+    expect(ev).toBeDefined();
+    expect(ev!.text).toBe('+3 Anrufe');
+    expect(ev!.source).toBe('KPIs');
+  });
+
+  it('falls back to kpi_name when unit is empty', async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    vi.mocked(getRecentCounterActivity).mockResolvedValue([
+      { kpi_id: 'k2', kpi_name: 'Commits', unit: '', day: today, delta: 1 },
+    ]);
+    const days = await buildActivityFeed(makeMember(), []);
+    const ev = days.find((d) => d.label === 'Heute')!.events.find((e) => e.kind === 'counter');
+    expect(ev?.text).toBe('+1 Commits');
+  });
+
+  it('places yesterday counter deltas in Gestern bucket', async () => {
+    const y = new Date();
+    y.setDate(y.getDate() - 1);
+    const yesterdayDay = y.toISOString().slice(0, 10);
+    vi.mocked(getRecentCounterActivity).mockResolvedValue([
+      { kpi_id: 'k3', kpi_name: 'Demos', unit: 'Demos', day: yesterdayDay, delta: 2 },
+    ]);
+    const days = await buildActivityFeed(makeMember(), []);
+    const yest = days.find((d) => d.label === 'Gestern');
+    expect(yest).toBeDefined();
+    expect(yest!.events.some((e) => e.kind === 'counter' && e.text === '+2 Demos')).toBe(true);
+  });
+
+  it('silently skips when getRecentCounterActivity throws', async () => {
+    vi.mocked(getRecentCounterActivity).mockRejectedValue(new Error('boom'));
+    const days = await buildActivityFeed(makeMember(), []);
+    expect(days.find((d) => d.label === 'Heute')!.events.some((e) => e.kind === 'counter')).toBe(false);
   });
 });

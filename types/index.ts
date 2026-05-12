@@ -90,7 +90,8 @@ export interface DailyBriefing {
   member: TeamMember;
   tasks: LinearIssue[];
   meetings: CalendarEvent[];
-  activeBranch: string | null;
+  /** All branches actively assigned to the member — authored, PR-assignee, or PR-reviewer. */
+  activeBranches: GitHubBranch[];
   weekTargets: KpiTargets;
   weekActuals: KpiDaily;
   unprocessedInsights: NotionInsight[];

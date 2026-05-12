@@ -73,13 +73,35 @@ export default async function DashboardPage({
 
   return (
     <>
-      {briefing.activeBranch && (
-        <div className="mb-5 flex items-center gap-2.5">
-          <span className="inline-flex items-center gap-1.5 rounded-[7px] border border-[var(--line-1)] bg-white/[0.06] px-2.5 py-1 text-[11.5px] font-medium text-[var(--ink-2)] mono">
-            <GitBranch size={11} className="text-[var(--ink-3)]" aria-hidden />
-            {briefing.activeBranch}
+      {briefing.activeBranches.length > 0 && (
+        <div className="mb-5 flex flex-wrap items-center gap-2.5">
+          {briefing.activeBranches.map((br) => {
+            const repoShort = br.repo ? br.repo.split('/').pop() : null;
+            const key = `${br.repo ?? ''}#${br.name}`;
+            return (
+              <span
+                key={key}
+                className="inline-flex items-center gap-1.5 rounded-[7px] border border-[var(--line-1)] bg-white/[0.06] px-2.5 py-1 text-[11.5px] font-medium text-[var(--ink-2)] mono"
+                title={br.repo ?? undefined}
+              >
+                <GitBranch size={11} className="text-[var(--ink-3)]" aria-hidden />
+                {br.name}
+                {br.prNumber && (
+                  <span className="text-[var(--ink-3)]">#{br.prNumber}</span>
+                )}
+                {repoShort && (
+                  <span className="ml-0.5 rounded-[4px] bg-white/[0.04] px-1 text-[10px] font-normal text-[var(--ink-3)]">
+                    {repoShort}
+                  </span>
+                )}
+              </span>
+            );
+          })}
+          <span className="text-[12px] text-[var(--ink-3)]">
+            {briefing.activeBranches.length === 1
+              ? `aktiver Branch · ${me.name}`
+              : `${briefing.activeBranches.length} aktive Branches · ${me.name}`}
           </span>
-          <span className="text-[12px] text-[var(--ink-3)]">aktiver Branch · {me.name}</span>
         </div>
       )}
 

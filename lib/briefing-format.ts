@@ -9,8 +9,16 @@ export function formatBriefingMarkdown(b: DailyBriefing): string {
   lines.push(`*Guten Morgen, ${b.member.name}* — ${date}`);
   lines.push('');
 
-  if (b.activeBranch) {
-    lines.push(`Aktiver Branch: \`${b.activeBranch}\``);
+  if (b.activeBranches.length === 1) {
+    lines.push(`Aktiver Branch: \`${b.activeBranches[0].name}\``);
+    lines.push('');
+  } else if (b.activeBranches.length > 1) {
+    lines.push(`Aktive Branches (${b.activeBranches.length}):`);
+    for (const br of b.activeBranches) {
+      const repoShort = br.repo ? br.repo.split('/').pop() : null;
+      const repoTag = repoShort ? ` _(${repoShort})_` : '';
+      lines.push(`• \`${br.name}\`${repoTag}`);
+    }
     lines.push('');
   }
 

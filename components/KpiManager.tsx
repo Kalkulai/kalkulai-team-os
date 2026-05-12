@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
+import { Hash, Target, Plus, X } from 'lucide-react';
 import type { KpiWithWeek, KpiType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,15 +16,22 @@ interface CreateDraft {
   due_date: string;
 }
 
+interface DraftStep {
+  name: string;
+  due_date: string;
+}
+
 const EMPTY_DRAFT: CreateDraft = { type: 'counter', name: '', unit: '', target: '', due_date: '' };
 
 export function KpiManager({ userId }: { userId: string }) {
   const [items, setItems] = useState<KpiWithWeek[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<CreateDraft>(EMPTY_DRAFT);
+  const [draftSteps, setDraftSteps] = useState<DraftStep[]>([]);
+  const [pendingStep, setPendingStep] = useState<DraftStep>({ name: '', due_date: '' });
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Record<string, { name: string; unit: string; target: string; due_date: string }>>({});
-  const [stepDraft, setStepDraft] = useState<Record<string, { name: string; due_date: string }>>({});
+  const [stepDraft, setStepDraft] = useState<Record<string, DraftStep>>({});
 
   const load = useCallback(async () => {
     if (!userId) return;
@@ -39,7 +47,27 @@ export function KpiManager({ userId }: { userId: string }) {
     }
   }, [userId]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch on mount; no external subscription model available
+    void load();
+  }, [load]);
+
+  function switchType(type: KpiType) {
+    setDraft({ ...EMPTY_DRAFT, type });
+    setDraftSteps([]);
+    setPendingStep({ name: '', due_date: '' });
+  }
+
+  function addPendingStep() {
+    const name = pendingStep.name.trim();
+    if (!name) return;
+    setDraftSteps((prev) => [...prev, { name, due_date: pendingStep.due_date }]);
+    setPendingStep({ name: '', due_date: '' });
+  }
+
+  function removeDraftStep(idx: number) {
+    setDraftSteps((prev) => prev.filter((_, i) => i !== idx));
+  }
 
   async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -65,7 +93,30 @@ export function KpiManager({ userId }: { userId: string }) {
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error('Anlegen fehlgeschlagen');
+
+      if (draft.type === 'project') {
+        const created = (await res.json()) as { id: string };
+        const stepsToCreate = [...draftSteps];
+        const tailName = pendingStep.name.trim();
+        if (tailName) stepsToCreate.push({ name: tailName, due_date: pendingStep.due_date });
+        for (const s of stepsToCreate) {
+          await fetch('/api/kpis', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
+            body: JSON.stringify({
+              user_id: userId,
+              type: 'step',
+              parent_id: created.id,
+              name: s.name,
+              due_date: s.due_date || null,
+            }),
+          });
+        }
+      }
+
       setDraft({ ...EMPTY_DRAFT, type: draft.type });
+      setDraftSteps([]);
+      setPendingStep({ name: '', due_date: '' });
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unbekannter Fehler');
@@ -161,29 +212,47 @@ export function KpiManager({ userId }: { userId: string }) {
     stepsByParent.set(s.parent_id, arr);
   }
 
+  const isProject = draft.type === 'project';
+  const queuedStepCount = draftSteps.length + (pendingStep.name.trim() ? 1 : 0);
+  const submitLabel = creating
+    ? 'Wird angelegt…'
+    : isProject
+      ? queuedStepCount > 0
+        ? `Projekt + ${queuedStepCount} ${queuedStepCount === 1 ? 'Step' : 'Steps'} anlegen`
+        : 'Projekt anlegen'
+      : 'Counter anlegen';
+
   return (
     <div className="space-y-6">
-      <form onSubmit={handleCreate} className="space-y-3 rounded-xl border border-foreground/[0.06] bg-card/40 p-4">
-        <div className="flex items-center justify-between gap-3">
+      <form onSubmit={handleCreate} className="space-y-4 rounded-xl border border-foreground/[0.06] bg-card/40 p-4">
+        <div>
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Neu anlegen</h3>
-          <div className="flex gap-1 rounded-lg bg-foreground/[0.05] p-0.5">
+          <div className="mt-2 grid grid-cols-2 gap-1.5 rounded-lg bg-foreground/[0.05] p-1">
             <button
               type="button"
-              onClick={() => setDraft({ ...EMPTY_DRAFT, type: 'counter' })}
-              className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                draft.type === 'counter' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              onClick={() => switchType('counter')}
+              className={`flex min-h-[48px] items-center justify-center gap-2 rounded-md text-sm font-medium transition-all ${
+                draft.type === 'counter'
+                  ? 'bg-background text-foreground shadow-sm ring-1 ring-foreground/[0.06]'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
+              aria-pressed={draft.type === 'counter'}
             >
-              Counter
+              <Hash size={16} aria-hidden />
+              Counter & KPI
             </button>
             <button
               type="button"
-              onClick={() => setDraft({ ...EMPTY_DRAFT, type: 'project' })}
-              className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
-                draft.type === 'project' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+              onClick={() => switchType('project')}
+              className={`flex min-h-[48px] items-center justify-center gap-2 rounded-md text-sm font-medium transition-all ${
+                draft.type === 'project'
+                  ? 'bg-background text-foreground shadow-sm ring-1 ring-foreground/[0.06]'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
+              aria-pressed={draft.type === 'project'}
             >
-              Projekt
+              <Target size={16} aria-hidden />
+              Projekt & Ziel
             </button>
           </div>
         </div>
@@ -195,13 +264,13 @@ export function KpiManager({ userId }: { userId: string }) {
               id="kpi-name"
               value={draft.name}
               onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              placeholder={draft.type === 'counter' ? 'z.B. Sales Calls' : 'z.B. Hermes integrieren'}
+              placeholder={isProject ? 'z.B. Hermes integrieren' : 'z.B. Sales Calls'}
               className="min-h-[44px]"
               required
             />
           </div>
 
-          {draft.type === 'counter' ? (
+          {!isProject ? (
             <>
               <div className="space-y-1.5">
                 <Label htmlFor="kpi-unit" className="text-xs">Einheit</Label>
@@ -240,8 +309,77 @@ export function KpiManager({ userId }: { userId: string }) {
             </div>
           )}
         </div>
+
+        {isProject && (
+          <div className="space-y-2.5 rounded-lg border border-dashed border-foreground/[0.08] bg-background/40 p-3.5">
+            <div className="flex items-center justify-between gap-2">
+              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Teilschritte
+              </Label>
+              <span className="text-[11px] text-muted-foreground">
+                {draftSteps.length === 0 ? 'optional' : `${draftSteps.length} angelegt`}
+              </span>
+            </div>
+
+            {draftSteps.length > 0 && (
+              <ul className="space-y-1">
+                {draftSteps.map((s, i) => (
+                  <li
+                    key={`${i}-${s.name}`}
+                    className="flex items-center gap-2 rounded-md bg-foreground/[0.04] px-2.5 py-1.5 text-sm"
+                  >
+                    <span className="flex-1 truncate">{s.name}</span>
+                    {s.due_date && (
+                      <span className="text-[11px] text-muted-foreground">{s.due_date}</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => removeDraftStep(i)}
+                      className="rounded-sm p-0.5 text-muted-foreground hover:bg-rose-500/10 hover:text-rose-600"
+                      aria-label="Step entfernen"
+                    >
+                      <X size={14} aria-hidden />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              <Input
+                value={pendingStep.name}
+                onChange={(e) => setPendingStep({ ...pendingStep, name: e.target.value })}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addPendingStep();
+                  }
+                }}
+                placeholder="z.B. Brief an Investoren schreiben"
+                className="min-h-[40px] flex-1 text-sm"
+              />
+              <Input
+                type="date"
+                value={pendingStep.due_date}
+                onChange={(e) => setPendingStep({ ...pendingStep, due_date: e.target.value })}
+                className="min-h-[40px] w-auto text-sm"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addPendingStep}
+                disabled={!pendingStep.name.trim()}
+                className="min-h-[40px] shrink-0 gap-1"
+              >
+                <Plus size={14} aria-hidden />
+                Step
+              </Button>
+            </div>
+          </div>
+        )}
+
         <Button type="submit" disabled={creating || !draft.name.trim()} className="min-h-[44px] w-full sm:w-auto">
-          {creating ? 'Wird angelegt…' : draft.type === 'counter' ? 'Counter hinzufügen' : 'Projekt hinzufügen'}
+          {submitLabel}
         </Button>
       </form>
 
@@ -254,7 +392,7 @@ export function KpiManager({ userId }: { userId: string }) {
 
       {projects.length > 0 && (
         <section className="space-y-2">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Projekte</h4>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Projekte & Ziele</h4>
           <ul className="space-y-2">
             {projects.map((p) => {
               const steps = (stepsByParent.get(p.id) ?? []);
@@ -371,7 +509,7 @@ export function KpiManager({ userId }: { userId: string }) {
 
       {counters.length > 0 && (
         <section className="space-y-2">
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Counter</h4>
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Counter & KPIs</h4>
           <ul className="space-y-2">
             {counters.map((k) => {
               const e = editing[k.id];

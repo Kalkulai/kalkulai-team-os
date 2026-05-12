@@ -37,27 +37,14 @@ function SettingsContent() {
 
   return (
     <div className="space-y-5">
-      <section className="glass card-rise overflow-hidden p-5">
-        <p className="ovr">Konfiguration</p>
-        <h2 className="mt-1.5 text-[22px] font-semibold leading-[1.15] tracking-[-0.015em] text-[var(--ink-1)]">
-          Integrationen & KPIs
-        </h2>
-        {activeMember && (
-          <p className="mt-1.5 text-[12.5px] text-[var(--ink-3)]">
-            Aktiv: <span className="font-medium text-[var(--ink-1)]">{activeMember.name}</span>
-            <span className="ml-1.5">— Person oben rechts wechseln.</span>
-          </p>
-        )}
-      </section>
-
       <section className="glass card-rise overflow-hidden">
-        <header className="relative z-[1] flex items-baseline justify-between gap-2.5 px-5 pt-[18px] pb-[14px]">
-          <div>
-            <span className="ovr">KPIs diese Woche</span>
-            <p className="mt-0.5 text-[12px] text-[var(--ink-3)]">
-              Eigene KPIs anlegen, Ziele setzen, im Dashboard manuell hochzählen.
-            </p>
-          </div>
+        <header className="relative z-[1] px-5 pt-[20px] pb-[14px]">
+          <h2 className="text-[22px] font-semibold leading-[1.15] tracking-[-0.015em] text-[var(--ink-1)]">
+            KPIs und Projekte
+          </h2>
+          <p className="mt-1 text-[12.5px] text-[var(--ink-3)]">
+            Eigene KPIs anlegen, Ziele setzen, Projekte mit Teilschritten planen.
+          </p>
         </header>
         <div className="relative z-[1] px-5 pb-5">
           {activeId ? (

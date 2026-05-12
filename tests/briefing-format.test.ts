@@ -40,7 +40,7 @@ function makeBriefing(overrides: Partial<DailyBriefing> = {}): DailyBriefing {
     member: makeMember(),
     tasks: [],
     meetings: [],
-    activeBranch: null,
+    activeBranches: [],
     weekTargets: { tasks_target: 5, calls_target: 0, bugs_target: 0 },
     weekActuals: { tasks_completed: 0, calls_made: 0, bugs_fixed: 0, commits_count: 0 },
     unprocessedInsights: [],
@@ -189,7 +189,27 @@ describe('formatBriefingMarkdown', () => {
   });
 
   it('includes the active branch when present', () => {
-    const out = formatBriefingMarkdown(makeBriefing({ activeBranch: 'feature/kal-42-login' }));
+    const out = formatBriefingMarkdown(
+      makeBriefing({
+        activeBranches: [
+          { name: 'feature/kal-42-login', commit: { sha: 'a', url: '' } },
+        ],
+      })
+    );
     expect(out).toContain('feature/kal-42-login');
+  });
+
+  it('lists multiple active branches with repo tag', () => {
+    const out = formatBriefingMarkdown(
+      makeBriefing({
+        activeBranches: [
+          { name: 'feature/a', commit: { sha: '1', url: '' }, repo: 'Kalkulai/kalkulai' },
+          { name: 'fix/b', commit: { sha: '2', url: '' }, repo: 'Kalkulai/kalkulai-team-os' },
+        ],
+      })
+    );
+    expect(out).toContain('Aktive Branches (2)');
+    expect(out).toContain('feature/a');
+    expect(out).toContain('kalkulai-team-os');
   });
 });

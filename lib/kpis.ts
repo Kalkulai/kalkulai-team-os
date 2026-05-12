@@ -239,6 +239,66 @@ export async function getRecentlyCompletedSteps(
   }));
 }
 
+export interface CounterActivity {
+  kpi_id: string;
+  kpi_name: string;
+  unit: string;
+  day: string;
+  delta: number;
+}
+
+/**
+ * Aggregates daily Counter-KPI deltas (per kpi_id, per day) from kpi_history.
+ * Each day's delta = actual(day) − actual(previous-stored-day-or-0).
+ * Only days within [sinceDay..today] are returned with a positive delta.
+ */
+export async function getRecentCounterActivity(
+  userId: string,
+  sinceDay: string,
+): Promise<CounterActivity[]> {
+  const { data: defs, error: defErr } = await supabaseAdmin
+    .from('kpis')
+    .select('id, name, unit, type')
+    .eq('user_id', userId)
+    .eq('type', 'counter');
+  if (defErr) throw defErr;
+  const counters = (defs ?? []) as Array<{ id: string; name: string; unit: string }>;
+  if (counters.length === 0) return [];
+
+  const ids = counters.map((c) => c.id);
+  const { data: rows, error } = await supabaseAdmin
+    .from('kpi_history')
+    .select('kpi_id, day, actual')
+    .in('kpi_id', ids)
+    .order('day', { ascending: true });
+  if (error) throw error;
+  const history = (rows ?? []) as Array<{ kpi_id: string; day: string; actual: number }>;
+
+  const nameById = new Map(counters.map((c) => [c.id, c]));
+  const byKpi = new Map<string, typeof history>();
+  for (const r of history) {
+    const arr = byKpi.get(r.kpi_id) ?? [];
+    arr.push(r);
+    byKpi.set(r.kpi_id, arr);
+  }
+
+  const out: CounterActivity[] = [];
+  for (const [kpiId, list] of byKpi) {
+    const meta = nameById.get(kpiId);
+    if (!meta) continue;
+    let prev = 0;
+    for (const r of list) {
+      const delta = r.actual - prev;
+      prev = r.actual;
+      if (delta <= 0) continue;
+      if (r.day < sinceDay) continue;
+      out.push({ kpi_id: kpiId, kpi_name: meta.name, unit: meta.unit, day: r.day, delta });
+    }
+  }
+  out.sort((a, b) => b.day.localeCompare(a.day));
+  return out;
+}
+
 export async function setKpiTarget(kpiId: string, weekStart: string, target: number): Promise<void> {
   const { error } = await supabaseAdmin.from('kpi_weeks').upsert(
     { kpi_id: kpiId, week_start: weekStart, target },

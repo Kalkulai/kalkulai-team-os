@@ -3,7 +3,7 @@ import { getActiveBranches, getRecentlyOpenedPRs, type MergedPR } from './github
 import { getCompletedIssuesSince, getCreatedIssuesSince } from './linear';
 import { getCallsThisWeek } from './hubspot';
 import { getSalesLogsSince } from './supabase';
-import { getRecentlyCompletedSteps } from './kpis';
+import { getRecentlyCompletedSteps, getRecentCounterActivity } from './kpis';
 import type { ActivityDay, ActivityEvent } from '@/components/dashboard/ActivityTimeline';
 import { format, isSameDay, isYesterday, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -185,6 +185,29 @@ export async function buildActivityFeed(
     } catch {
       // GitHub-Token fehlt o.ä. → silent skip
     }
+  }
+
+  // Counter-Increments heute/gestern → counter Events (Tagessumme pro KPI)
+  try {
+    const yesterday = new Date(now.getTime() - 86_400_000);
+    const sinceDay = format(yesterday, 'yyyy-MM-dd');
+    const todayDay = format(now, 'yyyy-MM-dd');
+    const yesterdayDay = sinceDay;
+    const counterEvents = await getRecentCounterActivity(member.id, sinceDay);
+    for (const c of counterEvents) {
+      const unitLabel = c.unit?.trim() ? c.unit : c.kpi_name;
+      const ev: ActivityEvent = {
+        time: '—',
+        text: `+${c.delta} ${unitLabel}`,
+        code: c.unit ? c.kpi_name : undefined,
+        source: 'KPIs',
+        kind: 'counter',
+      };
+      if (c.day === todayDay) todayEvents.push(ev);
+      else if (c.day === yesterdayDay) yesterdayEvents.push(ev);
+    }
+  } catch {
+    // kpi_history fehlt o.ä. → silent skip
   }
 
   // Projekt-Teilschritte heute/gestern als erledigt markiert → ok Events

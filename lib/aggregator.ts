@@ -25,7 +25,7 @@ export async function buildDailyBriefing(member: TeamMember): Promise<DailyBrief
   const results = await Promise.allSettled([
     member.linear_user_id ? getIssuesForUser(member.linear_user_id) : Promise.resolve([]),
     getTodayEvents(member),
-    getActiveBranches(),
+    getActiveBranches({ withPRMeta: true }),
     getWeekTargets(member.id, weekStart),
     getTopUnprocessedInsights(2),
     member.role === 'sales' ? getSalesCallsThisWeek(member.id) : Promise.resolve(0),
@@ -84,8 +84,29 @@ export async function buildDailyBriefing(member: TeamMember): Promise<DailyBrief
   // Linear bugs fixed (Bug-label issues completed this week): in-memory only
   weekActuals.bugs_fixed += typeof bugsFixed === 'number' ? bugsFixed : 0;
 
-  const activeBranch =
-    branches.find((b) => b.authorLogin === member.github_username)?.name ?? null;
+  const username = member.github_username;
+  const activeBranches: typeof branches = username
+    ? (() => {
+        const matched = branches.filter(
+          (b) =>
+            b.authorLogin === username ||
+            b.prAssignee === username ||
+            b.prRequestedReviewer === username,
+        );
+        // Dedupe by (repo, name) — same branch can appear in multiple match buckets.
+        const seen = new Set<string>();
+        const unique: typeof matched = [];
+        for (const b of matched) {
+          const key = `${b.repo ?? ''}#${b.name}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          unique.push(b);
+        }
+        // Most recent commit first; branches without commit-date sink to the bottom.
+        unique.sort((a, b) => (b.lastCommitDate ?? '').localeCompare(a.lastCommitDate ?? ''));
+        return unique;
+      })()
+    : [];
 
-  return { member, tasks, meetings, activeBranch, weekTargets, weekActuals, unprocessedInsights };
+  return { member, tasks, meetings, activeBranches, weekTargets, weekActuals, unprocessedInsights };
 }
