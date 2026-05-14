@@ -172,9 +172,53 @@ export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: stri
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Hydration-safe: localStorage existiert nicht beim SSR.
+  // Beim Mount: lokale Tasks laden → wenn welche da sind (z.B. aus Pre-Sync-Zeit),
+  // versuchen sie in Linear zu syncen. Erfolgreiche raus aus localStorage,
+  // gefailte bleiben für den nächsten Mount-Retry (Idempotenz garantiert durch
+  // remove-on-success).
   useEffect(() => {
-    setLocalStore(loadLocal(userId));
-  }, [userId]);
+    const stored = loadLocal(userId);
+    setLocalStore(stored);
+    if (stored.length === 0) return;
+
+    let cancelled = false;
+    void (async () => {
+      let anyMigrated = false;
+      for (const t of stored) {
+        if (cancelled) break;
+        try {
+          const res = await fetch('/api/tasks/create', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? ''}`,
+            },
+            body: JSON.stringify({
+              title: t.title,
+              userId,
+              priority: t.priority || undefined,
+              dueDate: t.dueDate || undefined,
+            }),
+          });
+          if (!res.ok) continue;
+          if (cancelled) break;
+          setLocalStore((prev) => {
+            const next = prev.filter((x) => x.id !== t.id);
+            persistLocal(userId, next);
+            return next;
+          });
+          anyMigrated = true;
+        } catch {
+          // network / serializer fehler → nächster mount versucht's nochmal
+        }
+      }
+      if (anyMigrated && !cancelled) router.refresh();
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId, router]);
 
   async function handleCheck(id: string) {
     setDone((prev) => new Set(prev).add(id));
