@@ -105,20 +105,26 @@ export async function createIssue(
   teamId: string,
   title: string,
   assigneeId?: string,
-  labelIds: string[] = []
+  labelIds: string[] = [],
+  priority?: number,
+  dueDate?: string | null,
 ): Promise<LinearIssue> {
   const data = await gql(
     `mutation CreateIssue(
        $teamId: String!,
        $title: String!,
        $assigneeId: String,
-       $labelIds: [String!]
+       $labelIds: [String!],
+       $priority: Int,
+       $dueDate: TimelessDate
      ) {
        issueCreate(input: {
          teamId: $teamId
          title: $title
          assigneeId: $assigneeId
          labelIds: $labelIds
+         priority: $priority
+         dueDate: $dueDate
        }) {
          issue {
            id identifier title priority dueDate
@@ -128,7 +134,14 @@ export async function createIssue(
          }
        }
      }`,
-    { teamId, title, assigneeId: assigneeId ?? null, labelIds }
+    {
+      teamId,
+      title,
+      assigneeId: assigneeId ?? null,
+      labelIds,
+      priority: typeof priority === 'number' && priority >= 0 && priority <= 4 ? priority : null,
+      dueDate: dueDate || null,
+    }
   );
   const raw = (data.issueCreate as { issue: LinearIssueRaw }).issue;
   return mapIssue(raw);
@@ -141,7 +154,7 @@ export async function createIssue(
  */
 export async function ensureLabelId(teamId: string, name: string): Promise<string> {
   const data = await gql(
-    `query GetLabel($teamId: ID!, $name: String!) {
+    `query GetLabel($teamId: String!, $name: String!) {
        team(id: $teamId) {
          labels(filter: { name: { eq: $name } }) {
            nodes { id name }

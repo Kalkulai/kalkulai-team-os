@@ -1,5 +1,6 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Check, Plus, X, ChevronRight } from 'lucide-react';
 import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -158,11 +159,13 @@ function TaskRow({
  * Layout-Klassen 1:1 von HorizonSection übernommen.
  */
 export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: string }) {
+  const router = useRouter();
   const [done, setDone] = useState<Set<string>>(new Set());
   const [draft, setDraft] = useState('');
   const [draftDue, setDraftDue] = useState('');
   const [draftPrio, setDraftPrio] = useState<number>(0);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [showAll, setShowAll] = useState(false);
   const [localStore, setLocalStore] = useState<StoredLocalTask[]>([]);
@@ -202,27 +205,64 @@ export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: stri
     }
   }
 
-  function handleCreate(e: React.FormEvent<HTMLFormElement>) {
+  async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const title = draft.trim();
-    if (!title) return;
+    if (!title || submitting) return;
     setCreateError(null);
-    const fresh: StoredLocalTask = {
-      id: `local-${crypto.randomUUID()}`,
+    setSubmitting(true);
+
+    // Optimistic: lokalen pending-Task sofort zeigen, NICHT in localStorage persistieren
+    // (kommt erst rein wenn Linear-Sync fehlschlägt)
+    const optimisticId = `local-${crypto.randomUUID()}`;
+    const optimistic: StoredLocalTask = {
+      id: optimisticId,
       title,
       createdAt: new Date().toISOString(),
-      dueDate: draftDue ? draftDue : null,
+      dueDate: draftDue || null,
       priority: draftPrio,
     };
-    setLocalStore((prev) => {
-      const next = [fresh, ...prev];
-      persistLocal(userId, next);
-      return next;
-    });
-    setDraft('');
-    setDraftDue('');
-    setDraftPrio(0);
-    inputRef.current?.focus();
+    setLocalStore((prev) => [optimistic, ...prev]);
+
+    try {
+      const res = await fetch('/api/tasks/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? ''}`,
+        },
+        body: JSON.stringify({
+          title,
+          userId,
+          priority: draftPrio || undefined,
+          dueDate: draftDue || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? `Linear-Sync fehlgeschlagen (HTTP ${res.status})`);
+      }
+      // Erfolg: optimistic raus, dann refresh damit echtes Linear-Issue im nächsten Render erscheint
+      setLocalStore((prev) => prev.filter((t) => t.id !== optimisticId));
+      setDraft('');
+      setDraftDue('');
+      setDraftPrio(0);
+      router.refresh();
+    } catch (err) {
+      // Fehler: optimistic bleibt sichtbar UND wird in localStorage gespeichert (Fallback-Modus)
+      const msg = err instanceof Error ? err.message : 'Unbekannter Fehler';
+      setCreateError(`Linear-Sync fehlgeschlagen — Task nur lokal gespeichert. (${msg})`);
+      setLocalStore((prev) => {
+        persistLocal(userId, prev);
+        return prev;
+      });
+      setDraft('');
+      setDraftDue('');
+      setDraftPrio(0);
+    } finally {
+      setSubmitting(false);
+      inputRef.current?.focus();
+    }
   }
 
   function toggleAdd() {

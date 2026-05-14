@@ -14,11 +14,13 @@ export async function POST(req: NextRequest) {
   if (!body?.title || typeof body.title !== 'string' || !body.title.trim()) {
     return NextResponse.json({ error: 'title required' }, { status: 400 });
   }
-  const { title, assigneeId, userId, source } = body as {
+  const { title, assigneeId, userId, source, priority, dueDate } = body as {
     title: string;
     assigneeId?: string;
     userId?: string;
     source?: 'hermes' | 'notion' | 'linear';
+    priority?: number;
+    dueDate?: string | null;
   };
 
   try {
@@ -47,7 +49,14 @@ export async function POST(req: NextRequest) {
       labelIds.push(labelId);
     }
 
-    const issue = await createIssue(teamId, title.trim(), resolvedAssignee, labelIds);
+    const issue = await createIssue(
+      teamId,
+      title.trim(),
+      resolvedAssignee,
+      labelIds,
+      priority,
+      dueDate ?? null,
+    );
     return NextResponse.json(issue);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
