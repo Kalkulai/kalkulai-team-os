@@ -333,11 +333,16 @@ html.light .see-all:hover { background: rgba(255, 255, 255, 0.75); }
   transition: all 0.14s;
   -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
 }
-html.light .add-trigger { background: rgba(255, 255, 255, 0.7); border-color: rgba(11, 11, 15, 0.10); }
+html.light .add-trigger {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(11, 11, 15, 0.18);
+  box-shadow: 0 1px 3px rgba(11, 11, 15, 0.08), 0 0 0 1px rgba(11, 11, 15, 0.04);
+  color: #1a1c22;
+}
 .add-trigger:hover {
   background: linear-gradient(135deg, var(--brand), var(--brand-2));
   color: #fff; border-color: transparent;
-  box-shadow: 0 0 12px -2px var(--brand);
+  box-shadow: 0 4px 14px -4px var(--brand);
 }
 .add-trigger[aria-expanded="true"] {
   background: rgba(255, 107, 92, 0.16);
@@ -427,7 +432,12 @@ html.light .kpi-actions { background: rgba(255, 255, 255, 0.5); border-color: rg
   color: var(--ink-1); transition: all 0.14s;
   -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
 }
-html.light .btn-step { background: rgba(255, 255, 255, 0.7); border-color: rgba(11, 11, 15, 0.10); }
+html.light .btn-step {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(11, 11, 15, 0.18);
+  box-shadow: 0 1px 3px rgba(11, 11, 15, 0.08), 0 0 0 1px rgba(11, 11, 15, 0.04);
+  color: #1a1c22;
+}
 .btn-step:hover { background: rgba(255, 255, 255, 0.08); color: var(--ink-1); border-color: var(--line-2); }
 .btn-step.pri {
   background: linear-gradient(135deg, var(--brand), var(--brand-2));
@@ -435,7 +445,8 @@ html.light .btn-step { background: rgba(255, 255, 255, 0.7); border-color: rgba(
   box-shadow: 0 4px 14px -4px var(--brand), 0 0 0 1px rgba(255, 255, 255, 0.25) inset;
 }
 .btn-step.pri:hover { filter: brightness(1.1); }
-.btn-step:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-step:disabled { opacity: 0.45; cursor: not-allowed; }
+html.light .btn-step:disabled { opacity: 0.7; }
 
 /* Primary action button — used for settings actions, error retry, etc. */
 .btn-action {
