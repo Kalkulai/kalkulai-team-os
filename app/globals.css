@@ -405,7 +405,7 @@ html.light .prio-group { background: rgba(255, 255, 255, 0.4); }
 .kpi-num .t { font: 400 12px/1 var(--mono); color: var(--ink-3); }
 .kpi-bar { display: flex; align-items: center; gap: 10px; margin-top: 9px; }
 .bar {
-  flex: 1; height: 5px; background: rgba(255, 255, 255, 0.06);
+  flex: 1; height: 7px; background: rgba(255, 255, 255, 0.06);
   border-radius: 999px; overflow: hidden; border: 1px solid var(--line-1);
 }
 html.light .bar { background: rgba(11, 11, 15, 0.05); }

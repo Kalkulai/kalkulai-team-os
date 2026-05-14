@@ -10,37 +10,6 @@ function barClass(pct: number): string {
   return 'bar';
 }
 
-function strokeTone(pct: number): string {
-  if (pct >= 100) return 'var(--ok)';
-  return 'var(--brand)';
-}
-
-function sparkPath(pct: number): string {
-  const yEnd = Math.max(3, Math.min(21, 21 - (pct / 100) * 18));
-  const yMid = yEnd + (21 - yEnd) * 0.55;
-  return `M2,21 L26,${yMid} L50,${yEnd + 3} L78,${yEnd}`;
-}
-
-/**
- * Build SVG polyline from real daily history. y is normalised against the
- * higher of `target` or `max(history)` so a series exceeding target still
- * stays inside the 24px SVG canvas.
- */
-function sparkPathFromHistory(history: number[], target: number): string {
-  const max = Math.max(target, ...history, 1);
-  const n = history.length;
-  if (n < 2) return `M2,21 L78,21`;
-  const xStart = 2;
-  const xEnd = 78;
-  const step = (xEnd - xStart) / (n - 1);
-  const points = history.map((v, i) => {
-    const x = xStart + step * i;
-    const y = Math.max(3, 21 - (v / max) * 18);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-  return `M${points.join(' L')}`;
-}
-
 export function KpiTracker({ userId }: { userId: string }) {
   const [kpis, setKpis] = useState<KpiWithWeek[] | null>(null);
   const [busy, setBusy] = useState<Set<string>>(new Set());
@@ -99,7 +68,6 @@ export function KpiTracker({ userId }: { userId: string }) {
       {kpis.map((k) => {
         const pct = k.target > 0 ? Math.min(Math.round((k.actual / k.target) * 100), 100) : 0;
         const isBusy = busy.has(k.id);
-        const stroke = strokeTone(pct);
         return (
           <li key={k.id} className="kpi">
             <div className="kpi-row">
@@ -141,20 +109,6 @@ export function KpiTracker({ userId }: { userId: string }) {
                   }}
                 />
               </div>
-              <svg className="spark" width="74" height="20" viewBox="0 0 80 24" aria-hidden>
-                <path
-                  d={
-                    k.history && k.history.length >= 2
-                      ? sparkPathFromHistory(k.history, k.target)
-                      : sparkPath(pct)
-                  }
-                  fill="none"
-                  stroke={stroke}
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
             </div>
           </li>
         );
