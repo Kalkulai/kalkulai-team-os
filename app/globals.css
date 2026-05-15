@@ -312,6 +312,54 @@ html.light .task:hover { background: rgba(11, 11, 15, 0.03); }
 .task .ref { font: 500 11px/1 var(--mono); color: var(--ink-3); margin-right: 7px; }
 .task .row2 { display: flex; align-items: center; gap: 6px; margin-top: 5px; flex-wrap: wrap; }
 
+.task .task-actions {
+  flex: none; align-self: center; display: inline-flex; align-items: center;
+  opacity: 0; transition: opacity 0.14s;
+}
+.task:hover .task-actions,
+.task:focus-within .task-actions,
+.task.is-done .task-actions { opacity: 1; }
+
+.task-edit {
+  width: 26px; height: 26px; border-radius: 7px;
+  border: 1px solid var(--line-1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink-2);
+  display: grid; place-items: center;
+  cursor: pointer; transition: all 0.14s;
+}
+html.light .task-edit {
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(11, 11, 15, 0.14);
+  color: #1a1c22;
+}
+.task-edit:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: rgba(91, 140, 255, 0.10);
+}
+
+.task-undo {
+  display: inline-flex; align-items: center; gap: 5px;
+  height: 26px; padding: 0 10px; border-radius: 7px;
+  border: 1px solid rgba(255, 107, 92, 0.32);
+  background: rgba(255, 107, 92, 0.10);
+  color: #FF8A7C;
+  font: 500 11.5px/1 var(--font);
+  cursor: pointer; transition: all 0.14s;
+}
+html.light .task-undo { color: #C2351A; background: rgba(255, 107, 92, 0.12); }
+.task-undo:hover { background: rgba(255, 107, 92, 0.18); border-color: rgba(255, 107, 92, 0.5); }
+
+.task-edit-form {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px; margin: 0 -10px;
+  border-radius: 9px;
+  background: rgba(91, 140, 255, 0.04);
+  border: 1px solid var(--line-1);
+}
+html.light .task-edit-form { background: rgba(255, 255, 255, 0.55); }
+
 .see-all {
   margin-top: 12px; display: inline-flex; align-items: center; gap: 6px;
   font: 500 11.5px/1 var(--font); color: var(--ink-2);

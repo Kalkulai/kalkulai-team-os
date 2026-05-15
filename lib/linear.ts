@@ -101,6 +101,22 @@ export async function setIssueStatus(issueId: string, stateId: string): Promise<
   `, { id: issueId, stateId });
 }
 
+export async function updateIssue(
+  issueId: string,
+  patch: { title?: string; priority?: number | null; dueDate?: string | null },
+): Promise<void> {
+  const input: Record<string, unknown> = {};
+  if (patch.title !== undefined) input.title = patch.title;
+  if (patch.priority !== undefined) input.priority = patch.priority;
+  if (patch.dueDate !== undefined) input.dueDate = patch.dueDate;
+  await gql(
+    `mutation UpdateIssue($id: String!, $input: IssueUpdateInput!) {
+       issueUpdate(id: $id, input: $input) { success }
+     }`,
+    { id: issueId, input },
+  );
+}
+
 export async function createIssue(
   teamId: string,
   title: string,

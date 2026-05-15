@@ -1,7 +1,7 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, Plus, X, ChevronRight } from 'lucide-react';
+import { Check, Plus, X, ChevronRight, Pencil, Undo2 } from 'lucide-react';
 import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import type { LinearIssue, TaskSource } from '@/types';
@@ -15,6 +15,8 @@ type StoredLocalTask = {
 };
 
 const LS_KEY = (userId: string) => `kalkulai-local-tasks:${userId}`;
+
+const UNDO_WINDOW_MS = 5000;
 
 function loadLocal(userId: string): StoredLocalTask[] {
   try {
@@ -110,23 +112,42 @@ function dueMeta(iso: string | null | undefined): { label: string; pillClass: st
 
 function TaskRow({
   task,
-  isDone,
+  isPending,
   onCheck,
+  onUndo,
+  onStartEdit,
 }: {
   task: LinearIssue;
-  isDone: boolean;
+  isPending: boolean;
   onCheck: (id: string) => void;
+  onUndo: (id: string) => void;
+  onStartEdit: (task: LinearIssue) => void;
 }) {
   const prio = task.priority;
   const source: TaskSource = task.source ?? 'linear';
   const due = dueMeta(task.dueDate);
   const hasMeta = prio > 0 || due !== null;
+
+  function handleRowClick() {
+    if (!isPending) onCheck(task.id);
+  }
+  function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (isPending) return;
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onCheck(task.id);
+    }
+  }
+
   return (
     <li>
-      <button
-        type="button"
-        onClick={() => !isDone && onCheck(task.id)}
-        className={`task ${isDone ? 'is-done' : ''}`}
+      <div
+        className={`task ${isPending ? 'is-done' : ''}`}
+        role="button"
+        tabIndex={0}
+        aria-pressed={isPending}
+        onClick={handleRowClick}
+        onKeyDown={handleKeyDown}
       >
         <span className="kb" aria-hidden>
           <Check />
@@ -148,19 +169,139 @@ function TaskRow({
             </span>
           )}
         </span>
-      </button>
+        <span className="task-actions">
+          {isPending ? (
+            <button
+              type="button"
+              className="task-undo"
+              onClick={(e) => {
+                e.stopPropagation();
+                onUndo(task.id);
+              }}
+              aria-label="Rückgängig"
+              title="Rückgängig (5s)"
+            >
+              <Undo2 size={12} aria-hidden />
+              <span>Rückgängig</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="task-edit"
+              onClick={(e) => {
+                e.stopPropagation();
+                onStartEdit(task);
+              }}
+              aria-label="Task bearbeiten"
+              title="Bearbeiten"
+            >
+              <Pencil size={12} aria-hidden />
+            </button>
+          )}
+        </span>
+      </div>
     </li>
   );
 }
 
-/**
- * Tasks-Sektion: rendert Sub-Section selbst (kein HorizonSection-Wrapper),
- * damit Plus-Toggle, Inline-Add-Form, Top-3 und Rest-Liste gemeinsamen Client-State teilen.
- * Layout-Klassen 1:1 von HorizonSection übernommen.
- */
+function TaskEditForm({
+  task,
+  onCancel,
+  onSave,
+  submitting,
+  error,
+}: {
+  task: LinearIssue;
+  onCancel: () => void;
+  onSave: (patch: { title: string; dueDate: string | null; priority: number }) => void;
+  submitting: boolean;
+  error: string | null;
+}) {
+  const [title, setTitle] = useState(task.title);
+  const [due, setDue] = useState(task.dueDate ?? '');
+  const [prio, setPrio] = useState<number>(task.priority || 0);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    inputRef.current?.focus();
+    inputRef.current?.select();
+  }, []);
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const trimmed = title.trim();
+    if (!trimmed || submitting) return;
+    onSave({ title: trimmed, dueDate: due || null, priority: prio });
+  }
+
+  return (
+    <li>
+      <form onSubmit={handleSubmit} className="task-edit-form">
+        <div className="flex items-center gap-2">
+          <input
+            ref={inputRef}
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Titel"
+            className="h-[30px] min-w-0 flex-1 rounded-lg border border-[var(--line-1)] bg-white/[0.04] px-3 text-[13px] text-[var(--ink-1)] outline-none transition-colors placeholder:text-[var(--ink-3)] focus:border-[var(--brand)] focus:bg-white/[0.06]"
+          />
+          <button
+            type="submit"
+            disabled={!title.trim() || submitting}
+            className="btn-step pri h-[30px] w-[30px] flex-none p-0"
+            aria-label="Änderungen speichern"
+            title="Speichern"
+          >
+            <Check size={14} strokeWidth={2.6} aria-hidden />
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="btn-step h-[30px] w-[30px] flex-none p-0"
+            aria-label="Bearbeiten abbrechen"
+            title="Abbrechen"
+          >
+            <X size={14} strokeWidth={2.4} aria-hidden />
+          </button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="date"
+            value={due}
+            onChange={(e) => setDue(e.target.value)}
+            aria-label="Fälligkeitsdatum"
+            className="task-date-input"
+          />
+          <div className="prio-group" role="radiogroup" aria-label="Priorität">
+            {([
+              [1, 'pill-rose', 'urgent'],
+              [2, 'pill-amber', 'high'],
+              [3, 'pill-mute', 'medium'],
+              [4, 'pill-mute', 'low'],
+            ] as const).map(([p, cls, label]) => (
+              <button
+                key={p}
+                type="button"
+                role="radio"
+                aria-checked={prio === p}
+                onClick={() => setPrio(prio === p ? 0 : p)}
+                className={`pill ${cls} prio-chip ${prio === p ? 'is-on' : ''}`}
+                title={`Priorität: ${label}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {error && <p className="text-[11.5px] text-[var(--danger)]">{error}</p>}
+      </form>
+    </li>
+  );
+}
+
 export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: string }) {
   const router = useRouter();
-  const [done, setDone] = useState<Set<string>>(new Set());
   const [draft, setDraft] = useState('');
   const [draftDue, setDraftDue] = useState('');
   const [draftPrio, setDraftPrio] = useState<number>(0);
@@ -171,11 +312,17 @@ export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: stri
   const [localStore, setLocalStore] = useState<StoredLocalTask[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Hydration-safe: localStorage existiert nicht beim SSR.
-  // Beim Mount: lokale Tasks laden → wenn welche da sind (z.B. aus Pre-Sync-Zeit),
-  // versuchen sie in Linear zu syncen. Erfolgreiche raus aus localStorage,
-  // gefailte bleiben für den nächsten Mount-Retry (Idempotenz garantiert durch
-  // remove-on-success).
+  // Pending-Complete: Task ist abgehakt, aber Commit (Linear-State-Set bzw. localStore-Delete)
+  // läuft erst nach UNDO_WINDOW_MS. Solange pending: Row bleibt sichtbar mit "Rückgängig"-Button.
+  const [pending, setPending] = useState<Map<string, { localOnly: boolean }>>(new Map());
+  const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // Nach committetem Complete: Task aus Liste raus, bis router.refresh die Server-Daten aktualisiert.
+  const [hidden, setHidden] = useState<Set<string>>(new Set());
+
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
   useEffect(() => {
     const stored = loadLocal(userId);
     setLocalStore(stored);
@@ -220,9 +367,24 @@ export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: stri
     };
   }, [userId, router]);
 
-  async function handleCheck(id: string) {
-    setDone((prev) => new Set(prev).add(id));
-    if (id.startsWith('local-')) {
+  useEffect(() => {
+    const timers = timersRef.current;
+    return () => {
+      timers.forEach((t) => clearTimeout(t));
+      timers.clear();
+    };
+  }, []);
+
+  function commitCompletion(id: string, localOnly: boolean) {
+    timersRef.current.delete(id);
+    setPending((prev) => {
+      const next = new Map(prev);
+      next.delete(id);
+      return next;
+    });
+    setHidden((prev) => new Set(prev).add(id));
+
+    if (localOnly) {
       setLocalStore((prev) => {
         const next = prev.filter((t) => t.id !== id);
         persistLocal(userId, next);
@@ -230,22 +392,106 @@ export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: stri
       });
       return;
     }
+
+    void (async () => {
+      try {
+        const res = await fetch('/api/tasks/complete', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? ''}`,
+          },
+          body: JSON.stringify({ issueId: id, userId }),
+        });
+        if (!res.ok) throw new Error('Fehler beim Abschließen');
+        router.refresh();
+      } catch {
+        // Rollback: Task taucht wieder auf.
+        setHidden((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
+    })();
+  }
+
+  function handleCheck(id: string) {
+    if (pending.has(id) || hidden.has(id)) return;
+    const localOnly = id.startsWith('local-');
+    setPending((prev) => new Map(prev).set(id, { localOnly }));
+    const existing = timersRef.current.get(id);
+    if (existing) clearTimeout(existing);
+    const timer = setTimeout(() => commitCompletion(id, localOnly), UNDO_WINDOW_MS);
+    timersRef.current.set(id, timer);
+  }
+
+  function handleUndo(id: string) {
+    const t = timersRef.current.get(id);
+    if (t) clearTimeout(t);
+    timersRef.current.delete(id);
+    setPending((prev) => {
+      const next = new Map(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  function handleStartEdit(task: LinearIssue) {
+    setEditError(null);
+    setEditingId(task.id);
+  }
+  function handleCancelEdit() {
+    setEditingId(null);
+    setEditError(null);
+  }
+
+  async function handleSaveEdit(
+    task: LinearIssue,
+    patch: { title: string; dueDate: string | null; priority: number },
+  ) {
+    setEditError(null);
+    setEditSubmitting(true);
+
+    if (task.id.startsWith('local-')) {
+      setLocalStore((prev) => {
+        const next = prev.map((t) =>
+          t.id === task.id
+            ? { ...t, title: patch.title, dueDate: patch.dueDate, priority: patch.priority }
+            : t,
+        );
+        persistLocal(userId, next);
+        return next;
+      });
+      setEditSubmitting(false);
+      setEditingId(null);
+      return;
+    }
+
     try {
-      const res = await fetch('/api/tasks/complete', {
-        method: 'POST',
+      const res = await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? ''}`,
         },
-        body: JSON.stringify({ issueId: id, userId }),
+        body: JSON.stringify({
+          title: patch.title,
+          dueDate: patch.dueDate,
+          priority: patch.priority,
+        }),
       });
-      if (!res.ok) throw new Error('Fehler beim Abschließen');
-    } catch {
-      setDone((prev) => {
-        const next = new Set(prev);
-        next.delete(id);
-        return next;
-      });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(data?.error ?? `Update fehlgeschlagen (HTTP ${res.status})`);
+      }
+      setEditingId(null);
+      router.refresh();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Unbekannter Fehler';
+      setEditError(msg);
+    } finally {
+      setEditSubmitting(false);
     }
   }
 
@@ -256,8 +502,6 @@ export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: stri
     setCreateError(null);
     setSubmitting(true);
 
-    // Optimistic: lokalen pending-Task sofort zeigen, NICHT in localStorage persistieren
-    // (kommt erst rein wenn Linear-Sync fehlschlägt)
     const optimisticId = `local-${crypto.randomUUID()}`;
     const optimistic: StoredLocalTask = {
       id: optimisticId,
@@ -286,14 +530,12 @@ export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: stri
         const data = (await res.json().catch(() => null)) as { error?: string } | null;
         throw new Error(data?.error ?? `Linear-Sync fehlgeschlagen (HTTP ${res.status})`);
       }
-      // Erfolg: optimistic raus, dann refresh damit echtes Linear-Issue im nächsten Render erscheint
       setLocalStore((prev) => prev.filter((t) => t.id !== optimisticId));
       setDraft('');
       setDraftDue('');
       setDraftPrio(0);
       router.refresh();
     } catch (err) {
-      // Fehler: optimistic bleibt sichtbar UND wird in localStorage gespeichert (Fallback-Modus)
       const msg = err instanceof Error ? err.message : 'Unbekannter Fehler';
       setCreateError(`Linear-Sync fehlgeschlagen — Task nur lokal gespeichert. (${msg})`);
       setLocalStore((prev) => {
@@ -322,14 +564,38 @@ export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: stri
     }
   }
 
-  // Lokale Tasks zuerst (neueste oben), danach Server-Tasks. Bereits abgehakte Items werden ausgeblendet.
   const localIssues = localStore.map(toIssue);
   const merged = [...localIssues, ...tasks];
-  const visible = merged.filter((t) => !done.has(t.id));
+  const visible = merged.filter((t) => !hidden.has(t.id));
   const top3 = visible.slice(0, 3);
   const rest = visible.slice(3);
   const restLabel =
     rest.length === 1 ? 'Weitere 1 Task anzeigen' : `Weitere ${rest.length} Tasks anzeigen`;
+
+  function renderItem(t: LinearIssue) {
+    if (editingId === t.id) {
+      return (
+        <TaskEditForm
+          key={t.id}
+          task={t}
+          onCancel={handleCancelEdit}
+          onSave={(patch) => handleSaveEdit(t, patch)}
+          submitting={editSubmitting}
+          error={editError}
+        />
+      );
+    }
+    return (
+      <TaskRow
+        key={t.id}
+        task={t}
+        isPending={pending.has(t.id)}
+        onCheck={handleCheck}
+        onUndo={handleUndo}
+        onStartEdit={handleStartEdit}
+      />
+    );
+  }
 
   return (
     <div className="relative z-[1] mt-0.5 border-t border-[var(--line-1)] px-5 pt-4 pb-4">
@@ -403,11 +669,7 @@ export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: stri
       )}
 
       {top3.length > 0 ? (
-        <ul>
-          {top3.map((t) => (
-            <TaskRow key={t.id} task={t} isDone={done.has(t.id)} onCheck={handleCheck} />
-          ))}
-        </ul>
+        <ul>{top3.map(renderItem)}</ul>
       ) : (
         <p className="text-[13px] text-[var(--ink-3)]">
           Keine offenen Tasks — Plus-Button rechts oben, um den ersten anzulegen.
@@ -429,13 +691,7 @@ export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: stri
               className={`transition-transform ${showAll ? 'rotate-90' : ''}`}
             />
           </button>
-          {showAll && (
-            <ul className="mt-2">
-              {rest.map((t) => (
-                <TaskRow key={t.id} task={t} isDone={done.has(t.id)} onCheck={handleCheck} />
-              ))}
-            </ul>
-          )}
+          {showAll && <ul className="mt-2">{rest.map(renderItem)}</ul>}
         </>
       )}
     </div>
