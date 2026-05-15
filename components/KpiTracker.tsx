@@ -68,37 +68,49 @@ export function KpiTracker({ userId }: { userId: string }) {
       {kpis.map((k) => {
         const pct = k.target > 0 ? Math.min(Math.round((k.actual / k.target) * 100), 100) : 0;
         const isBusy = busy.has(k.id);
+        const isAuto = k.source !== 'manual';
+        const sourceLabel = isAuto ? sourceBadgeLabel(k.source) : 'Manual';
+        const sourcePillClass = isAuto ? 'pill-amber' : 'pill-blue';
         return (
           <li key={k.id} className="kpi">
             <div className="kpi-row">
               <span className="kpi-name">
                 {k.name}
                 {k.unit && <span className="text-[12px] text-[var(--ink-3)]">· {k.unit}</span>}
-                <span className="pill pill-blue">Manual</span>
+                <span
+                  className={`pill ${sourcePillClass}`}
+                  title={isAuto ? `Wird automatisch von ${sourceLabel} gesynct` : 'Manuelles Tracking via +/-'}
+                >
+                  {sourceLabel}
+                </span>
               </span>
               <span className="kpi-actions">
-                <button
-                  type="button"
-                  onClick={() => adjust(k.id, -1)}
-                  disabled={isBusy || k.actual === 0}
-                  aria-label="Eins weniger"
-                  className="btn-step"
-                >
-                  <Minus size={12} aria-hidden />
-                </button>
+                {!isAuto && (
+                  <button
+                    type="button"
+                    onClick={() => adjust(k.id, -1)}
+                    disabled={isBusy || k.actual === 0}
+                    aria-label="Eins weniger"
+                    className="btn-step"
+                  >
+                    <Minus size={12} aria-hidden />
+                  </button>
+                )}
                 <span className="kpi-num">
                   <span className="v">{k.actual}</span>
                   <span className="t">/ {k.target || '∞'}</span>
                 </span>
-                <button
-                  type="button"
-                  onClick={() => adjust(k.id, +1)}
-                  disabled={isBusy}
-                  aria-label="Eins mehr"
-                  className="btn-step pri"
-                >
-                  <Plus size={12} aria-hidden />
-                </button>
+                {!isAuto && (
+                  <button
+                    type="button"
+                    onClick={() => adjust(k.id, +1)}
+                    disabled={isBusy}
+                    aria-label="Eins mehr"
+                    className="btn-step pri"
+                  >
+                    <Plus size={12} aria-hidden />
+                  </button>
+                )}
               </span>
             </div>
             <div className="kpi-bar">
@@ -115,4 +127,14 @@ export function KpiTracker({ userId }: { userId: string }) {
       })}
     </ul>
   );
+}
+
+function sourceBadgeLabel(source: KpiWithWeek['source']): string {
+  switch (source) {
+    case 'hubspot:calls-week':
+      return 'HubSpot';
+    case 'manual':
+    default:
+      return 'Manual';
+  }
 }

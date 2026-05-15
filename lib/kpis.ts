@@ -1,5 +1,6 @@
 import { supabaseAdmin } from './supabase';
-import type { Kpi, KpiWithWeek, KpiType } from '@/types';
+import { getCallsThisWeek } from './hubspot';
+import type { Kpi, KpiWithWeek, KpiType, KpiSource, TeamMember } from '@/types';
 
 interface KpiRow {
   id: string;
@@ -12,6 +13,30 @@ interface KpiRow {
   due_date: string | null;
   completed: boolean;
   created_at: string;
+  source: KpiSource;
+}
+
+/**
+ * Live-resolve the `actual` value for a non-manual counter-KPI from its
+ * external source. Fail-soft: returns 0 if member lacks the relevant ID or
+ * the API is unreachable (mirror of aggregator.ts:32-34 Promise.allSettled
+ * pattern).
+ */
+export async function resolveActualFromSource(
+  source: KpiSource,
+  member: TeamMember | null,
+): Promise<number> {
+  if (source === 'manual') return 0;
+  if (source === 'hubspot:calls-week') {
+    if (!member?.hubspot_owner_id) return 0;
+    try {
+      const calls = await getCallsThisWeek(member.hubspot_owner_id);
+      return calls.length;
+    } catch {
+      return 0;
+    }
+  }
+  return 0;
 }
 
 interface WeekRow {
@@ -108,11 +133,34 @@ export async function listUserKpis(userId: string, weekStart: string): Promise<K
     }
   }
 
+  // Resolve actuals for non-manual counters live from their external source.
+  // Only fetch member if at least one auto-source KPI exists (saves a DB hop).
+  const autoSourceById = new Map<string, KpiSource>();
+  for (const d of definitions) {
+    if (d.type === 'counter' && d.source !== 'manual') autoSourceById.set(d.id, d.source);
+  }
+  let member: TeamMember | null = null;
+  if (autoSourceById.size > 0) {
+    const { data: m } = await supabaseAdmin
+      .from('team_members')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+    member = (m as TeamMember | null) ?? null;
+  }
+  const autoActuals = new Map<string, number>();
+  for (const [kpiId, source] of autoSourceById) {
+    autoActuals.set(kpiId, await resolveActualFromSource(source, member));
+  }
+
   return definitions.map((d) => ({
     ...d,
     target: weekByKpi.get(d.id)?.target ?? 0,
-    actual: weekByKpi.get(d.id)?.actual ?? 0,
-    history: historyByKpi.get(d.id),
+    actual: autoActuals.has(d.id)
+      ? (autoActuals.get(d.id) as number)
+      : weekByKpi.get(d.id)?.actual ?? 0,
+    // History only for manual counters — auto-sourced KPIs don't snapshot to kpi_history.
+    history: autoActuals.has(d.id) ? undefined : historyByKpi.get(d.id),
   }));
 }
 
@@ -125,8 +173,11 @@ export async function createKpi(input: {
   week_start: string;
   type?: KpiType;
   due_date?: string | null;
+  source?: KpiSource;
 }): Promise<KpiWithWeek> {
   const type: KpiType = input.type ?? 'counter';
+  // Source only meaningful for counters; force 'manual' on project/step rows.
+  const source: KpiSource = type === 'counter' ? (input.source ?? 'manual') : 'manual';
 
   const { data: maxRow } = await supabaseAdmin
     .from('kpis')
@@ -147,13 +198,26 @@ export async function createKpi(input: {
       position: nextPosition,
       type,
       due_date: input.due_date ?? null,
+      source,
     })
     .select()
     .single();
   if (kpiErr) throw kpiErr;
 
   const target = input.target ?? 0;
-  if (type === 'counter') {
+  // Only seed kpi_weeks for manual counters. Auto-sourced counters read live
+  // from their external source — no row in kpi_weeks needed (target still
+  // matters but is added on first setKpiTarget call from the UI).
+  if (type === 'counter' && source === 'manual') {
+    const { error: weekErr } = await supabaseAdmin.from('kpi_weeks').insert({
+      kpi_id: kpi.id,
+      week_start: input.week_start,
+      target,
+      actual: 0,
+    });
+    if (weekErr) throw weekErr;
+  } else if (type === 'counter' && target > 0) {
+    // Auto-counter with explicit target: persist target only (actual is computed).
     const { error: weekErr } = await supabaseAdmin.from('kpi_weeks').insert({
       kpi_id: kpi.id,
       week_start: input.week_start,

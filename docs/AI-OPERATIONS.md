@@ -101,6 +101,22 @@ Content-Type: application/json
 }
 ```
 
+**Auto-tracked Counter** (Wert wird live aus externer Quelle gelesen, kein manuelles `adjust` mehr nötig):
+```json
+{
+  "user_id": "24d43f6d-4a7e-458b-a119-84ecb8e6616f",
+  "type": "counter",
+  "name": "Cold Calls",
+  "unit": "Anrufe",
+  "target": 30,
+  "source": "hubspot:calls-week"
+}
+```
+
+Erlaubte `source`-Werte:
+- `"manual"` (Default) — Wert lebt in `kpi_weeks.actual`, wird via `POST /api/kpis/{id}/adjust` hochgezählt.
+- `"hubspot:calls-week"` — Voraussetzung: Member hat `hubspot_owner_id` gesetzt UND `role='sales'`. `actual` = Anzahl HubSpot-Calls dieser Woche (Montag-basis). `POST /api/kpis/{id}/adjust` returnt 409 für solche KPIs.
+
 **Projekt** (Container, mit optionaler Deadline):
 ```json
 {

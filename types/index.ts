@@ -106,6 +106,15 @@ export interface DailyBriefing {
 
 export type KpiType = 'counter' | 'project' | 'step';
 
+/**
+ * Tracking source for counter-KPIs.
+ *   manual              — value lives in kpi_weeks.actual, +/- buttons increment
+ *   hubspot:calls-week  — value = HubSpot calls this week for member.hubspot_owner_id
+ *
+ * Project/step rows always carry 'manual' (source has no meaning for non-counters).
+ */
+export type KpiSource = 'manual' | 'hubspot:calls-week';
+
 export interface Kpi {
   id: string;
   user_id: string;
@@ -117,6 +126,7 @@ export interface Kpi {
   due_date: string | null;
   completed: boolean;
   created_at: string;
+  source: KpiSource;
 }
 
 export interface KpiWithWeek extends Kpi {

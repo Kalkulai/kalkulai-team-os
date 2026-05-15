@@ -48,7 +48,7 @@ function SettingsContent() {
         </header>
         <div className="relative z-[1] px-5 pb-5">
           {activeId ? (
-            <KpiManager userId={activeId} />
+            <KpiManager userId={activeId} member={activeMember} />
           ) : (
             <p className="text-[13px] text-[var(--ink-3)]">Lädt…</p>
           )}

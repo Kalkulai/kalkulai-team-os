@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback } from 'react';
 import { Hash, Target, Plus, X } from 'lucide-react';
-import type { KpiWithWeek, KpiType } from '@/types';
+import type { KpiWithWeek, KpiType, KpiSource, TeamMember } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -14,6 +14,7 @@ interface CreateDraft {
   unit: string;
   target: string;
   due_date: string;
+  source: KpiSource;
 }
 
 interface DraftStep {
@@ -21,9 +22,16 @@ interface DraftStep {
   due_date: string;
 }
 
-const EMPTY_DRAFT: CreateDraft = { type: 'counter', name: '', unit: '', target: '', due_date: '' };
+const EMPTY_DRAFT: CreateDraft = {
+  type: 'counter',
+  name: '',
+  unit: '',
+  target: '',
+  due_date: '',
+  source: 'manual',
+};
 
-export function KpiManager({ userId }: { userId: string }) {
+export function KpiManager({ userId, member }: { userId: string; member?: TeamMember | null }) {
   const [items, setItems] = useState<KpiWithWeek[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<CreateDraft>(EMPTY_DRAFT);
@@ -84,6 +92,7 @@ export function KpiManager({ userId }: { userId: string }) {
       if (draft.type === 'counter') {
         body.unit = draft.unit.trim();
         body.target = Number.isFinite(target) && target > 0 ? target : 0;
+        if (draft.source !== 'manual') body.source = draft.source;
       } else {
         body.due_date = draft.due_date || null;
       }
@@ -256,6 +265,46 @@ export function KpiManager({ userId }: { userId: string }) {
             </button>
           </div>
         </div>
+
+        {draft.type === 'counter' && member?.role === 'sales' && member?.hubspot_owner_id && (
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Tracking-Modus
+            </h4>
+            <div className="mt-2 grid grid-cols-2 gap-1.5 rounded-lg bg-foreground/[0.05] p-1">
+              <button
+                type="button"
+                onClick={() => setDraft({ ...draft, source: 'manual' })}
+                className={`flex min-h-[40px] flex-col items-center justify-center rounded-md text-sm font-medium transition-all ${
+                  draft.source === 'manual'
+                    ? 'bg-background text-foreground shadow-sm ring-1 ring-foreground/[0.06]'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                aria-pressed={draft.source === 'manual'}
+              >
+                Manuell
+                <span className="text-[10px] font-normal text-muted-foreground">+/- im Tracker</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDraft({
+                  ...draft,
+                  source: 'hubspot:calls-week',
+                  unit: draft.unit.trim() ? draft.unit : 'Anrufe',
+                })}
+                className={`flex min-h-[40px] flex-col items-center justify-center rounded-md text-sm font-medium transition-all ${
+                  draft.source === 'hubspot:calls-week'
+                    ? 'bg-background text-foreground shadow-sm ring-1 ring-foreground/[0.06]'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                aria-pressed={draft.source === 'hubspot:calls-week'}
+              >
+                Automatisch (HubSpot)
+                <span className="text-[10px] font-normal text-muted-foreground">Calls diese Woche</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-1.5 sm:col-span-2">

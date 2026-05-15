@@ -63,6 +63,11 @@ vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: { from: (...args: unknown[]) => fromMock(...(args as [string])) },
 }));
 
+const getCallsThisWeekMock = vi.fn(async (_ownerId: string) => [] as unknown[]);
+vi.mock('@/lib/hubspot', () => ({
+  getCallsThisWeek: (ownerId: string) => getCallsThisWeekMock(ownerId),
+}));
+
 import {
   createKpi,
   adjustKpiActual,
@@ -71,6 +76,7 @@ import {
   listUserKpis,
   getRecentlyCompletedSteps,
   getRecentCounterActivity,
+  resolveActualFromSource,
 } from '@/lib/kpis';
 
 const USER = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
@@ -85,6 +91,8 @@ beforeEach(() => {
   upsertPayloads.length = 0;
   eqCalls.length = 0;
   fromMock.mockClear();
+  getCallsThisWeekMock.mockClear();
+  getCallsThisWeekMock.mockImplementation(async () => []);
 });
 
 describe('createKpi', () => {
@@ -214,7 +222,7 @@ describe('listUserKpis', () => {
     responses.push(
       {
         data: [
-          { id: KPI_ID, user_id: USER, parent_id: null, name: 'Calls', unit: 'Anrufe', position: 0, type: 'counter', due_date: null, completed: false, created_at: 'x' },
+          { id: KPI_ID, user_id: USER, parent_id: null, name: 'Calls', unit: 'Anrufe', position: 0, type: 'counter', due_date: null, completed: false, created_at: 'x', source: 'manual' },
         ],
         error: null,
       }, // definitions
@@ -226,6 +234,96 @@ describe('listUserKpis', () => {
     expect(out).toHaveLength(1);
     expect(out[0].target).toBe(30);
     expect(out[0].actual).toBe(12);
+  });
+
+  it('overrides actual from HubSpot for auto-sourced counter', async () => {
+    getCallsThisWeekMock.mockResolvedValueOnce([
+      { id: 'c1' }, { id: 'c2' }, { id: 'c3' }, { id: 'c4' }, { id: 'c5' },
+    ]);
+    responses.push(
+      {
+        data: [
+          { id: KPI_ID, user_id: USER, parent_id: null, name: 'Cold Calls', unit: 'Anrufe', position: 0, type: 'counter', due_date: null, completed: false, created_at: 'x', source: 'hubspot:calls-week' },
+        ],
+        error: null,
+      }, // definitions
+      { data: [{ kpi_id: KPI_ID, target: 30, actual: 99 }], error: null }, // kpi_weeks (ignored for actual)
+      { data: [], error: null }, // kpi_history
+      { data: { id: USER, hubspot_owner_id: 'hs-paul-id', role: 'sales' }, error: null }, // team_members.single
+    );
+
+    const out = await listUserKpis(USER, WEEK);
+    expect(out).toHaveLength(1);
+    expect(out[0].target).toBe(30);
+    expect(out[0].actual).toBe(5);
+    expect(out[0].history).toBeUndefined();
+    expect(getCallsThisWeekMock).toHaveBeenCalledWith('hs-paul-id');
+  });
+
+  it('auto-counter returns 0 if member has no hubspot_owner_id', async () => {
+    responses.push(
+      {
+        data: [
+          { id: KPI_ID, user_id: USER, parent_id: null, name: 'Cold Calls', unit: 'Anrufe', position: 0, type: 'counter', due_date: null, completed: false, created_at: 'x', source: 'hubspot:calls-week' },
+        ],
+        error: null,
+      },
+      { data: [{ kpi_id: KPI_ID, target: 30, actual: 99 }], error: null },
+      { data: [], error: null },
+      { data: { id: USER, hubspot_owner_id: null, role: 'sales' }, error: null },
+    );
+
+    const out = await listUserKpis(USER, WEEK);
+    expect(out[0].actual).toBe(0);
+    expect(getCallsThisWeekMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveActualFromSource', () => {
+  const SALES_MEMBER = {
+    id: USER,
+    name: 'Paul',
+    email: 'p@x.de',
+    role: 'sales' as const,
+    telegram_chat_id: null,
+    linear_user_id: null,
+    github_username: null,
+    hubspot_owner_id: 'hs-paul-id',
+    google_calendar_id: null,
+    google_refresh_token: null,
+    google_calendar_email: null,
+    notion_user_id: null,
+  };
+
+  it("returns 0 for 'manual' source", async () => {
+    const out = await resolveActualFromSource('manual', SALES_MEMBER);
+    expect(out).toBe(0);
+    expect(getCallsThisWeekMock).not.toHaveBeenCalled();
+  });
+
+  it("returns calls.length for 'hubspot:calls-week'", async () => {
+    getCallsThisWeekMock.mockResolvedValueOnce([{ id: 'a' }, { id: 'b' }, { id: 'c' }]);
+    const out = await resolveActualFromSource('hubspot:calls-week', SALES_MEMBER);
+    expect(out).toBe(3);
+    expect(getCallsThisWeekMock).toHaveBeenCalledWith('hs-paul-id');
+  });
+
+  it('returns 0 when member has no hubspot_owner_id', async () => {
+    const out = await resolveActualFromSource('hubspot:calls-week', { ...SALES_MEMBER, hubspot_owner_id: null });
+    expect(out).toBe(0);
+    expect(getCallsThisWeekMock).not.toHaveBeenCalled();
+  });
+
+  it('returns 0 fail-soft when HubSpot throws', async () => {
+    getCallsThisWeekMock.mockRejectedValueOnce(new Error('HubSpot 500'));
+    const out = await resolveActualFromSource('hubspot:calls-week', SALES_MEMBER);
+    expect(out).toBe(0);
+  });
+
+  it('returns 0 when member is null', async () => {
+    const out = await resolveActualFromSource('hubspot:calls-week', null);
+    expect(out).toBe(0);
+    expect(getCallsThisWeekMock).not.toHaveBeenCalled();
   });
 });
 
