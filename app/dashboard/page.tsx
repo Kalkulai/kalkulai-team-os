@@ -1,3 +1,4 @@
+import { cookies } from 'next/headers';
 import { TaskList } from '@/components/TaskList';
 import { MeetingList } from '@/components/MeetingList';
 import { KpiTracker } from '@/components/KpiTracker';
@@ -12,6 +13,8 @@ import { getAllMembers, getSalesLogsTodayByType } from '@/lib/supabase';
 import { differenceInCalendarDays, format, getISOWeek, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { GitBranch } from 'lucide-react';
+
+const ACTIVE_MEMBER_COOKIE = 'kalkulai-active-member';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,7 +48,11 @@ export default async function DashboardPage({
 }: {
   searchParams: Promise<{ member?: string }>;
 }) {
-  const [members, params] = await Promise.all([getAllMembers(), searchParams]);
+  const [members, params, cookieStore] = await Promise.all([
+    getAllMembers(),
+    searchParams,
+    cookies(),
+  ]);
 
   if (!members.length) {
     return (
@@ -55,7 +62,11 @@ export default async function DashboardPage({
     );
   }
 
-  const me = members.find((m) => m.id === params.member) ?? members[0];
+  const fromCookie = cookieStore.get(ACTIVE_MEMBER_COOKIE)?.value;
+  const me =
+    members.find((m) => m.id === params.member) ??
+    members.find((m) => m.id === fromCookie) ??
+    members[0];
   const briefing = await buildDailyBriefing(me);
   const mergedPRs = await getRecentlyMergedPRs(2);
   const [activityDays, todaySalesLogs] = await Promise.all([

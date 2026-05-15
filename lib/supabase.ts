@@ -37,7 +37,10 @@ export const supabase: SupabaseClient = lazyProxy(() => (_anonClient ??= buildAn
 export const supabaseAdmin: SupabaseClient = lazyProxy(() => (_adminClient ??= buildAdmin()));
 
 export async function getAllMembers(): Promise<TeamMember[]> {
-  const { data, error } = await supabaseAdmin.from('team_members').select('*');
+  const { data, error } = await supabaseAdmin
+    .from('team_members')
+    .select('*')
+    .order('created_at', { ascending: true });
   if (error) throw error;
   return data;
 }

@@ -3,7 +3,20 @@ import { useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { TeamMember } from '@/types';
 
-const ACTIVE_USER_KEY = 'team-os-active-user';
+export const ACTIVE_MEMBER_COOKIE = 'kalkulai-active-member';
+const LEGACY_LS_KEY = 'team-os-active-user';
+const COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 Jahr
+
+function readCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(new RegExp(`(?:^|; )${name}=([^;]*)`));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function writeCookie(name: string, value: string): void {
+  if (typeof document === 'undefined') return;
+  document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${COOKIE_MAX_AGE}; SameSite=Lax`;
+}
 
 export function useActiveMember() {
   const router = useRouter();
@@ -21,14 +34,17 @@ export function useActiveMember() {
         setMembers(data);
         const ids = new Set(data.map((m) => m.id));
         const fromUrl = params.get('member') || params.get('userId');
+        const fromCookie = readCookie(ACTIVE_MEMBER_COOKIE);
         const fromStorage =
-          typeof window !== 'undefined' ? window.localStorage.getItem(ACTIVE_USER_KEY) : null;
+          typeof window !== 'undefined' ? window.localStorage.getItem(LEGACY_LS_KEY) : null;
         const next =
           (fromUrl && ids.has(fromUrl) && fromUrl) ||
+          (fromCookie && ids.has(fromCookie) && fromCookie) ||
           (fromStorage && ids.has(fromStorage) && fromStorage) ||
           data[0].id;
         setActiveId(next);
-        if (typeof window !== 'undefined') window.localStorage.setItem(ACTIVE_USER_KEY, next);
+        writeCookie(ACTIVE_MEMBER_COOKIE, next);
+        if (typeof window !== 'undefined') window.localStorage.setItem(LEGACY_LS_KEY, next);
         if (!params.get('member')) {
           const sp = new URLSearchParams(params.toString());
           sp.delete('userId');
@@ -44,7 +60,8 @@ export function useActiveMember() {
 
   const setActive = (id: string) => {
     setActiveId(id);
-    if (typeof window !== 'undefined') window.localStorage.setItem(ACTIVE_USER_KEY, id);
+    writeCookie(ACTIVE_MEMBER_COOKIE, id);
+    if (typeof window !== 'undefined') window.localStorage.setItem(LEGACY_LS_KEY, id);
     const sp = new URLSearchParams(params.toString());
     sp.set('member', id);
     router.replace(`${pathname}?${sp.toString()}`);
