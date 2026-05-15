@@ -244,7 +244,7 @@ describe('buildActivityFeed', () => {
 
   // --- HubSpot calls ----------------------------------------------------
 
-  it('renders HubSpot-call as call event for sales role', async () => {
+  it('renders a single HubSpot-call as call event for sales role', async () => {
     vi.mocked(getCallsThisWeek).mockResolvedValue([
       {
         id: 'c-1',
@@ -255,9 +255,40 @@ describe('buildActivityFeed', () => {
     ]);
     const days = await buildActivityFeed(makeMember({ role: 'sales' }), []);
     const today = days.find((d) => d.label === 'Heute')!;
-    const call = today.events.find((e) => e.kind === 'call' && e.source === 'HubSpot');
-    expect(call).toBeDefined();
-    expect(call!.text).toBe('Call (5 min)');
+    const calls = today.events.filter((e) => e.kind === 'call' && e.source === 'HubSpot');
+    expect(calls).toHaveLength(1);
+    expect(calls[0].text).toBe('Call (5 min)');
+  });
+
+  it('clusters consecutive HubSpot calls into one session event', async () => {
+    // 5 Cold-Calls innerhalb 25 Minuten — sollten zu EINEM Eintrag werden
+    vi.mocked(getCallsThisWeek).mockResolvedValue([
+      { id: 'c-1', timestamp: todayMinusMinutes(60), duration: 60_000, ownerId: 'hub-1' },
+      { id: 'c-2', timestamp: todayMinusMinutes(55), duration: 60_000, ownerId: 'hub-1' },
+      { id: 'c-3', timestamp: todayMinusMinutes(50), duration: 60_000, ownerId: 'hub-1' },
+      { id: 'c-4', timestamp: todayMinusMinutes(40), duration: 60_000, ownerId: 'hub-1' },
+      { id: 'c-5', timestamp: todayMinusMinutes(35), duration: 60_000, ownerId: 'hub-1' },
+    ]);
+    const days = await buildActivityFeed(makeMember({ role: 'sales' }), []);
+    const today = days.find((d) => d.label === 'Heute')!;
+    const calls = today.events.filter((e) => e.kind === 'call' && e.source === 'HubSpot');
+    expect(calls).toHaveLength(1);
+    expect(calls[0].text).toMatch(/^5 Calls · \d{2}:\d{2}–\d{2}:\d{2}$/);
+  });
+
+  it('keeps calls separated by long gaps in separate sessions', async () => {
+    // Morgen-Session + Nachmittags-Session, >30 min Pause → 2 Einträge
+    vi.mocked(getCallsThisWeek).mockResolvedValue([
+      { id: 'c-1', timestamp: todayMinusMinutes(240), duration: 60_000, ownerId: 'hub-1' },
+      { id: 'c-2', timestamp: todayMinusMinutes(235), duration: 60_000, ownerId: 'hub-1' },
+      { id: 'c-3', timestamp: todayMinusMinutes(60), duration: 60_000, ownerId: 'hub-1' },
+      { id: 'c-4', timestamp: todayMinusMinutes(55), duration: 60_000, ownerId: 'hub-1' },
+    ]);
+    const days = await buildActivityFeed(makeMember({ role: 'sales' }), []);
+    const today = days.find((d) => d.label === 'Heute')!;
+    const calls = today.events.filter((e) => e.kind === 'call' && e.source === 'HubSpot');
+    expect(calls).toHaveLength(2);
+    expect(calls.every((c) => /^2 Calls · /.test(String(c.text)))).toBe(true);
   });
 
   it('ignores HubSpot when role is not sales', async () => {

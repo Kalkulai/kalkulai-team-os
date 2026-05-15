@@ -1,4 +1,4 @@
-import type { TeamMember, CalendarEvent } from '@/types';
+import type { TeamMember, CalendarEvent, HubSpotCall } from '@/types';
 import { getActiveBranches, getRecentlyOpenedPRs, type MergedPR } from './github';
 import { getCompletedIssuesSince, getCreatedIssuesSince } from './linear';
 import { getCallsThisWeek } from './hubspot';
@@ -9,6 +9,63 @@ import { format, isSameDay, isYesterday, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 
 const HERMES_LABELS = new Set(['hermes', 'from-hermes']);
+const CALL_SESSION_GAP_MS = 30 * 60_000;
+
+/**
+ * Calls within `gapMs` of each other (default 30 min) are merged into one
+ * "calling session" — keeps the timeline readable when a sales user logs 20+
+ * cold calls in a row. A solo call passes through as a session of count=1.
+ * Output is sorted ascending by session start; callers re-sort if needed.
+ */
+export interface CallSession {
+  start: Date;
+  end: Date;
+  count: number;
+  totalDurationMs: number;
+}
+
+export function clusterCalls(
+  calls: HubSpotCall[],
+  gapMs: number = CALL_SESSION_GAP_MS,
+): CallSession[] {
+  const dated = calls
+    .map((c) => ({ t: parseISO(c.timestamp), duration: c.duration }))
+    .filter((c) => !Number.isNaN(c.t.getTime()))
+    .sort((a, b) => a.t.getTime() - b.t.getTime());
+  const out: CallSession[] = [];
+  for (const c of dated) {
+    const last = out[out.length - 1];
+    if (last && c.t.getTime() - last.end.getTime() <= gapMs) {
+      last.end = c.t;
+      last.count += 1;
+      last.totalDurationMs += c.duration;
+    } else {
+      out.push({ start: c.t, end: c.t, count: 1, totalDurationMs: c.duration });
+    }
+  }
+  return out;
+}
+
+function callSessionToEvent(session: CallSession): ActivityEvent {
+  const startTime = format(session.start, 'HH:mm');
+  if (session.count === 1) {
+    const minutes = Math.max(1, Math.round(session.totalDurationMs / 60_000));
+    return {
+      time: startTime,
+      text: `Call (${minutes} min)`,
+      source: 'HubSpot',
+      kind: 'call',
+    };
+  }
+  const endTime = format(session.end, 'HH:mm');
+  const range = startTime === endTime ? startTime : `${startTime}–${endTime}`;
+  return {
+    time: startTime,
+    text: `${session.count} Calls · ${range}`,
+    source: 'HubSpot',
+    kind: 'call',
+  };
+}
 
 function salesLogLabel(type: string): string {
   switch (type) {
@@ -102,27 +159,29 @@ export async function buildActivityFeed(
     }
   }
 
-  // HubSpot-Calls (für sales-Members) → call Events (heute/gestern)
+  // HubSpot-Calls (für sales-Members) → call Events (heute/gestern). Calls in
+  // einer Sitzung (Abstand < 30 min) werden zu einem Eintrag zusammengefasst,
+  // damit eine Cold-Call-Stunde nicht die ganze Timeline überflutet. Single
+  // calls bleiben als „Call (X min)" sichtbar.
   if (member.hubspot_owner_id && member.role === 'sales') {
     try {
       const calls = await getCallsThisWeek(member.hubspot_owner_id);
+      const todayCalls: HubSpotCall[] = [];
+      const yesterdayCalls: HubSpotCall[] = [];
       for (const c of calls) {
         try {
           const dt = parseISO(c.timestamp);
-          if (!isSameDay(dt, now) && !isYesterday(dt)) continue;
-          const time = format(dt, 'HH:mm');
-          const minutes = Math.max(1, Math.round(c.duration / 60_000));
-          const ev: ActivityEvent = {
-            time,
-            text: `Call (${minutes} min)`,
-            source: 'HubSpot',
-            kind: 'call',
-          };
-          if (isSameDay(dt, now)) todayEvents.push(ev);
-          else yesterdayEvents.push(ev);
+          if (isSameDay(dt, now)) todayCalls.push(c);
+          else if (isYesterday(dt)) yesterdayCalls.push(c);
         } catch {
           // ignore parse errors
         }
+      }
+      for (const session of clusterCalls(todayCalls)) {
+        todayEvents.push(callSessionToEvent(session));
+      }
+      for (const session of clusterCalls(yesterdayCalls)) {
+        yesterdayEvents.push(callSessionToEvent(session));
       }
     } catch {
       // HubSpot-Token fehlt o.ä. → silent skip
