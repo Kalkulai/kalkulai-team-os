@@ -21,21 +21,29 @@ async function hsPost<T>(path: string, body: unknown): Promise<T> {
 }
 
 /**
- * All HubSpot Calls created by `hubspotOwnerId` since Monday this week.
+ * All HubSpot Calls created by `hubspotOwnerId` since `since` (or Monday this
+ * week if `since` is omitted or earlier than Monday).
  *
- * Uses the server-side Search API instead of a flat list — the flat
- * `/crm/v3/objects/calls?limit=100` endpoint paginates over ALL calls
- * in the account, so for any team with more than 100 historical calls
- * the per-owner subset for the current week is silently truncated
- * (or missed entirely). Search lets HubSpot filter server-side.
+ * For KPIs created mid-week, callers pass the kpi.created_at so the counter
+ * doesn't retroactively include calls logged before the KPI even existed.
+ * Once the next week starts, Monday wins again and counting resets normally.
+ *
+ * Uses the server-side Search API — the flat `/crm/v3/objects/calls?limit=100`
+ * endpoint paginates over ALL calls in the account, so per-owner subsets get
+ * silently truncated for accounts with >100 historical calls. Search lets
+ * HubSpot filter server-side.
  *
  * Pagination: walks all matching pages (HubSpot's max page size is 100;
- * safety-capped at 10 pages = 1000 calls/week, far above realistic counts).
+ * safety-capped at 10 pages = 1000 calls/window, above realistic counts).
  */
-export async function getCallsThisWeek(hubspotOwnerId: string): Promise<HubSpotCall[]> {
+export async function getCallsThisWeek(
+  hubspotOwnerId: string,
+  since?: Date,
+): Promise<HubSpotCall[]> {
   const monday = startOfWeek(new Date(), { weekStartsOn: 1 });
   monday.setHours(0, 0, 0, 0);
-  const sinceIso = monday.toISOString();
+  const effectiveSince = since && since > monday ? since : monday;
+  const sinceIso = effectiveSince.toISOString();
 
   type SearchResp = {
     results: Array<{

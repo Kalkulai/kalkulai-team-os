@@ -21,16 +21,23 @@ interface KpiRow {
  * external source. Fail-soft: returns 0 if member lacks the relevant ID or
  * the API is unreachable (mirror of aggregator.ts:32-34 Promise.allSettled
  * pattern).
+ *
+ * `kpiCreatedAt` (ISO timestamp) is used as a lower bound for HubSpot Calls
+ * so newly-created KPIs don't retroactively count pre-creation activity.
+ * The source itself decides whether/how to apply it — current rule for
+ * `hubspot:calls-week`: take max(monday-this-week, kpiCreatedAt).
  */
 export async function resolveActualFromSource(
   source: KpiSource,
   member: TeamMember | null,
+  kpiCreatedAt?: string,
 ): Promise<number> {
   if (source === 'manual') return 0;
   if (source === 'hubspot:calls-week') {
     if (!member?.hubspot_owner_id) return 0;
     try {
-      const calls = await getCallsThisWeek(member.hubspot_owner_id);
+      const since = kpiCreatedAt ? new Date(kpiCreatedAt) : undefined;
+      const calls = await getCallsThisWeek(member.hubspot_owner_id, since);
       return calls.length;
     } catch {
       return 0;
@@ -135,12 +142,12 @@ export async function listUserKpis(userId: string, weekStart: string): Promise<K
 
   // Resolve actuals for non-manual counters live from their external source.
   // Only fetch member if at least one auto-source KPI exists (saves a DB hop).
-  const autoSourceById = new Map<string, KpiSource>();
+  const autoDefById = new Map<string, KpiRow>();
   for (const d of definitions) {
-    if (d.type === 'counter' && d.source !== 'manual') autoSourceById.set(d.id, d.source);
+    if (d.type === 'counter' && d.source !== 'manual') autoDefById.set(d.id, d);
   }
   let member: TeamMember | null = null;
-  if (autoSourceById.size > 0) {
+  if (autoDefById.size > 0) {
     const { data: m } = await supabaseAdmin
       .from('team_members')
       .select('*')
@@ -149,8 +156,11 @@ export async function listUserKpis(userId: string, weekStart: string): Promise<K
     member = (m as TeamMember | null) ?? null;
   }
   const autoActuals = new Map<string, number>();
-  for (const [kpiId, source] of autoSourceById) {
-    autoActuals.set(kpiId, await resolveActualFromSource(source, member));
+  for (const [kpiId, def] of autoDefById) {
+    autoActuals.set(
+      kpiId,
+      await resolveActualFromSource(def.source, member, def.created_at),
+    );
   }
 
   return definitions.map((d) => ({
