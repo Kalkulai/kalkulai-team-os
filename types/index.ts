@@ -15,6 +15,13 @@ export interface TeamMember {
   google_calendar_email: string | null;
   notion_user_id: string | null;
   role: UserRole;
+  /**
+   * Derived boolean — true iff `google_refresh_token` is set in DB. Only present
+   * on the public `/api/members` payload (refresh-token itself stays server-side).
+   * Use this for UI connection-status checks; `google_calendar_email` alone is
+   * NOT a reliable signal (kann gesetzt sein während das Token bereits revoked ist).
+   */
+  calendar_connected?: boolean;
 }
 
 export type TaskSource = 'linear' | 'notion' | 'hermes' | 'local';

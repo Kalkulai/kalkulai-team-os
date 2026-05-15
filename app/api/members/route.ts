@@ -12,6 +12,9 @@ import { getAllMembers } from '@/lib/supabase';
  */
 export async function GET() {
   const members = await getAllMembers();
-  const safe = members.map(({ google_refresh_token: _drop, ...rest }) => rest);
+  const safe = members.map(({ google_refresh_token, ...rest }) => ({
+    ...rest,
+    calendar_connected: !!google_refresh_token,
+  }));
   return NextResponse.json(safe);
 }

@@ -63,12 +63,20 @@ function SettingsContent() {
           {activeMember ? (
             <div className="space-y-3.5">
               <p className="text-[13px] leading-snug text-[var(--ink-2)]">
-                {activeMember.google_calendar_email ? (
+                {activeMember.calendar_connected ? (
                   <>
                     Verbunden mit{' '}
                     <span className="font-medium text-[var(--ink-1)]">
+                      {activeMember.google_calendar_email ?? 'Google Calendar'}
+                    </span>
+                  </>
+                ) : activeMember.google_calendar_email ? (
+                  <>
+                    Token ungültig oder revoked — bitte neu verbinden (war zuletzt{' '}
+                    <span className="font-medium text-[var(--ink-1)]">
                       {activeMember.google_calendar_email}
                     </span>
+                    ).
                   </>
                 ) : (
                   'Noch nicht verbunden — Briefing nutzt Fallback-Kalender.'
@@ -78,7 +86,11 @@ function SettingsContent() {
                 href={`/api/oauth/google/start?userId=${activeMember.id}`}
                 className="btn-action"
               >
-                {activeMember.google_calendar_email ? 'Anderen Account verbinden' : 'Mit Google Calendar verbinden'}
+                {activeMember.calendar_connected
+                  ? 'Anderen Account verbinden'
+                  : activeMember.google_calendar_email
+                    ? 'Neu verbinden'
+                    : 'Mit Google Calendar verbinden'}
               </a>
             </div>
           ) : (
@@ -161,8 +173,10 @@ function buildChecks(m: TeamMember): { label: string; ok: boolean; hint: string 
     { label: 'GitHub', ok: !!m.github_username, hint: 'In DB: github_username setzen' },
     {
       label: 'Calendar',
-      ok: !!m.google_refresh_token || !!m.google_calendar_email,
-      hint: 'Person klickt "Mit Google Calendar verbinden"',
+      ok: !!m.calendar_connected,
+      hint: m.google_calendar_email
+        ? 'Token ungültig — Person muss erneut "Mit Google Calendar verbinden" klicken'
+        : 'Person klickt "Mit Google Calendar verbinden"',
     },
   ];
   if (m.role === 'sales') {
