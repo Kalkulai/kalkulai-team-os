@@ -233,7 +233,7 @@ function TaskRow({
               <Undo2 size={12} aria-hidden />
               <span>Rückgängig</span>
             </button>
-          ) : !isStep ? (
+          ) : (
             <button
               type="button"
               className="task-edit"
@@ -246,7 +246,7 @@ function TaskRow({
             >
               <Pencil size={12} aria-hidden />
             </button>
-          ) : null}
+          )}
         </span>
       </div>
     </li>
@@ -259,12 +259,14 @@ function TaskEditForm({
   onSave,
   submitting,
   error,
+  isStep = false,
 }: {
   task: UnifiedTask;
   onCancel: () => void;
   onSave: (patch: { title: string; dueDate: string | null; priority: number }) => void;
   submitting: boolean;
   error: string | null;
+  isStep?: boolean;
 }) {
   const [title, setTitle] = useState(task.title);
   const [due, setDue] = useState(task.dueDate ?? '');
@@ -322,26 +324,28 @@ function TaskEditForm({
             aria-label="Fälligkeitsdatum"
             className="task-date-input"
           />
-          <div className="prio-group" role="radiogroup" aria-label="Priorität">
-            {([
-              [1, 'pill-rose', 'urgent'],
-              [2, 'pill-amber', 'high'],
-              [3, 'pill-mute', 'medium'],
-              [4, 'pill-mute', 'low'],
-            ] as const).map(([p, cls, label]) => (
-              <button
-                key={p}
-                type="button"
-                role="radio"
-                aria-checked={prio === p}
-                onClick={() => setPrio(prio === p ? 0 : p)}
-                className={`pill ${cls} prio-chip ${prio === p ? 'is-on' : ''}`}
-                title={`Priorität: ${label}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          {!isStep && (
+            <div className="prio-group" role="radiogroup" aria-label="Priorität">
+              {([
+                [1, 'pill-rose', 'urgent'],
+                [2, 'pill-amber', 'high'],
+                [3, 'pill-mute', 'medium'],
+                [4, 'pill-mute', 'low'],
+              ] as const).map(([p, cls, label]) => (
+                <button
+                  key={p}
+                  type="button"
+                  role="radio"
+                  aria-checked={prio === p}
+                  onClick={() => setPrio(prio === p ? 0 : p)}
+                  className={`pill ${cls} prio-chip ${prio === p ? 'is-on' : ''}`}
+                  title={`Priorität: ${label}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         {error && <p className="text-[11.5px] text-[var(--danger)]">{error}</p>}
       </form>
@@ -554,6 +558,31 @@ export function TaskList({
       return;
     }
 
+    if (task.kind === 'step') {
+      try {
+        const res = await fetch(`/api/kpis/${encodeURIComponent(task.id)}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? ''}`,
+          },
+          body: JSON.stringify({ name: patch.title, due_date: patch.dueDate || null }),
+        });
+        if (!res.ok) {
+          const data = (await res.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(data?.error ?? `Update fehlgeschlagen (HTTP ${res.status})`);
+        }
+        setEditingId(null);
+        router.refresh();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        setEditError(msg);
+      } finally {
+        setEditSubmitting(false);
+      }
+      return;
+    }
+
     try {
       const res = await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
         method: 'PATCH',
@@ -714,7 +743,7 @@ export function TaskList({
     rest.length === 1 ? 'Weitere 1 Task anzeigen' : `Weitere ${rest.length} Tasks anzeigen`;
 
   function renderItem(t: UnifiedTask) {
-    if (editingId === t.id && t.kind === 'linear') {
+    if (editingId === t.id) {
       return (
         <TaskEditForm
           key={t.id}
@@ -723,6 +752,7 @@ export function TaskList({
           onSave={(patch) => handleSaveEdit(t, patch)}
           submitting={editSubmitting}
           error={editError}
+          isStep={t.kind === 'step'}
         />
       );
     }

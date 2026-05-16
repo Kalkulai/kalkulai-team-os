@@ -1,6 +1,6 @@
 'use client';
-import { useEffect, useState, useCallback } from 'react';
-import { Check } from 'lucide-react';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { Check, Pencil, X } from 'lucide-react';
 import type { KpiWithWeek } from '@/types';
 import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -16,6 +16,10 @@ export function ProjectsTracker({ userId }: { userId: string }) {
   const [groups, setGroups] = useState<ProjectGroup[] | null>(null);
   const [busy, setBusy] = useState<Set<string>>(new Set());
   const [open, setOpen] = useState<Set<string>>(new Set());
+  const [editingStepId, setEditingStepId] = useState<string | null>(null);
+  const [editStepName, setEditStepName] = useState('');
+  const [editStepDue, setEditStepDue] = useState('');
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/kpis?userId=${encodeURIComponent(userId)}`, {
@@ -57,6 +61,50 @@ export function ProjectsTracker({ userId }: { userId: string }) {
       else next.add(id);
       return next;
     });
+  }
+
+  function startEditStep(s: KpiWithWeek) {
+    setEditingStepId(s.id);
+    setEditStepName(s.name);
+    setEditStepDue(s.due_date ?? '');
+    requestAnimationFrame(() => editInputRef.current?.focus());
+  }
+
+  function cancelEditStep() {
+    setEditingStepId(null);
+    setEditStepName('');
+    setEditStepDue('');
+  }
+
+  async function saveEditStep(stepId: string) {
+    const name = editStepName.trim();
+    if (!name) return;
+    setBusy((prev) => new Set(prev).add(stepId));
+    try {
+      const res = await fetch(`/api/kpis/${encodeURIComponent(stepId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
+        body: JSON.stringify({ name, due_date: editStepDue || null }),
+      });
+      if (!res.ok) return;
+      setGroups((prev) =>
+        prev
+          ? prev.map((g) => ({
+              ...g,
+              steps: g.steps.map((s) =>
+                s.id === stepId ? { ...s, name, due_date: editStepDue || null } : s,
+              ),
+            }))
+          : prev,
+      );
+      cancelEditStep();
+    } finally {
+      setBusy((prev) => {
+        const n = new Set(prev);
+        n.delete(stepId);
+        return n;
+      });
+    }
   }
 
   async function toggleStep(stepId: string, next: boolean) {
@@ -149,19 +197,70 @@ export function ProjectsTracker({ userId }: { userId: string }) {
                 {steps.map((s) => {
                   const isBusy = busy.has(s.id);
                   const meta = stepDueMeta(s.due_date);
+                  const isEditingThis = editingStepId === s.id;
                   return (
-                    <li key={s.id} className={`proj-task ${s.completed ? 'done' : ''}`}>
-                      <button
-                        type="button"
-                        onClick={() => !isBusy && toggleStep(s.id, !s.completed)}
-                        className="kb"
-                        disabled={isBusy}
-                        aria-label={s.completed ? 'Schritt offen markieren' : 'Schritt erledigen'}
-                      >
-                        <Check />
-                      </button>
-                      <span className="lbl">{s.name}</span>
-                      {meta && <span className={`pill ${meta.pillClass} mono due`}>{meta.label}</span>}
+                    <li key={s.id} className={`proj-task ${s.completed ? 'done' : ''} ${isEditingThis ? 'is-editing' : ''}`}>
+                      {isEditingThis ? (
+                        <form
+                          className="proj-step-edit"
+                          onSubmit={(e) => { e.preventDefault(); void saveEditStep(s.id); }}
+                        >
+                          <input
+                            ref={editInputRef}
+                            type="text"
+                            value={editStepName}
+                            onChange={(e) => setEditStepName(e.target.value)}
+                            placeholder="Schrittname"
+                            className="proj-step-edit-input"
+                          />
+                          <input
+                            type="date"
+                            value={editStepDue}
+                            onChange={(e) => setEditStepDue(e.target.value)}
+                            aria-label="Fälligkeitsdatum"
+                            className="task-date-input"
+                          />
+                          <button
+                            type="submit"
+                            disabled={!editStepName.trim() || isBusy}
+                            className="btn-step pri h-[26px] w-[26px] flex-none p-0"
+                            aria-label="Speichern"
+                          >
+                            <Check size={12} strokeWidth={2.6} aria-hidden />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={cancelEditStep}
+                            className="btn-step h-[26px] w-[26px] flex-none p-0"
+                            aria-label="Abbrechen"
+                          >
+                            <X size={12} strokeWidth={2.4} aria-hidden />
+                          </button>
+                        </form>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => !isBusy && toggleStep(s.id, !s.completed)}
+                            className="kb"
+                            disabled={isBusy}
+                            aria-label={s.completed ? 'Schritt offen markieren' : 'Schritt erledigen'}
+                          >
+                            <Check />
+                          </button>
+                          <span className="lbl">{s.name}</span>
+                          {meta && <span className={`pill ${meta.pillClass} mono due`}>{meta.label}</span>}
+                          <button
+                            type="button"
+                            onClick={() => startEditStep(s)}
+                            className="proj-step-edit-btn"
+                            aria-label="Schritt bearbeiten"
+                            title="Bearbeiten"
+                          >
+                            <Pencil size={11} aria-hidden />
+                          </button>
+                        </>
+                      )}
                     </li>
                   );
                 })}

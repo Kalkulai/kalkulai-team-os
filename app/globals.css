@@ -314,7 +314,7 @@ html.light .task:hover { background: rgba(11, 11, 15, 0.03); }
 .task .row1-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .task .row2-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .task .row2-meta .due-pill { font-size: 12px; }
-.task .row2-meta .meta-end { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; }
+.task .row2-meta .meta-end { display: inline-flex; gap: 6px; align-items: center; }
 
 /* ─── Avatar stack ─── */
 .avatar-stack { display: inline-flex; align-items: center; }
@@ -586,6 +586,25 @@ html.light .proj.late .proj-due { color: #C2351A; }
 .proj-task.done .lbl { color: var(--ink-3); text-decoration: line-through; }
 .proj-task .lbl { flex: 1; }
 .proj-task .due { margin-left: auto; }
+.proj-step-edit-btn {
+  display: none; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 5px; flex-shrink: 0;
+  color: var(--ink-3); opacity: 0.7; transition: opacity 0.15s;
+}
+.proj-task:hover .proj-step-edit-btn { display: inline-flex; }
+.proj-step-edit-btn:hover { opacity: 1; color: var(--ink-1); }
+.proj-task.done .proj-step-edit-btn { display: none; }
+.proj-step-edit {
+  display: flex; align-items: center; gap: 6px; flex: 1; flex-wrap: wrap;
+}
+.proj-step-edit-input {
+  height: 26px; min-width: 0; flex: 1;
+  border-radius: 7px; border: 1px solid var(--line-1);
+  background: rgba(255,255,255,0.04); padding: 0 10px;
+  font: 400 12px/1 var(--font); color: var(--ink-1); outline: none;
+  transition: border-color 0.15s;
+}
+.proj-step-edit-input:focus { border-color: var(--brand); }
 
 /* ─── Activity timeline ─── */
 .tl { position: relative; padding-left: 30px; }
