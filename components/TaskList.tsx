@@ -183,12 +183,10 @@ function TaskRow({
         <span className="body">
           {hasRow1 && (
             <span className="row1-meta">
-              {isStep && task.project ? (
+              {isStep && task.project && (
                 <span className="pill pill-mute text-[10px] opacity-70" title={`Schritt von ${task.project.name}`}>
                   ▸ {task.project.name}
                 </span>
-              ) : (
-                <span />
               )}
               {task.teamTask && (
                 <AvatarStack
