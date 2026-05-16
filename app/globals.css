@@ -343,6 +343,9 @@ html.light .task:hover { background: rgba(11, 11, 15, 0.03); }
 .member-team-chip { height: 26px; padding: 0 10px; border-radius: 13px; font-size: 10px; font-weight: 600; border: 1.5px solid var(--line-2); cursor: pointer; color: var(--ink-3); background: transparent; transition: border-color 0.14s, color 0.14s; }
 .member-team-chip.is-on { border-color: var(--brand); color: var(--brand); }
 
+.task-avatar-slot {
+  flex: none; align-self: center; margin-left: auto; padding-left: 8px;
+}
 .task .task-actions {
   flex: none; align-self: center; display: inline-flex; align-items: center;
   opacity: 0; transition: opacity 0.14s;

@@ -151,7 +151,7 @@ function TaskRow({
   const due = dueMeta(task.dueDate);
   const statusLabel = STATUS_LABEL[task.status];
   const hasMeta = prio > 0 || due !== null || statusLabel !== null;
-  const hasRow1 = (isStep && !!task.project) || !!task.teamTask;
+  const hasRow1 = isStep && !!task.project;
 
   function handleRowClick() {
     if (!isPending) onCheck(task.id, task.kind);
@@ -181,19 +181,11 @@ function TaskRow({
           {srcLetter}
         </span>
         <span className="body">
-          {hasRow1 && (
+          {isStep && task.project && (
             <span className="row1-meta">
-              {isStep && task.project && (
-                <span className="pill pill-mute text-[10px] opacity-70" title={`Schritt von ${task.project.name}`}>
-                  ▸ {task.project.name}
-                </span>
-              )}
-              {task.teamTask && (
-                <AvatarStack
-                  assigneeUserIds={task.teamTask.assigneeUserIds}
-                  members={members}
-                />
-              )}
+              <span className="pill pill-mute text-[10px] opacity-70" title={`Schritt von ${task.project.name}`}>
+                ▸ {task.project.name}
+              </span>
             </span>
           )}
           <span className="title">
@@ -216,6 +208,11 @@ function TaskRow({
             </span>
           )}
         </span>
+        {task.teamTask && (
+          <span className="task-avatar-slot">
+            <AvatarStack assigneeUserIds={task.teamTask.assigneeUserIds} members={members} />
+          </span>
+        )}
         <span className="task-actions">
           {isPending ? (
             <button
