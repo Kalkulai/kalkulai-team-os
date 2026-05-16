@@ -1,6 +1,7 @@
 import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import type { UnifiedTask } from '@/lib/unified-tasks';
+import { AvatarStack } from '@/components/dashboard/AvatarStack';
 
 function duePill(iso: string | null): { label: string; cls: string } | null {
   if (!iso) return null;
@@ -24,7 +25,15 @@ const PRIORITY_PILL: Record<number, string> = {
   4: 'pill-mute',
 };
 
-export function KanbanCard({ task, done = false }: { task: UnifiedTask; done?: boolean }) {
+export function KanbanCard({
+  task,
+  done = false,
+  members = [],
+}: {
+  task: UnifiedTask;
+  done?: boolean;
+  members?: Array<{ id: string; name: string }>;
+}) {
   const due = duePill(task.dueDate);
   const prio = task.priority ?? 0;
 
@@ -35,7 +44,12 @@ export function KanbanCard({ task, done = false }: { task: UnifiedTask; done?: b
           ▸ {task.project.name}
         </span>
       )}
-      <p className={`kanban-card-title${done ? ' kanban-card-title-done' : ''}`}>{task.title}</p>
+      <div className="flex items-start justify-between gap-2">
+        <p className={`kanban-card-title${done ? ' kanban-card-title-done' : ''} flex-1`}>{task.title}</p>
+        {task.teamTask && (
+          <AvatarStack assigneeUserIds={task.teamTask.assigneeUserIds} members={members} />
+        )}
+      </div>
       <div className="kanban-card-meta">
         {task.identifier && (
           <span className="pill pill-mute mono text-[10px]">{task.identifier}</span>

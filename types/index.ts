@@ -37,6 +37,10 @@ export interface LinearIssue {
   dueDate?: string | null;
   /** Origin label (computed from Linear labels). Default: 'linear'. */
   source?: TaskSource;
+  /** Raw label names from Linear (e.g. ['Hermes', 'Team-Task']). */
+  labels?: string[];
+  /** Raw description text from Linear. Used for team-task group markers. */
+  description?: string | null;
 }
 
 export interface GitHubBranch {

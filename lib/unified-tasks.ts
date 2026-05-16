@@ -1,5 +1,6 @@
 import { differenceInCalendarDays, parseISO } from 'date-fns';
 import type { KpiWithWeek, LinearIssue, TaskSource } from '@/types';
+import { parseTeamTaskGroupId, parseTeamTaskAssignees } from '@/lib/team-tasks';
 
 export type UnifiedStatus = 'todo' | 'in-progress' | 'on-hold' | 'done';
 export type UnifiedTaskKind = 'linear' | 'step';
@@ -16,6 +17,7 @@ export interface UnifiedTask {
   source?: TaskSource;
   project?: { id: string; name: string } | null;
   completedAt?: string;
+  teamTask?: { groupId: string; assigneeUserIds: string[] };
 }
 
 export function deriveLinearStatus(issue: LinearIssue): UnifiedStatus {
@@ -39,18 +41,6 @@ export function deriveStepStatus(step: KpiWithWeek): UnifiedStatus {
   return 'todo';
 }
 
-function urgencyBucket(t: UnifiedTask): number {
-  if (!t.dueDate) return 2;
-  try {
-    const days = differenceInCalendarDays(parseISO(t.dueDate), new Date());
-    if (days < 0) return 0;
-    if (days === 0) return 1;
-    return 2;
-  } catch {
-    return 2;
-  }
-}
-
 const prioRank = (p: number | undefined) => (p === undefined || p === 0 ? 99 : p);
 
 export function mergeTasks(
@@ -60,17 +50,24 @@ export function mergeTasks(
 ): UnifiedTask[] {
   const projectMap = new Map(projects.map((p) => [p.id, p.name]));
 
-  const linearTasks: UnifiedTask[] = issues.map((issue) => ({
-    id: issue.id,
-    kind: 'linear',
-    title: issue.title,
-    status: deriveLinearStatus(issue),
-    dueDate: issue.dueDate ?? null,
-    identifier: issue.identifier,
-    priority: issue.priority,
-    source: issue.source,
-    project: null,
-  }));
+  const linearTasks: UnifiedTask[] = issues.map((issue) => {
+    const groupId = parseTeamTaskGroupId(issue.description);
+    const teamTask = groupId
+      ? { groupId, assigneeUserIds: parseTeamTaskAssignees(issue.description) }
+      : undefined;
+    return {
+      id: issue.id,
+      kind: 'linear',
+      title: issue.title,
+      status: deriveLinearStatus(issue),
+      dueDate: issue.dueDate ?? null,
+      identifier: issue.identifier,
+      priority: issue.priority,
+      source: issue.source,
+      project: null,
+      teamTask,
+    };
+  });
 
   const stepTasks: UnifiedTask[] = steps
     .filter((s) => s.type === 'step')
@@ -88,8 +85,14 @@ export function mergeTasks(
   return [...linearTasks, ...stepTasks]
     .filter((t) => t.status !== 'done')
     .sort((a, b) => {
-      const ub = urgencyBucket(a) - urgencyBucket(b);
-      if (ub !== 0) return ub;
+      if (a.dueDate && b.dueDate) {
+        const cmp = a.dueDate.localeCompare(b.dueDate);
+        if (cmp !== 0) return cmp;
+      } else if (a.dueDate) {
+        return -1;
+      } else if (b.dueDate) {
+        return 1;
+      }
       return prioRank(a.priority) - prioRank(b.priority);
     });
 }

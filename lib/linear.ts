@@ -40,6 +40,7 @@ interface LinearIssueRaw {
   state: { name: string; type: string };
   assignee: { id: string; name: string } | null;
   dueDate?: string | null;
+  description?: string | null;
   labels?: { nodes: Array<{ name: string }> };
 }
 
@@ -54,12 +55,14 @@ function mapIssue(raw: LinearIssueRaw): LinearIssue {
     assignee: raw.assignee,
     dueDate: raw.dueDate ?? null,
     source: detectSource(labelNames),
+    labels: labelNames,
+    description: raw.description ?? null,
   };
 }
 
 export async function getIssuesForUser(linearUserId: string): Promise<LinearIssue[]> {
   // Linear's PaginationOrderBy enum supports only `createdAt` / `updatedAt`.
-  // Final sort (overdue → today → priority) happens in app/dashboard/page.tsx sortTasks.
+  // Final sort (overdue → today → priority) happens in mergeTasks.
   const data = await gql(`
     query GetUserIssues($userId: ID!) {
       issues(filter: {
@@ -67,7 +70,7 @@ export async function getIssuesForUser(linearUserId: string): Promise<LinearIssu
         state: { type: { nin: ["completed", "cancelled"] } }
       }, orderBy: updatedAt) {
         nodes {
-          id identifier title priority dueDate
+          id identifier title priority dueDate description
           state { name type }
           assignee { id name }
           labels { nodes { name } }
@@ -124,6 +127,7 @@ export async function createIssue(
   labelIds: string[] = [],
   priority?: number,
   dueDate?: string | null,
+  description?: string,
 ): Promise<LinearIssue> {
   const data = await gql(
     `mutation CreateIssue(
@@ -132,7 +136,8 @@ export async function createIssue(
        $assigneeId: String,
        $labelIds: [String!],
        $priority: Int,
-       $dueDate: TimelessDate
+       $dueDate: TimelessDate,
+       $description: String
      ) {
        issueCreate(input: {
          teamId: $teamId
@@ -141,9 +146,10 @@ export async function createIssue(
          labelIds: $labelIds
          priority: $priority
          dueDate: $dueDate
+         description: $description
        }) {
          issue {
-           id identifier title priority dueDate
+           id identifier title priority dueDate description
            state { name type }
            assignee { id name }
            labels { nodes { name } }
@@ -157,6 +163,7 @@ export async function createIssue(
       labelIds,
       priority: typeof priority === 'number' && priority >= 0 && priority <= 4 ? priority : null,
       dueDate: dueDate || null,
+      description: description ?? null,
     }
   );
   const raw = (data.issueCreate as { issue: LinearIssueRaw }).issue;

@@ -56,6 +56,8 @@ function makeProject(id = 'proj-1', name = 'Testprojekt'): KpiWithWeek {
 const TODAY = new Date().toISOString().slice(0, 10);
 const YESTERDAY = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 const TOMORROW = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+const IN_TWO_DAYS = new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10);
+const IN_THREE_DAYS = new Date(Date.now() + 3 * 86400000).toISOString().slice(0, 10);
 
 describe('deriveLinearStatus', () => {
   it('completed → done', () => {
@@ -151,5 +153,51 @@ describe('mergeTasks', () => {
     const issue = makeIssue({ id: 'shared-id' });
     const step = makeStep({ id: 'shared-id' });
     expect(mergeTasks([issue], [step], [])).toHaveLength(2);
+  });
+});
+
+describe('mergeTasks — sort by exact dueDate', () => {
+  it('earlier date sorts before later date within future', () => {
+    const later = makeIssue({ id: 'b', dueDate: IN_THREE_DAYS, priority: 1 });
+    const earlier = makeIssue({ id: 'a', dueDate: IN_TWO_DAYS, priority: 4 });
+    const result = mergeTasks([later, earlier], [], []);
+    expect(result[0].id).toBe('a');
+  });
+
+  it('task with due date sorts before task without', () => {
+    const withDate = makeIssue({ id: 'a', dueDate: IN_TWO_DAYS });
+    const noDate = makeIssue({ id: 'b', dueDate: null, priority: 1 });
+    const result = mergeTasks([noDate, withDate], [], []);
+    expect(result[0].id).toBe('a');
+  });
+
+  it('overdue (past) sorts before future date', () => {
+    const future = makeIssue({ id: 'a', dueDate: TOMORROW, priority: 1 });
+    const overdue = makeIssue({ id: 'b', dueDate: YESTERDAY, priority: 4 });
+    const result = mergeTasks([future, overdue], [], []);
+    expect(result[0].id).toBe('b');
+  });
+
+  it('same due date: lower priority number sorts first', () => {
+    const low = makeIssue({ id: 'b', dueDate: TOMORROW, priority: 4 });
+    const high = makeIssue({ id: 'a', dueDate: TOMORROW, priority: 1 });
+    const result = mergeTasks([low, high], [], []);
+    expect(result[0].id).toBe('a');
+  });
+
+  it('no date tasks sort by priority among themselves', () => {
+    const lowPrio = makeIssue({ id: 'b', dueDate: null, priority: 4 });
+    const highPrio = makeIssue({ id: 'a', dueDate: null, priority: 1 });
+    const result = mergeTasks([lowPrio, highPrio], [], []);
+    expect(result[0].id).toBe('a');
+  });
+
+  it('full ordering: past < present < future < no-date', () => {
+    const noDate = makeIssue({ id: 'd', dueDate: null });
+    const future = makeIssue({ id: 'c', dueDate: IN_TWO_DAYS });
+    const today = makeIssue({ id: 'b', dueDate: TODAY });
+    const overdue = makeIssue({ id: 'a', dueDate: YESTERDAY });
+    const result = mergeTasks([noDate, future, today, overdue], [], []);
+    expect(result.map((t) => t.id)).toEqual(['a', 'b', 'c', 'd']);
   });
 });

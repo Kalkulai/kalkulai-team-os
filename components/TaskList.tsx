@@ -6,6 +6,7 @@ import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import type { LinearIssue, KpiWithWeek, TaskSource } from '@/types';
 import { mergeTasks, type UnifiedTask, type UnifiedStatus } from '@/lib/unified-tasks';
+import { AvatarStack } from '@/components/dashboard/AvatarStack';
 
 type StoredLocalTask = {
   id: string;
@@ -130,12 +131,14 @@ function TaskRow({
   onCheck,
   onUndo,
   onStartEdit,
+  members,
 }: {
   task: UnifiedTask;
   isPending: boolean;
   onCheck: (id: string, kind: 'linear' | 'step') => void;
   onUndo: (id: string) => void;
   onStartEdit: (task: UnifiedTask) => void;
+  members: Array<{ id: string; name: string }>;
 }) {
   const prio = task.priority ?? 0;
   const isStep = task.kind === 'step';
@@ -148,6 +151,7 @@ function TaskRow({
   const due = dueMeta(task.dueDate);
   const statusLabel = STATUS_LABEL[task.status];
   const hasMeta = prio > 0 || due !== null || statusLabel !== null;
+  const hasRow1 = (isStep && !!task.project) || !!task.teamTask;
 
   function handleRowClick() {
     if (!isPending) onCheck(task.id, task.kind);
@@ -177,11 +181,21 @@ function TaskRow({
           {srcLetter}
         </span>
         <span className="body">
-          {isStep && task.project && (
-            <span className="row2 mb-0.5">
-              <span className="pill pill-mute text-[10px] opacity-70" title={`Schritt von ${task.project.name}`}>
-                ▸ {task.project.name}
-              </span>
+          {hasRow1 && (
+            <span className="row1-meta">
+              {isStep && task.project ? (
+                <span className="pill pill-mute text-[10px] opacity-70" title={`Schritt von ${task.project.name}`}>
+                  ▸ {task.project.name}
+                </span>
+              ) : (
+                <span />
+              )}
+              {task.teamTask && (
+                <AvatarStack
+                  assigneeUserIds={task.teamTask.assigneeUserIds}
+                  members={members}
+                />
+              )}
             </span>
           )}
           <span className="title">
@@ -189,13 +203,17 @@ function TaskRow({
             {task.title}
           </span>
           {hasMeta && (
-            <span className="row2">
-              {prio > 0 && (
-                <span className={`pill ${PRIORITY_PILL[prio]}`}>{PRIORITY_LABEL[prio]}</span>
-              )}
-              {due && <span className={`pill ${due.pillClass} mono`}>{due.label}</span>}
-              {statusLabel && (
-                <span className={`pill ${STATUS_PILL[task.status]}`}>{statusLabel}</span>
+            <span className="row2-meta">
+              {due && <span className={`pill ${due.pillClass} mono due-pill`}>{due.label}</span>}
+              {(prio > 0 || statusLabel) && (
+                <span className="meta-end">
+                  {prio > 0 && (
+                    <span className={`pill ${PRIORITY_PILL[prio]}`}>{PRIORITY_LABEL[prio]}</span>
+                  )}
+                  {statusLabel && (
+                    <span className={`pill ${STATUS_PILL[task.status]}`}>{statusLabel}</span>
+                  )}
+                </span>
               )}
             </span>
           )}
@@ -336,16 +354,19 @@ export function TaskList({
   userId,
   steps = [],
   projects = [],
+  members = [],
 }: {
   tasks: LinearIssue[];
   userId: string;
   steps?: KpiWithWeek[];
   projects?: KpiWithWeek[];
+  members?: Array<{ id: string; name: string }>;
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState('');
   const [draftDue, setDraftDue] = useState('');
   const [draftPrio, setDraftPrio] = useState<number>(0);
+  const [selectedAssignees, setSelectedAssignees] = useState<Set<string>>(new Set());
   const [createError, setCreateError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
@@ -567,16 +588,61 @@ export function TaskList({
     setCreateError(null);
     setSubmitting(true);
 
-    const optimisticId = `local-${crypto.randomUUID()}`;
-    const optimistic: StoredLocalTask = {
-      id: optimisticId,
-      title,
-      createdAt: new Date().toISOString(),
-      dueDate: draftDue || null,
-      priority: draftPrio,
-    };
-    setLocalStore((prev) => [optimistic, ...prev]);
+    const isTeamTask = selectedAssignees.size > 0;
 
+    // Team Tasks skip the optimistic local-store path (N issues, too complex to mirror locally)
+    if (!isTeamTask) {
+      const optimisticId = `local-${crypto.randomUUID()}`;
+      const optimistic: StoredLocalTask = {
+        id: optimisticId,
+        title,
+        createdAt: new Date().toISOString(),
+        dueDate: draftDue || null,
+        priority: draftPrio,
+      };
+      setLocalStore((prev) => [optimistic, ...prev]);
+
+      try {
+        const res = await fetch('/api/tasks/create', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? ''}`,
+          },
+          body: JSON.stringify({
+            title,
+            userId,
+            priority: draftPrio || undefined,
+            dueDate: draftDue || undefined,
+          }),
+        });
+        if (!res.ok) {
+          const data = (await res.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(data?.error ?? `Linear-Sync fehlgeschlagen (HTTP ${res.status})`);
+        }
+        setLocalStore((prev) => prev.filter((t) => t.id !== optimisticId));
+        setDraft('');
+        setDraftDue('');
+        setDraftPrio(0);
+        router.refresh();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Unbekannter Fehler';
+        setCreateError(`Linear-Sync fehlgeschlagen — Task nur lokal gespeichert. (${msg})`);
+        setLocalStore((prev) => {
+          persistLocal(userId, prev);
+          return prev;
+        });
+        setDraft('');
+        setDraftDue('');
+        setDraftPrio(0);
+      } finally {
+        setSubmitting(false);
+        inputRef.current?.focus();
+      }
+      return;
+    }
+
+    // Multi-assignee Team Task
     try {
       const res = await fetch('/api/tasks/create', {
         method: 'POST',
@@ -586,30 +652,23 @@ export function TaskList({
         },
         body: JSON.stringify({
           title,
-          userId,
+          assigneeUserIds: [userId, ...Array.from(selectedAssignees)],
           priority: draftPrio || undefined,
           dueDate: draftDue || undefined,
         }),
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(data?.error ?? `Linear-Sync fehlgeschlagen (HTTP ${res.status})`);
+        throw new Error(data?.error ?? `Team Task fehlgeschlagen (HTTP ${res.status})`);
       }
-      setLocalStore((prev) => prev.filter((t) => t.id !== optimisticId));
       setDraft('');
       setDraftDue('');
       setDraftPrio(0);
+      setSelectedAssignees(new Set());
       router.refresh();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unbekannter Fehler';
-      setCreateError(`Linear-Sync fehlgeschlagen — Task nur lokal gespeichert. (${msg})`);
-      setLocalStore((prev) => {
-        persistLocal(userId, prev);
-        return prev;
-      });
-      setDraft('');
-      setDraftDue('');
-      setDraftPrio(0);
+      setCreateError(`Team Task fehlgeschlagen. (${msg})`);
     } finally {
       setSubmitting(false);
       inputRef.current?.focus();
@@ -622,12 +681,29 @@ export function TaskList({
       setDraft('');
       setDraftDue('');
       setDraftPrio(0);
+      setSelectedAssignees(new Set());
       setCreateError(null);
     } else {
       setAddOpen(true);
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }
+
+  function toggleAssignee(id: string) {
+    setSelectedAssignees((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAllAssignees() {
+    setSelectedAssignees((prev) =>
+      prev.size === members.length ? new Set() : new Set(members.map((m) => m.id)),
+    );
+  }
+
+  const pickerMembers = members.filter((m) => m.id !== userId);
 
   const localIssues = localStore.map(toIssue);
   const allUnified = mergeTasks([...localIssues, ...tasks], steps, projects);
@@ -658,6 +734,7 @@ export function TaskList({
         onCheck={handleCheck}
         onUndo={handleUndo}
         onStartEdit={handleStartEdit}
+        members={members}
       />
     );
   }
@@ -727,6 +804,30 @@ export function TaskList({
               ))}
             </div>
           </div>
+          {pickerMembers.length > 0 && (
+            <div className="member-picker" role="group" aria-label="Auch zuweisen an">
+              {pickerMembers.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  aria-pressed={selectedAssignees.has(m.id)}
+                  onClick={() => toggleAssignee(m.id)}
+                  className={`member-avatar-chip${selectedAssignees.has(m.id) ? ' is-on' : ''}`}
+                  title={m.name}
+                >
+                  {m.name.charAt(0).toUpperCase()}
+                </button>
+              ))}
+              <button
+                type="button"
+                aria-pressed={selectedAssignees.size === pickerMembers.length && pickerMembers.length > 0}
+                onClick={toggleAllAssignees}
+                className={`member-team-chip${selectedAssignees.size === pickerMembers.length && pickerMembers.length > 0 ? ' is-on' : ''}`}
+              >
+                Alle
+              </button>
+            </div>
+          )}
         </form>
       )}
       {createError && (

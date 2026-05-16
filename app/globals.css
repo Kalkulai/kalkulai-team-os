@@ -307,10 +307,41 @@ html.light .task:hover { background: rgba(11, 11, 15, 0.03); }
 .task.is-done .kb svg,
 .proj-task.done .kb svg { opacity: 1; }
 .task.is-done .title { color: var(--ink-3); text-decoration: line-through; }
-.task .body { flex: 1; min-width: 0; }
+.task .body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .task .title { font: 400 13.5px/1.45 var(--font); color: var(--ink-1); }
 .task .ref { font: 500 11px/1 var(--mono); color: var(--ink-3); margin-right: 7px; }
-.task .row2 { display: flex; align-items: center; gap: 6px; margin-top: 5px; flex-wrap: wrap; }
+.task .row2 { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.task .row1-meta { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.task .row2-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.task .row2-meta .due-pill { font-size: 12px; }
+.task .row2-meta .meta-end { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; }
+
+/* ─── Avatar stack ─── */
+.avatar-stack { display: inline-flex; align-items: center; }
+.avatar-stack > .avatar { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 700; color: #fff; border: 2px solid var(--glass-2); margin-left: -8px; background: var(--ink-4); }
+.avatar-stack > .avatar:first-child { margin-left: 0; }
+.avatar-stack > .avatar.more { background: var(--ink-4); color: var(--ink-2); }
+/* 12 deterministic avatar hues — bucket = nameHash % 12 */
+.avatar-h0  { background: hsl(0,   52%, 44%); }
+.avatar-h1  { background: hsl(30,  52%, 40%); }
+.avatar-h2  { background: hsl(60,  48%, 36%); }
+.avatar-h3  { background: hsl(90,  48%, 36%); }
+.avatar-h4  { background: hsl(120, 48%, 34%); }
+.avatar-h5  { background: hsl(150, 52%, 34%); }
+.avatar-h6  { background: hsl(180, 52%, 36%); }
+.avatar-h7  { background: hsl(210, 56%, 42%); }
+.avatar-h8  { background: hsl(240, 52%, 46%); }
+.avatar-h9  { background: hsl(270, 52%, 44%); }
+.avatar-h10 { background: hsl(300, 48%, 42%); }
+.avatar-h11 { background: hsl(330, 52%, 42%); }
+
+/* ─── Member picker (Team-Task create) ─── */
+.member-picker { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.member-avatar-chip { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: rgba(255,255,255,0.6); border: 2px solid var(--line-2); cursor: pointer; transition: border-color 0.14s, color 0.14s; background: transparent; }
+.member-avatar-chip.is-on { border-color: var(--brand); color: #fff; }
+.member-avatar-chip:hover { border-color: var(--line-3); }
+.member-team-chip { height: 26px; padding: 0 10px; border-radius: 13px; font-size: 10px; font-weight: 600; border: 1.5px solid var(--line-2); cursor: pointer; color: var(--ink-3); background: transparent; transition: border-color 0.14s, color 0.14s; }
+.member-team-chip.is-on { border-color: var(--brand); color: var(--brand); }
 
 .task .task-actions {
   flex: none; align-self: center; display: inline-flex; align-items: center;

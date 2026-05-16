@@ -12,7 +12,15 @@ const COLUMNS: Column[] = [
   { id: 'on-hold', label: 'On Hold' },
 ];
 
-export function KanbanBoard({ tasks, doneTasks = [] }: { tasks: UnifiedTask[]; doneTasks?: UnifiedTask[] }) {
+export function KanbanBoard({
+  tasks,
+  doneTasks = [],
+  members = [],
+}: {
+  tasks: UnifiedTask[];
+  doneTasks?: UnifiedTask[];
+  members?: Array<{ id: string; name: string }>;
+}) {
   return (
     <div className="kanban-grid">
       {COLUMNS.map((col) => {
@@ -30,7 +38,7 @@ export function KanbanBoard({ tasks, doneTasks = [] }: { tasks: UnifiedTask[]; d
             ) : (
               <div className="kanban-cards">
                 {cards.map((task) => (
-                  <KanbanCard key={task.id} task={task} />
+                  <KanbanCard key={task.id} task={task} members={members} />
                 ))}
               </div>
             )}
@@ -50,7 +58,7 @@ export function KanbanBoard({ tasks, doneTasks = [] }: { tasks: UnifiedTask[]; d
         ) : (
           <div className="kanban-cards">
             {doneTasks.map((task) => (
-              <KanbanCard key={task.id} task={task} done />
+              <KanbanCard key={task.id} task={task} done members={members} />
             ))}
           </div>
         )}

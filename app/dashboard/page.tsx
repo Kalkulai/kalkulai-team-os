@@ -124,12 +124,12 @@ export default async function DashboardPage({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-[18px] lg:grid-cols-3 max-lg:grid-cols-2 max-[760px]:grid-cols-1">
+      <div className="grid grid-cols-1 gap-[18px] lg:grid-cols-3">
         <HorizonCard number={1} title={heuteTitle} meta={dayShort} delayMs={40}>
           <HorizonSection label="Termine" end={<span className="mono">{briefing.meetings.length} heute</span>}>
             <MeetingList meetings={briefing.meetings} />
           </HorizonSection>
-          <TaskList tasks={tasksSorted} userId={me.id} steps={kpiSteps} projects={kpiProjects} />
+          <TaskList tasks={tasksSorted} userId={me.id} steps={kpiSteps} projects={kpiProjects} members={members} />
         </HorizonCard>
 
         <HorizonCard number={2} title="Diese Woche" meta={<span className="mono">KW {weekNo}</span>} delayMs={120}>

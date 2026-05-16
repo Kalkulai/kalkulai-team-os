@@ -52,7 +52,7 @@ export default async function BoardPage({
   return (
     <>
       <ViewToggle currentView="board" memberId={me.id} />
-      <KanbanBoard tasks={tasks} doneTasks={doneTasks} />
+      <KanbanBoard tasks={tasks} doneTasks={doneTasks} members={members} />
     </>
   );
 }
