@@ -52,8 +52,8 @@ export function HorizonCard({
 
   const style: CSSProperties = { animationDelay: `${delayMs}ms` };
   return (
-    <section className="glass card-rise overflow-hidden" style={style}>
-      <header className="relative z-[1] px-5 pt-[18px] pb-[14px]">
+    <section className="glass card-rise overflow-hidden flex flex-col" style={style}>
+      <header className="relative z-[1] flex-none px-5 pt-[18px] pb-[14px]">
         {collapsible ? (
           <button
             type="button"
@@ -76,7 +76,16 @@ export function HorizonCard({
           </h2>
         )}
       </header>
-      {!collapsed && <div className="flex flex-col">{children}</div>}
+      {collapsed ? (
+        <div className="horizon-preview">
+          <div className="absolute inset-0 flex flex-col overflow-hidden">
+            {children}
+          </div>
+          <div className="horizon-fade" />
+        </div>
+      ) : (
+        <div className="flex flex-col">{children}</div>
+      )}
     </section>
   );
 }
