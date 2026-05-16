@@ -24,18 +24,18 @@ const PRIORITY_PILL: Record<number, string> = {
   4: 'pill-mute',
 };
 
-export function KanbanCard({ task }: { task: UnifiedTask }) {
+export function KanbanCard({ task, done = false }: { task: UnifiedTask; done?: boolean }) {
   const due = duePill(task.dueDate);
   const prio = task.priority ?? 0;
 
   const inner = (
-    <div className="kanban-card">
+    <div className={`kanban-card${done ? ' kanban-card-done' : ''}`}>
       {task.project && (
         <span className="kanban-card-project" title={`Schritt von ${task.project.name}`}>
           ▸ {task.project.name}
         </span>
       )}
-      <p className="kanban-card-title">{task.title}</p>
+      <p className={`kanban-card-title${done ? ' kanban-card-title-done' : ''}`}>{task.title}</p>
       <div className="kanban-card-meta">
         {task.identifier && (
           <span className="pill pill-mute mono text-[10px]">{task.identifier}</span>

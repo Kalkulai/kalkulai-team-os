@@ -15,6 +15,7 @@ export interface UnifiedTask {
   priority?: number;
   source?: TaskSource;
   project?: { id: string; name: string } | null;
+  completedAt?: string;
 }
 
 export function deriveLinearStatus(issue: LinearIssue): UnifiedStatus {
@@ -91,4 +92,47 @@ export function mergeTasks(
       if (ub !== 0) return ub;
       return prioRank(a.priority) - prioRank(b.priority);
     });
+}
+
+export function mergeDoneTasks(
+  completedLinear: Array<{ id: string; identifier: string; title: string; completedAt: string }>,
+  completedSteps: KpiWithWeek[],
+  projects: KpiWithWeek[],
+  limit = 3,
+): UnifiedTask[] {
+  const projectMap = new Map(projects.map((p) => [p.id, p.name]));
+
+  const linearDone: UnifiedTask[] = completedLinear.map((issue) => ({
+    id: issue.id,
+    kind: 'linear',
+    title: issue.title,
+    status: 'done',
+    dueDate: null,
+    identifier: issue.identifier,
+    completedAt: issue.completedAt,
+    project: null,
+  }));
+
+  const stepDone: UnifiedTask[] = completedSteps
+    .filter((s) => s.type === 'step' && s.completed)
+    .map((step) => ({
+      id: step.id,
+      kind: 'step',
+      title: step.name,
+      status: 'done',
+      dueDate: step.due_date,
+      completedAt: step.completed_at ?? undefined,
+      project: step.parent_id
+        ? { id: step.parent_id, name: projectMap.get(step.parent_id) ?? 'Projekt' }
+        : null,
+    }));
+
+  return [...linearDone, ...stepDone]
+    .sort((a, b) => {
+      if (!a.completedAt && !b.completedAt) return 0;
+      if (!a.completedAt) return 1;
+      if (!b.completedAt) return -1;
+      return b.completedAt.localeCompare(a.completedAt);
+    })
+    .slice(0, limit);
 }

@@ -1,8 +1,8 @@
 import { cookies } from 'next/headers';
 import { getAllMembers, currentWeekStart } from '@/lib/supabase';
-import { getIssuesForUser } from '@/lib/linear';
+import { getIssuesForUser, getCompletedIssuesSince } from '@/lib/linear';
 import { listUserKpis } from '@/lib/kpis';
-import { mergeTasks } from '@/lib/unified-tasks';
+import { mergeTasks, mergeDoneTasks } from '@/lib/unified-tasks';
 import { KanbanBoard } from '@/components/dashboard/KanbanBoard';
 import { ViewToggle } from '@/components/dashboard/ViewToggle';
 
@@ -35,19 +35,24 @@ export default async function BoardPage({
     members.find((m) => m.id === fromCookie) ??
     members[0];
 
-  const [issues, allKpis] = await Promise.all([
+  const since14 = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+
+  const [issues, allKpis, completedLinear] = await Promise.all([
     me.linear_user_id ? getIssuesForUser(me.linear_user_id) : Promise.resolve([]),
     listUserKpis(me.id, currentWeekStart()),
+    me.linear_user_id ? getCompletedIssuesSince(me.linear_user_id, since14) : Promise.resolve([]),
   ]);
 
   const steps = allKpis.filter((k) => k.type === 'step' && !k.completed);
+  const completedSteps = allKpis.filter((k) => k.type === 'step' && k.completed);
   const projects = allKpis.filter((k) => k.type === 'project');
   const tasks = mergeTasks(issues, steps, projects);
+  const doneTasks = mergeDoneTasks(completedLinear, completedSteps, projects, 3);
 
   return (
     <>
       <ViewToggle currentView="board" memberId={me.id} />
-      <KanbanBoard tasks={tasks} />
+      <KanbanBoard tasks={tasks} doneTasks={doneTasks} />
     </>
   );
 }

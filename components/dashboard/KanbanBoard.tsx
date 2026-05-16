@@ -12,7 +12,7 @@ const COLUMNS: Column[] = [
   { id: 'on-hold', label: 'On Hold' },
 ];
 
-export function KanbanBoard({ tasks }: { tasks: UnifiedTask[] }) {
+export function KanbanBoard({ tasks, doneTasks = [] }: { tasks: UnifiedTask[]; doneTasks?: UnifiedTask[] }) {
   return (
     <div className="kanban-grid">
       {COLUMNS.map((col) => {
@@ -37,6 +37,24 @@ export function KanbanBoard({ tasks }: { tasks: UnifiedTask[] }) {
           </div>
         );
       })}
+
+      <div className="kanban-col kanban-col-done">
+        <div className="kanban-col-header">
+          <span className="kanban-col-title">Erledigt</span>
+          {doneTasks.length > 0 && (
+            <span className="kanban-col-count mono">{doneTasks.length}</span>
+          )}
+        </div>
+        {doneTasks.length === 0 ? (
+          <p className="kanban-empty">Nichts diese Woche</p>
+        ) : (
+          <div className="kanban-cards">
+            {doneTasks.map((task) => (
+              <KanbanCard key={task.id} task={task} done />
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

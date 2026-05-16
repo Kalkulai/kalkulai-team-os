@@ -125,6 +125,7 @@ export interface Kpi {
   type: KpiType;
   due_date: string | null;
   completed: boolean;
+  completed_at?: string | null;
   created_at: string;
   source: KpiSource;
 }
