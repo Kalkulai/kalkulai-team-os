@@ -1,4 +1,6 @@
-import type { CSSProperties, ReactNode } from 'react';
+'use client';
+import { useState, useEffect, type CSSProperties, type ReactNode } from 'react';
+import { ChevronDown } from 'lucide-react';
 
 interface HorizonCardProps {
   /** kept for API compatibility; not rendered (overline removed per design feedback) */
@@ -10,22 +12,71 @@ interface HorizonCardProps {
   title: string;
   delayMs?: number;
   children: ReactNode;
+  /** Enable collapse toggle on the card header */
+  collapsible?: boolean;
+  /** Initial collapsed state (default: false) */
+  defaultCollapsed?: boolean;
+  /** localStorage key for persisting collapse state */
+  storageKey?: string;
 }
 
 export function HorizonCard({
   title,
   delayMs = 0,
   children,
+  collapsible,
+  defaultCollapsed = false,
+  storageKey,
 }: HorizonCardProps) {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+
+  useEffect(() => {
+    if (!storageKey) return;
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored !== null) setCollapsed(stored === 'true');
+    } catch {
+      // localStorage unavailable
+    }
+  }, [storageKey]);
+
+  function toggle() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      if (storageKey) {
+        try { localStorage.setItem(storageKey, String(next)); } catch { /* noop */ }
+      }
+      return next;
+    });
+  }
+
   const style: CSSProperties = { animationDelay: `${delayMs}ms` };
   return (
     <section className="glass card-rise overflow-hidden" style={style}>
       <header className="relative z-[1] px-5 pt-[18px] pb-[14px]">
-        <h2 className="text-[22px] font-semibold leading-[1.15] tracking-[-0.015em] text-[var(--ink-1)]">
-          {title}
-        </h2>
+        {collapsible ? (
+          <button
+            type="button"
+            onClick={toggle}
+            className="flex w-full items-center gap-2 text-left"
+            aria-expanded={!collapsed}
+          >
+            <h2 className="flex-1 text-[22px] font-semibold leading-[1.15] tracking-[-0.015em] text-[var(--ink-1)]">
+              {title}
+            </h2>
+            <ChevronDown
+              size={16}
+              className={`flex-none text-[var(--ink-3)] transition-transform ${collapsed ? '' : 'rotate-180'}`}
+              aria-hidden
+            />
+          </button>
+        ) : (
+          <h2 className="text-[22px] font-semibold leading-[1.15] tracking-[-0.015em] text-[var(--ink-1)]">
+            {title}
+          </h2>
+        )}
       </header>
-      <div className="flex flex-col">{children}</div>
+      {!collapsed && <div className="flex flex-col">{children}</div>}
     </section>
   );
 }

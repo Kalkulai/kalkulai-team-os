@@ -9,7 +9,9 @@ import { ActivityTimeline } from '@/components/dashboard/ActivityTimeline';
 import { buildDailyBriefing } from '@/lib/aggregator';
 import { buildActivityFeed } from '@/lib/activity';
 import { getRecentlyMergedPRs } from '@/lib/github';
-import { getAllMembers, getSalesLogsTodayByType } from '@/lib/supabase';
+import { getAllMembers, getSalesLogsTodayByType, currentWeekStart } from '@/lib/supabase';
+import { listUserKpis } from '@/lib/kpis';
+import { ViewToggle } from '@/components/dashboard/ViewToggle';
 import { differenceInCalendarDays, format, getISOWeek, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { GitBranch } from 'lucide-react';
@@ -67,12 +69,17 @@ export default async function DashboardPage({
     members.find((m) => m.id === params.member) ??
     members.find((m) => m.id === fromCookie) ??
     members[0];
-  const briefing = await buildDailyBriefing(me);
-  const mergedPRs = await getRecentlyMergedPRs(2);
+  const [briefing, mergedPRs, allKpis] = await Promise.all([
+    buildDailyBriefing(me),
+    getRecentlyMergedPRs(2),
+    listUserKpis(me.id, currentWeekStart()),
+  ]);
   const [activityDays, todaySalesLogs] = await Promise.all([
     buildActivityFeed(me, briefing.meetings, mergedPRs),
     me.role === 'sales' ? getSalesLogsTodayByType(me.id) : Promise.resolve({}),
   ]);
+  const kpiSteps = allKpis.filter((k) => k.type === 'step' && !k.completed);
+  const kpiProjects = allKpis.filter((k) => k.type === 'project');
 
   const now = new Date();
   const dayShort = format(now, 'd. MMM', { locale: de });
@@ -84,6 +91,7 @@ export default async function DashboardPage({
 
   return (
     <>
+      <ViewToggle currentView="day" memberId={me.id} />
       {briefing.activeBranches.length > 0 && (
         <div className="mb-5 flex flex-wrap items-center gap-2.5">
           {briefing.activeBranches.map((br) => {
@@ -121,7 +129,7 @@ export default async function DashboardPage({
           <HorizonSection label="Termine" end={<span className="mono">{briefing.meetings.length} heute</span>}>
             <MeetingList meetings={briefing.meetings} />
           </HorizonSection>
-          <TaskList tasks={tasksSorted} userId={me.id} />
+          <TaskList tasks={tasksSorted} userId={me.id} steps={kpiSteps} projects={kpiProjects} />
         </HorizonCard>
 
         <HorizonCard number={2} title="Diese Woche" meta={<span className="mono">KW {weekNo}</span>} delayMs={120}>
@@ -147,7 +155,7 @@ export default async function DashboardPage({
           </HorizonSection>
         </HorizonCard>
 
-        <HorizonCard number={3} title="Aktivität" meta={<span className="mono">{activityCount} Events</span>} delayMs={200}>
+        <HorizonCard number={3} title="Aktivität" meta={<span className="mono">{activityCount} Events</span>} delayMs={200} collapsible storageKey={`activity-collapsed-${me.id}`}>
           <HorizonSection label="Stream">
             <ActivityTimeline days={activityDays} />
           </HorizonSection>

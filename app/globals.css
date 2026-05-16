@@ -627,3 +627,30 @@ html.light .tl-row code { background: rgba(11, 11, 15, 0.05); }
 @keyframes card-rise { from { opacity: 0; transform: translateY(10px) scale(0.99); } to { opacity: 1; transform: none; } }
 .card-rise { animation: card-rise 0.42s cubic-bezier(0.22, 0.61, 0.36, 1) both; transition: transform 0.25s ease, box-shadow 0.25s ease; }
 .card-rise:hover { transform: translateY(-2px); }
+
+/* ─── Kanban Board ─── */
+.kanban-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 760px) { .kanban-grid { grid-template-columns: 1fr; } }
+.kanban-col {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--line-1);
+  border-radius: 16px;
+  padding: 14px 16px;
+  min-height: 100px;
+}
+.kanban-col-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.kanban-col-title { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3); }
+.kanban-col-count { font-size: 11px; color: var(--ink-3); background: rgba(255,255,255,0.06); border-radius: 6px; padding: 1px 7px; }
+.kanban-cards { display: flex; flex-direction: column; gap: 7px; }
+.kanban-empty { font-size: 12px; color: var(--ink-3); }
+.kanban-card {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--line-1);
+  border-radius: 10px;
+  padding: 9px 11px;
+  transition: background 0.15s ease;
+}
+.kanban-card:hover { background: rgba(255,255,255,0.07); }
+.kanban-card-project { display: block; font-size: 10px; color: var(--ink-3); margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kanban-card-title { font-size: 13px; color: var(--ink-1); line-height: 1.35; margin: 0 0 5px; }
+.kanban-card-meta { display: flex; flex-wrap: wrap; gap: 4px; }

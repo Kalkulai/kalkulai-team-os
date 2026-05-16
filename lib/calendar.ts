@@ -1,6 +1,36 @@
 import type { CalendarEvent, TeamMember } from '@/types';
 
+export const APP_TIMEZONE = 'Europe/Berlin';
+
 const SALES_KEYWORDS = ['demo', 'call', 'gespräch', 'meeting', 'pitch', 'kunde'];
+
+/**
+ * Build ISO 8601 datetime strings for the start and end of "today" in Berlin timezone.
+ * Uses Intl APIs so no additional package is needed and the offset is always correct
+ * (CET = +01:00 in winter, CEST = +02:00 in summer).
+ */
+function berlinDayRange(): { start: string; end: string } {
+  const now = new Date();
+  const localeDateStr = new Intl.DateTimeFormat('sv-SE', {
+    timeZone: APP_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now); // 'YYYY-MM-DD'
+
+  const offsetStr = new Intl.DateTimeFormat('en', {
+    timeZone: APP_TIMEZONE,
+    timeZoneName: 'shortOffset',
+  }).formatToParts(now).find((p) => p.type === 'timeZoneName')?.value ?? 'GMT+1';
+  // 'GMT+2' → '+02:00', 'GMT+1' → '+01:00'
+  const match = offsetStr.match(/GMT([+-])(\d+)/);
+  const isoOffset = match ? `${match[1]}${match[2].padStart(2, '0')}:00` : '+01:00';
+
+  return {
+    start: `${localeDateStr}T00:00:00${isoOffset}`,
+    end:   `${localeDateStr}T23:59:59${isoOffset}`,
+  };
+}
 
 async function getAccessToken(refreshToken: string): Promise<string | null> {
   const res = await fetch('https://oauth2.googleapis.com/token', {
@@ -50,13 +80,12 @@ export async function getTodayEvents(member: TeamMember): Promise<CalendarEvent[
   }
 
   const calendarId = pickCalendarId(member);
-  const now = new Date();
-  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
-  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59).toISOString();
+  const { start, end } = berlinDayRange();
 
   const url =
     `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events` +
-    `?timeMin=${start}&timeMax=${end}&singleEvents=true&orderBy=startTime`;
+    `?timeMin=${encodeURIComponent(start)}&timeMax=${encodeURIComponent(end)}` +
+    `&timeZone=${encodeURIComponent(APP_TIMEZONE)}&singleEvents=true&orderBy=startTime`;
 
   const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
 
@@ -88,6 +117,7 @@ export async function getTodayEvents(member: TeamMember): Promise<CalendarEvent[
     count: items.length,
     timeMin: start,
     timeMax: end,
+    tz: APP_TIMEZONE,
   });
 
   return items.map((e) => ({

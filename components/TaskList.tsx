@@ -4,7 +4,8 @@ import { useRouter } from 'next/navigation';
 import { Check, Plus, X, ChevronRight, Pencil, Undo2 } from 'lucide-react';
 import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
-import type { LinearIssue, TaskSource } from '@/types';
+import type { LinearIssue, KpiWithWeek, TaskSource } from '@/types';
+import { mergeTasks, type UnifiedTask, type UnifiedStatus } from '@/lib/unified-tasks';
 
 type StoredLocalTask = {
   id: string;
@@ -110,6 +111,19 @@ function dueMeta(iso: string | null | undefined): { label: string; pillClass: st
   }
 }
 
+const STATUS_LABEL: Record<UnifiedStatus, string | null> = {
+  'todo': null,
+  'in-progress': 'in progress',
+  'on-hold': 'on hold',
+  'done': null,
+};
+const STATUS_PILL: Record<UnifiedStatus, string> = {
+  'todo': '',
+  'in-progress': 'pill-amber',
+  'on-hold': 'pill-mute',
+  'done': '',
+};
+
 function TaskRow({
   task,
   isPending,
@@ -117,25 +131,32 @@ function TaskRow({
   onUndo,
   onStartEdit,
 }: {
-  task: LinearIssue;
+  task: UnifiedTask;
   isPending: boolean;
-  onCheck: (id: string) => void;
+  onCheck: (id: string, kind: 'linear' | 'step') => void;
   onUndo: (id: string) => void;
-  onStartEdit: (task: LinearIssue) => void;
+  onStartEdit: (task: UnifiedTask) => void;
 }) {
-  const prio = task.priority;
-  const source: TaskSource = task.source ?? 'linear';
+  const prio = task.priority ?? 0;
+  const isStep = task.kind === 'step';
+  const source: TaskSource = isStep ? 'local' : (task.source ?? 'linear');
+  const srcClass = isStep ? 'src-local' : SOURCE_CLASS[source];
+  const srcLetter = isStep ? 'P' : SOURCE_LETTER[source];
+  const srcTitle = isStep
+    ? (task.project ? `Schritt von ${task.project.name}` : 'Projekt-Schritt')
+    : SOURCE_TITLE[source];
   const due = dueMeta(task.dueDate);
-  const hasMeta = prio > 0 || due !== null;
+  const statusLabel = STATUS_LABEL[task.status];
+  const hasMeta = prio > 0 || due !== null || statusLabel !== null;
 
   function handleRowClick() {
-    if (!isPending) onCheck(task.id);
+    if (!isPending) onCheck(task.id, task.kind);
   }
   function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     if (isPending) return;
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
-      onCheck(task.id);
+      onCheck(task.id, task.kind);
     }
   }
 
@@ -152,12 +173,19 @@ function TaskRow({
         <span className="kb" aria-hidden>
           <Check />
         </span>
-        <span className={`src-ic ${SOURCE_CLASS[source]}`} title={SOURCE_TITLE[source]}>
-          {SOURCE_LETTER[source]}
+        <span className={`src-ic ${srcClass}`} title={srcTitle}>
+          {srcLetter}
         </span>
         <span className="body">
+          {isStep && task.project && (
+            <span className="row2 mb-0.5">
+              <span className="pill pill-mute text-[10px] opacity-70" title={`Schritt von ${task.project.name}`}>
+                ▸ {task.project.name}
+              </span>
+            </span>
+          )}
           <span className="title">
-            <span className="ref">{task.identifier}</span>
+            {task.identifier && <span className="ref">{task.identifier}</span>}
             {task.title}
           </span>
           {hasMeta && (
@@ -166,6 +194,9 @@ function TaskRow({
                 <span className={`pill ${PRIORITY_PILL[prio]}`}>{PRIORITY_LABEL[prio]}</span>
               )}
               {due && <span className={`pill ${due.pillClass} mono`}>{due.label}</span>}
+              {statusLabel && (
+                <span className={`pill ${STATUS_PILL[task.status]}`}>{statusLabel}</span>
+              )}
             </span>
           )}
         </span>
@@ -184,7 +215,7 @@ function TaskRow({
               <Undo2 size={12} aria-hidden />
               <span>Rückgängig</span>
             </button>
-          ) : (
+          ) : !isStep ? (
             <button
               type="button"
               className="task-edit"
@@ -197,7 +228,7 @@ function TaskRow({
             >
               <Pencil size={12} aria-hidden />
             </button>
-          )}
+          ) : null}
         </span>
       </div>
     </li>
@@ -211,7 +242,7 @@ function TaskEditForm({
   submitting,
   error,
 }: {
-  task: LinearIssue;
+  task: UnifiedTask;
   onCancel: () => void;
   onSave: (patch: { title: string; dueDate: string | null; priority: number }) => void;
   submitting: boolean;
@@ -219,7 +250,7 @@ function TaskEditForm({
 }) {
   const [title, setTitle] = useState(task.title);
   const [due, setDue] = useState(task.dueDate ?? '');
-  const [prio, setPrio] = useState<number>(task.priority || 0);
+  const [prio, setPrio] = useState<number>(task.priority ?? 0);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -300,7 +331,17 @@ function TaskEditForm({
   );
 }
 
-export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: string }) {
+export function TaskList({
+  tasks,
+  userId,
+  steps = [],
+  projects = [],
+}: {
+  tasks: LinearIssue[];
+  userId: string;
+  steps?: KpiWithWeek[];
+  projects?: KpiWithWeek[];
+}) {
   const router = useRouter();
   const [draft, setDraft] = useState('');
   const [draftDue, setDraftDue] = useState('');
@@ -314,7 +355,7 @@ export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: stri
 
   // Pending-Complete: Task ist abgehakt, aber Commit (Linear-State-Set bzw. localStore-Delete)
   // läuft erst nach UNDO_WINDOW_MS. Solange pending: Row bleibt sichtbar mit "Rückgängig"-Button.
-  const [pending, setPending] = useState<Map<string, { localOnly: boolean }>>(new Map());
+  const [pending, setPending] = useState<Map<string, { localOnly: boolean; kind: 'linear' | 'step' }>>(new Map());
   const timersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   // Nach committetem Complete: Task aus Liste raus, bis router.refresh die Server-Daten aktualisiert.
   const [hidden, setHidden] = useState<Set<string>>(new Set());
@@ -375,7 +416,7 @@ export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: stri
     };
   }, []);
 
-  function commitCompletion(id: string, localOnly: boolean) {
+  function commitCompletion(id: string, localOnly: boolean, kind: 'linear' | 'step') {
     timersRef.current.delete(id);
     setPending((prev) => {
       const next = new Map(prev);
@@ -390,6 +431,30 @@ export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: stri
         persistLocal(userId, next);
         return next;
       });
+      return;
+    }
+
+    if (kind === 'step') {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/kpis/${encodeURIComponent(id)}`, {
+            method: 'PATCH',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? ''}`,
+            },
+            body: JSON.stringify({ completed: true }),
+          });
+          if (!res.ok) throw new Error('Fehler beim Abschließen');
+          router.refresh();
+        } catch {
+          setHidden((prev) => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+        }
+      })();
       return;
     }
 
@@ -416,13 +481,13 @@ export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: stri
     })();
   }
 
-  function handleCheck(id: string) {
+  function handleCheck(id: string, kind: 'linear' | 'step') {
     if (pending.has(id) || hidden.has(id)) return;
     const localOnly = id.startsWith('local-');
-    setPending((prev) => new Map(prev).set(id, { localOnly }));
+    setPending((prev) => new Map(prev).set(id, { localOnly, kind }));
     const existing = timersRef.current.get(id);
     if (existing) clearTimeout(existing);
-    const timer = setTimeout(() => commitCompletion(id, localOnly), UNDO_WINDOW_MS);
+    const timer = setTimeout(() => commitCompletion(id, localOnly, kind), UNDO_WINDOW_MS);
     timersRef.current.set(id, timer);
   }
 
@@ -437,7 +502,7 @@ export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: stri
     });
   }
 
-  function handleStartEdit(task: LinearIssue) {
+  function handleStartEdit(task: UnifiedTask) {
     setEditError(null);
     setEditingId(task.id);
   }
@@ -447,7 +512,7 @@ export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: stri
   }
 
   async function handleSaveEdit(
-    task: LinearIssue,
+    task: UnifiedTask,
     patch: { title: string; dueDate: string | null; priority: number },
   ) {
     setEditError(null);
@@ -565,15 +630,15 @@ export function TaskList({ tasks, userId }: { tasks: LinearIssue[]; userId: stri
   }
 
   const localIssues = localStore.map(toIssue);
-  const merged = [...localIssues, ...tasks];
-  const visible = merged.filter((t) => !hidden.has(t.id));
+  const allUnified = mergeTasks([...localIssues, ...tasks], steps, projects);
+  const visible = allUnified.filter((t) => !hidden.has(t.id));
   const top3 = visible.slice(0, 3);
   const rest = visible.slice(3);
   const restLabel =
     rest.length === 1 ? 'Weitere 1 Task anzeigen' : `Weitere ${rest.length} Tasks anzeigen`;
 
-  function renderItem(t: LinearIssue) {
-    if (editingId === t.id) {
+  function renderItem(t: UnifiedTask) {
+    if (editingId === t.id && t.kind === 'linear') {
       return (
         <TaskEditForm
           key={t.id}

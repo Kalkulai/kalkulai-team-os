@@ -1,10 +1,14 @@
-import { differenceInMinutes, format, parseISO } from 'date-fns';
-import { de } from 'date-fns/locale';
+import { differenceInMinutes, parseISO } from 'date-fns';
 import type { CalendarEvent } from '@/types';
+import { APP_TIMEZONE } from '@/lib/calendar';
 
 function safeTime(iso: string): string {
   try {
-    return format(parseISO(iso), 'HH:mm', { locale: de });
+    return new Intl.DateTimeFormat('de-DE', {
+      timeZone: APP_TIMEZONE,
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(parseISO(iso));
   } catch {
     return '--:--';
   }
