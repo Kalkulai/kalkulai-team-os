@@ -69,6 +69,7 @@ function DroppableColumn({
     <div
       ref={setNodeRef}
       className={`kanban-col${done ? ' kanban-col-done' : ''}${isOver && !done ? ' kanban-col-over' : ''}`}
+      data-col={colId}
     >
       <div className="kanban-col-header">
         <span className="kanban-col-title">{label}</span>
