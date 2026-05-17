@@ -37,15 +37,32 @@ export function KanbanCard({
   const due = duePill(task.dueDate);
   const prio = task.priority ?? 0;
 
-  const inner = (
-    <div className={`kanban-card${done ? ' kanban-card-done' : ''}`}>
+  return (
+    <div
+      className={`kanban-card${done ? ' kanban-card-done' : ''}`}
+      data-status={task.status}
+    >
       {task.project && (
         <span className="kanban-card-project" title={`Schritt von ${task.project.name}`}>
           ▸ {task.project.name}
         </span>
       )}
       <div className="flex items-start justify-between gap-2">
-        <p className={`kanban-card-title${done ? ' kanban-card-title-done' : ''} flex-1`}>{task.title}</p>
+        <p className={`kanban-card-title${done ? ' kanban-card-title-done' : ''} flex-1`}>
+          {task.url ? (
+            <a
+              href={task.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:underline"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {task.title}
+            </a>
+          ) : (
+            task.title
+          )}
+        </p>
         {task.teamTask && (
           <AvatarStack assigneeUserIds={task.teamTask.assigneeUserIds} members={members} />
         )}
@@ -63,14 +80,4 @@ export function KanbanCard({
       </div>
     </div>
   );
-
-  if (task.url) {
-    return (
-      <a href={task.url} target="_blank" rel="noopener noreferrer" className="block">
-        {inner}
-      </a>
-    );
-  }
-
-  return inner;
 }

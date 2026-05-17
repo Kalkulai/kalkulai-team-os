@@ -705,6 +705,15 @@ html.light .tl-row code { background: rgba(11, 11, 15, 0.05); }
   transition: background 0.15s ease;
 }
 .kanban-card:hover { background: rgba(255,255,255,0.07); }
+.kanban-card[data-status="in-progress"] { background: rgba(91,140,255,0.08); border-color: rgba(91,140,255,0.22); }
+.kanban-card[data-status="in-progress"]:hover { background: rgba(91,140,255,0.13); }
+.kanban-card[data-status="on-hold"] { background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.22); }
+.kanban-card[data-status="on-hold"]:hover { background: rgba(245,158,11,0.13); }
+.kanban-card[data-status="done"] { background: rgba(52,211,153,0.07); border-color: rgba(52,211,153,0.2); }
+.kanban-col-over { border-color: var(--brand) !important; background: rgba(91,140,255,0.07) !important; }
+.kanban-draggable { cursor: grab; touch-action: none; }
+.kanban-draggable.is-dragging { opacity: 0.4; cursor: grabbing; }
+.kanban-drag-overlay { transform: rotate(2deg); opacity: 0.95; pointer-events: none; }
 .kanban-card-project { display: block; font-size: 10px; color: var(--ink-3); margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kanban-card-title { font-size: 13px; color: var(--ink-1); line-height: 1.35; margin: 0 0 5px; }
 .kanban-card-meta { display: flex; flex-wrap: wrap; gap: 4px; }
