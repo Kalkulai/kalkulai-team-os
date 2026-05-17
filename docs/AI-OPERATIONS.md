@@ -25,7 +25,7 @@ Content-Type: application/json
 
 ---
 
-## 1. Team-Member-IDs (Stand 2026-05-12, stabil über DB-Resets)
+## 1. Team-Member-IDs (Stand 2026-05-17, stabil über DB-Resets)
 
 | Name | Rolle | User-ID (Supabase) | Linear-ID | GitHub |
 |---|---|---|---|---|
@@ -44,8 +44,8 @@ Live-Lookup: `GET /api/members` (kein Auth nötig).
 | Methode | Pfad | Auth | Zweck | Response |
 |---|---|---|---|---|
 | GET | `/api/members` | **kein** | Alle TeamMember (ohne `google_refresh_token`) | `Omit<TeamMember, 'google_refresh_token'>[]` |
-| GET | `/api/conflicts?linearId={IDENT}` | **Bearer** (seit 2026-05-12) | Branch+Issue+Assignee-Kreuzcheck | `{ branches, assignee, issue }` |
-| GET | `/api/kpi/set-target?userId={uuid}` | **Bearer** (seit 2026-05-12) | Wochenziele tasks/calls/bugs | `{ tasks_target, calls_target, bugs_target }` |
+| GET | `/api/conflicts?linearId={IDENT}` | **Bearer** | Branch+Issue+Assignee-Kreuzcheck | `{ branches, assignee, issue }` |
+| GET | `/api/kpi/set-target?userId={uuid}` | **Bearer** | Wochenziele tasks/calls/bugs | `{ tasks_target, calls_target, bugs_target }` |
 
 `/api/members` bleibt bewusst public — Hermes braucht die Member-Liste ohne Secret, und es enthält keine sensiblen Tokens (nur Handles/Mails/Calendar-Email).
 
@@ -188,11 +188,16 @@ Löscht KPI + Steps (cascade). Idempotent (200 auch wenn nicht vorhanden).
 
 ### 2.3 Tasks (Linear-Brücke)
 
+#### Task erstellen
+
 ```http
 POST /api/tasks/create
 Authorization: Bearer ${SECRET}
 Content-Type: application/json
+```
 
+**Single-Assignee (Hermes-Standard):**
+```json
 {
   "title": "Hermes-Setup finalisieren",
   "userId": "bd695d11-...",
@@ -200,10 +205,48 @@ Content-Type: application/json
 }
 ```
 
-- Wenn `source: 'hermes'` → Issue bekommt Linear-Label `Hermes` → Dashboard zeigt es mit `H`-Source-Icon und im Activity-Stream als `kind: 'hermes'`.
-- Alternative zu `userId`: `assigneeId` (direkt Linear-User-ID).
-- 400 wenn weder `assigneeId` noch `userId.linear_user_id` auflösbar (sonst würde Issue unassigned und im Dashboard verschwinden).
-- Response: Linear-Issue-Objekt mit `id`, `identifier` (z.B. `KAL-42`), `url`.
+**Multi-Assignee (Team-Task)** — legt pro Person ein separates Linear-Issue an, alle mit Label `Team-Task` und einem gemeinsamen Description-Footer:
+```json
+{
+  "title": "Sprint-Planning vorbereiten",
+  "assigneeUserIds": ["bd695d11-...", "c9677ade-..."],
+  "priority": 2
+}
+```
+
+**Team-wide** — alle Members mit `linear_user_id`:
+```json
+{
+  "title": "Security-Awareness-Update lesen",
+  "teamWide": true
+}
+```
+
+Body-Felder:
+| Feld | Typ | Zweck |
+|---|---|---|
+| `title` | `string` | **Pflicht** — Issue-Titel |
+| `userId` | `string` | Supabase-User-ID → wird zu `linear_user_id` aufgelöst |
+| `assigneeId` | `string` | Linear-User-ID direkt (überschreibt `userId`) |
+| `assigneeUserIds` | `string[]` | Multi-Assignee — Supabase-User-IDs |
+| `teamWide` | `boolean` | Alle aktiven Members |
+| `source` | `'hermes' \| 'notion' \| 'linear'` | Setzt Label + Activity-Icon |
+| `priority` | `number` | 1=urgent, 2=high, 3=medium, 4=low |
+| `dueDate` | `string \| null` | ISO-Datum `'YYYY-MM-DD'` |
+
+Response Single: Linear-Issue-Objekt mit `id`, `identifier` (z.B. `KAL-42`), `url`.
+Response Multi: `{ tasks: LinearIssue[]; teamTaskGroupId: string }`.
+
+Fehler 400 wenn weder `assigneeId` noch `userId.linear_user_id` auflösbar.
+
+**Team-Task-Mechanismus:** Jedes Duplikat-Issue bekommt diesen unsichtbaren Footer in der Description:
+```
+<!-- team-task-group:<uuid> -->
+<!-- team-task-assignees:<userId1>,<userId2>,... -->
+```
+Das Dashboard erkennt ihn beim Laden (`lib/team-tasks.ts: parseTeamTaskGroupId / parseTeamTaskAssignees`) und rendert einen Avatar-Stack (Initialen-Kreise) auf der Task-Karte. Jeder Assignee sieht seinen eigenen Issue — Completion ist pro Person separat.
+
+#### Task abschließen
 
 ```http
 POST /api/tasks/complete
@@ -213,6 +256,28 @@ Authorization: Bearer ${SECRET}
 ```
 
 Setzt Linear-State auf "Done" (via `LINEAR_DONE_STATE_ID`).
+
+#### Task-Status ändern (Kanban-DnD)
+
+```http
+PATCH /api/tasks/status
+Authorization: Bearer ${SECRET}
+Content-Type: application/json
+
+{ "issueId": "<linear-issue-id>", "status": "in-progress" }
+```
+
+Erlaubte `status`-Werte: `"todo"` | `"in-progress"` | `"on-hold"` | `"done"`.
+
+Mapping auf Linear-States (via Env-Vars):
+| Status | Linear-State-ID (Env) |
+|---|---|
+| `todo` | `LINEAR_TODO_STATE_ID` |
+| `in-progress` | `LINEAR_IN_PROGRESS_STATE_ID` |
+| `on-hold` | `LINEAR_IN_PROGRESS_STATE_ID` (kein separater State) |
+| `done` | `LINEAR_DONE_STATE_ID` |
+
+Dieser Endpoint wird vom Kanban-Board (`components/dashboard/KanbanBoard.tsx`) aufgerufen wenn ein Task per Drag & Drop in eine andere Spalte gezogen wird.
 
 ### 2.4 Sales-Logs (für sales-Rolle)
 
@@ -260,13 +325,14 @@ Triggert `buildDailyBriefing` + Telegram-Send. Body ohne `userId` = alle Member.
 
 ## 3. Datenfluss-Übersicht (wo speichern, was lesen)
 
-| Bereich | Lese-Quelle (Read) | Schreib-Pfad (Hermes) |
+| Bereich | Lese-Quelle (Read) | Schreib-Pfad (Hermes/DnD) |
 |---|---|---|
 | Top-3-Tasks | Linear (`getIssuesForUser`) | `POST /api/tasks/create` mit `source:'hermes'` |
+| Task-Status | Linear (`state.type`) | `PATCH /api/tasks/status` (Kanban-DnD) |
 | Termine | Google Calendar (`getTodayEvents`) | **KEIN Schreibpfad** — read-only |
 | KPIs (Counter) | Supabase `kpis` + `kpi_weeks` + `kpi_history` | `POST /api/kpis` (Anlage), `POST /api/kpis/{id}/adjust` (Increment) |
 | Projekte + Steps | Supabase `kpis` (`type='project'/'step'`, via `parent_id`) | `POST /api/kpis` mit `type:'project'` → dann `type:'step', parent_id:<id>` |
-| Step-Erledigung | s.o. | `PATCH /api/kpis/{stepId}` mit `{completed:true}` |
+| Step-Erledigung | s.o. | `PATCH /api/kpis/{stepId}` mit `{completed:true}` — auch via Kanban-DnD |
 | Sales-Calls | Supabase `sales_logs` + HubSpot | `POST /api/sales/log-call` |
 | Wochenziele | Supabase `kpi_targets` | `POST /api/kpi/set-target` |
 | Aktivität | aggregiert in `lib/activity.ts` | **kein direkter Schreibpfad** — Events entstehen aus Quellen oben automatisch |
@@ -275,49 +341,60 @@ Triggert `buildDailyBriefing` + Telegram-Send. Body ohne `userId` = alle Member.
 
 ---
 
-## 3.1 TypeScript-Client für Hermes
+## 3.1 System-Überblick: wie die Teile zusammenhängen
 
-**Copy-Paste-Vorlage**: `examples/team-os-client.ts` (470+ Zeilen, keine Dependencies außer `fetch`).
-
-Setup im Hermes-Repo:
-```ts
-import { TeamOSClient } from './team-os-client';
-
-const client = new TeamOSClient({
-  baseUrl: process.env.TEAM_OS_BASE_URL!,    // https://kalkulai-team-os.vercel.app
-  secret:  process.env.TEAM_OS_API_SECRET!,  // DASHBOARD_API_SECRET (gleicher Wert wie team-os repo)
-});
-
-// Health-Check vor jedem Run
-await client.healthCheck(leon.id); // → { ok: true, markdownLength: 612 }
-
-// Counter mit Wochenziel
-await client.createCounter({ userId: leon.id, name: 'Cold Calls', unit: 'Anrufe', weeklyTarget: 30 });
-
-// Projekt mit Steps atomar
-await client.createProjectWithSteps({
-  userId: leon.id,
-  name: 'Hermes-Integration',
-  dueDate: '2026-06-15',
-  steps: [
-    { name: 'Schema validieren' },
-    { name: 'Client einbauen', dueDate: '2026-05-25' },
-  ],
-});
-
-// Linear-Task aus Hermes-Insight
-await client.createHermesTask({ title: 'Söhnchen-Pricing einbauen', userId: leon.id });
 ```
+┌─────────────────────────────────────────────────────────────┐
+│  Datenquellen (Read)                                        │
+│  Linear ──────────── getIssuesForUser()                     │
+│  Google Calendar ─── getTodayEvents()                       │
+│  GitHub ──────────── getRecentCommits(), getOpenPRs()       │
+│  HubSpot ─────────── getCallsThisWeek()  (sales-only)       │
+│  Supabase ─────────── kpis, kpi_weeks, kpi_history,         │
+│                        team_members, sales_logs              │
+└───────────────────────────────┬─────────────────────────────┘
+                                │
+                      lib/unified-tasks.ts
+                      mergeTasks() — kombiniert Linear-Issues
+                      und Projekt-Steps zu UnifiedTask[],
+                      sortiert nach Fälligkeit dann Priorität
+                                │
+           ┌────────────────────┼────────────────────┐
+           ▼                    ▼                    ▼
+  /dashboard (TaskList)  /dashboard/board      Activity-Stream
+  ┌──────────────┐       ┌──────────────┐      lib/activity.ts
+  │ To Do        │       │ Kanban-Board │      events aus allen
+  │ In Progress  │  DnD  │ 4 Spalten    │      Quellen
+  │ On Hold      │ ────► │ todo/progress│
+  │ Done         │       │ on-hold/done │
+  └──────────────┘       └──────┬───────┘
+                                │ PATCH /api/tasks/status
+                                │ PATCH /api/kpis/{id}
+                                ▼
+                    Linear API (State-Change)
+                    Supabase (Step-Completion)
 
-Verfügbare Methoden (alle typed, alle authentifiziert wenn nicht anders markiert):
-- `listMembers()` *(unauth)*, `memberByName(name)`, `listKpis(userId)`, `healthCheck(userId)`
-- `createCounter`, `createProject`, `addStep`, `createProjectWithSteps`
-- `incrementCounter(kpiId, delta)`, `completeStep(stepId)`, `reopenStep(stepId)`
-- `updateKpi(kpiId, patch)`, `deleteKpi(kpiId)`
-- `createHermesTask`, `createTask`, `completeTask(linearIssueId)`
-- `logSalesCall`, `setWeeklyTargets`
+┌─────────────────────────────────────────────────────────────┐
+│  Write-Pfade (Hermes / Claude Code)                         │
+│  POST /api/tasks/create  — Linear-Issue(s) anlegen          │
+│  POST /api/kpis          — Counter/Projekt/Step             │
+│  POST /api/kpis/{id}/adjust — Counter hochzählen            │
+│  PATCH /api/kpis/{id}    — Step erledigen / umbenennen      │
+│  POST /api/tasks/complete — Linear-Issue auf Done           │
+│  POST /api/sales/log-call — Sales-Event loggen              │
+└─────────────────────────────────────────────────────────────┘
 
-Fehler werden als `TeamOSError` (mit `.status`-Property) geworfen.
+┌─────────────────────────────────────────────────────────────┐
+│  Team-Task-Mechanismus (seit 2026-05-17)                    │
+│  assigneeUserIds:[A,B] → N separate Linear-Issues           │
+│  alle mit Label "Team-Task"                                 │
+│  alle mit Description-Footer:                               │
+│    <!-- team-task-group:<uuid> -->                          │
+│    <!-- team-task-assignees:<idA>,<idB> -->                 │
+│  → Dashboard: Avatar-Stack (Initialen-Kreise) auf Karte     │
+│  → Completion: pro Person separat                           │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
@@ -358,6 +435,18 @@ curl -X POST "$BASE/api/tasks/create" -H "Authorization: Bearer $SECRET" -H "Con
 
 Resultat: Linear-Issue mit Label `Hermes` → Dashboard zeigt Task mit `H`-Icon + Activity-Event `kind: 'hermes'`.
 
+### 4.4 Team-Task für Leon + Felix anlegen
+
+```bash
+curl -X POST "$BASE/api/tasks/create" -H "Authorization: Bearer $SECRET" -H "Content-Type: application/json" \
+  -d '{
+    "title": "Sprint-Retro vorbereiten",
+    "assigneeUserIds": ["bd695d11-0632-4a0a-b1d0-db43acf46a68", "c9677ade-e42c-4593-81c6-7a2108b145fd"]
+  }'
+```
+
+Resultat: 2 Linear-Issues (je einer für Leon + Felix), beide mit Label `Team-Task`. Das Dashboard zeigt auf beiden Task-Karten den Avatar-Stack `[L][F]`.
+
 ---
 
 ## 5. Sources im Activity-Stream (welche Events landen wo)
@@ -388,6 +477,8 @@ Source-Label und `kind` sind die Sichtbarkeits-Marker. Übersicht:
 4. **Counter bleibt 0 trotz `adjust`**: KPI gehört einem anderen User oder ist `type='project'/'step'` (Adjust funktioniert nur für Counter).
 5. **Sparkline flat**: `kpi_history` braucht mindestens 2 verschiedene Tage mit Adjust-Calls. Bis dahin zeigt UI Fallback-Kurve.
 6. **Calendar leer**: Member hat kein `google_refresh_token` ODER OAuth-Flow nie durchlaufen. Aktuell: nur Leon hat das gesetzt.
+7. **Team-Task ohne Avatar-Stack**: Description-Footer fehlt oder wurde manuell in Linear editiert. Neu anlegen via API.
+8. **PATCH /api/tasks/status 400**: Unbekannter `status`-Wert ODER fehlende Env-Vars `LINEAR_TODO_STATE_ID` / `LINEAR_IN_PROGRESS_STATE_ID`.
 
 ---
 
@@ -396,6 +487,8 @@ Source-Label und `kind` sind die Sichtbarkeits-Marker. Übersicht:
 - TypeScript-Types: `types/index.ts`
 - DB-Schema: `supabase/migrations/00*.sql` (Migrations 001-007)
 - Activity-Event-Shape: `components/dashboard/ActivityTimeline.tsx` — `ActivityKind`, `ActivityEvent`
+- UnifiedTask (Dashboard-intern): `lib/unified-tasks.ts` — `UnifiedTask`, `mergeTasks`
+- Team-Task-Footer-Parser: `lib/team-tasks.ts` — `parseTeamTaskGroupId`, `parseTeamTaskAssignees`, `buildTeamTaskDescription`
 
 Bei Schema-Änderungen: neue Migration + Type-Update + diese Doku updaten.
 
@@ -409,6 +502,7 @@ Vor jedem Schreib-Call:
 - [ ] Bei Step-Anlage: `parent_id` ist eine valide Project-ID (gleicher `user_id`).
 - [ ] Bei Counter-Adjust: KPI ist `type='counter'`.
 - [ ] Bei Task-Create: Member hat `linear_user_id` (sonst 400).
+- [ ] Bei Team-Task: `assigneeUserIds` sind Supabase-User-IDs, nicht Linear-IDs.
 
 Smoke-Test nach Setup-Änderungen:
 ```bash
@@ -419,23 +513,20 @@ curl -H "Authorization: Bearer $DASHBOARD_API_SECRET" \
 
 ---
 
-## 9. Bekannte Lücken (Stand 2026-05-12, nach Pre-Hermes-Härtung)
+## 9. Changelog
 
-**Gefixt am 2026-05-12 (Pre-Hermes-Sprint):**
-- ✅ `/api/conflicts` jetzt mit Bearer-Auth.
-- ✅ `/api/kpi/set-target` GET jetzt mit Bearer-Auth.
-- ✅ `/api/members` Response sanitized — `google_refresh_token` wird nicht mehr public ausgegeben.
-- ✅ **Browser-Auth-Layer** — `middleware.ts` verlangt für alle HTML-Seiten ein signiertes Auth-Cookie. Login-Page `/login` + Logout-Endpoint. Onboarding-Doku in `docs/TEAM-ACCESS.md`.
-- ✅ `lib/kpis.ts` hat direkten Test-Coverage (17 neue Tests in `tests/kpis.test.ts`).
-- ✅ `examples/team-os-client.ts` als typed Hermes-Client.
+| Datum | Sprint | Änderungen |
+|---|---|---|
+| 2026-05-12 | Pre-Hermes | `/api/conflicts` + `/api/kpi/set-target` mit Bearer-Auth; `/api/members` sanitized; Browser-Auth-Layer (Middleware + Cookie); kpis.ts Test-Coverage (17 Tests) |
+| 2026-05-13–15 | Dashboard-Sprint | Auto-tracked KPI-Counter (`source:'hubspot:calls-week'`); Calendar-OAuth-Fix (Web vs Desktop Client); Task-Edit + 5s-Undo; Activity-Call-Clustering (HubSpot-Calls zu Sessions); Profil-Cookie-Persistenz |
+| 2026-05-16–17 | Feature-Sprint | **Team Tasks** (`assigneeUserIds`, `teamWide`, Description-Footer, Label `Team-Task`, Avatar-Stack auf Karte); **Kanban-DnD** (Drag & Drop zwischen Spalten; `PATCH /api/tasks/status`; Step-Completion via DnD); **Kanban-Spaltenfarben** (In-Progress blau, On-Hold gelb, Done grün, todo grau); **TaskList-Layout** (row1-meta/row2-meta, Avatar-Slot); **Kanban-Sort** exakt nach ISO-Datum; **Mobile-Stack** unter lg |
 
-**Hermes-Pfad bleibt unbetroffen**: Server-to-Server-Calls senden `Authorization: Bearer ${DASHBOARD_API_SECRET}` und gehen direkt durch — **keine Code-Änderung im Hermes-Repo nötig**. Die Browser-Auth wirkt nur auf HTML-Seiten und auf API-Calls ohne Bearer-Header.
-
-**Noch offen:**
-- **Public Secret**: `NEXT_PUBLIC_DASHBOARD_API_SECRET` liegt im Client-Bundle (für die Browser-Komponenten KpiManager, ProjectsTracker, KpiTracker, SalesFab, TaskList). Vor harter Production-Schutz: Cookie/Session-Auth statt Public-Env-Var. Hermes-seitig **kein Blocker** — Hermes liest `DASHBOARD_API_SECRET` server-seitig.
-- **Calendar pro Person**: nur Leon hat `google_refresh_token`, Felix+Paul müssen `/api/oauth/google/start?userId=<id>` durchlaufen.
-- **HubSpot pro Person**: Paul (sales) hat `hubspot_owner_id=null` — Call-Counter aus CRM fehlt entsprechend.
-- **Activity-Write-Endpoint fehlt**: Aktuell kann Hermes Events nur indirekt erzeugen (via KPI-Adjust, Linear-Create, sales-log). Direkter `POST /api/activity/event` wäre erweiterbar — aber nicht nötig für Hermes-MVP (Indirektion deckt alle aktuellen Use-Cases ab).
+**Bekannte Lücken (Stand 2026-05-17):**
+- **Public Secret**: `NEXT_PUBLIC_DASHBOARD_API_SECRET` liegt im Client-Bundle. Kein Blocker für Hermes (server-seitig).
+- **Calendar pro Person**: nur Leon hat `google_refresh_token`. Felix+Paul: `/api/oauth/google/start?userId=<id>`.
+- **HubSpot pro Person**: Paul hat `hubspot_owner_id=null` — CRM-Call-Counter fehlt.
+- **Activity-Write-Endpoint fehlt**: Hermes erzeugt Events indirekt (KPI-Adjust, Linear-Create, sales-log). Direkter `POST /api/activity/event` wäre erweiterbar — nicht nötig für MVP.
+- **`examples/team-os-client.ts` entfernt**: Datei existiert nicht mehr. Calls direkt via `fetch` (s. Schnellreferenz).
 
 ---
 
@@ -463,6 +554,16 @@ curl -X PATCH -H "$H" -H "$J" -d '{"completed":true}' "$BASE/api/kpis/$STEP"
 curl -X POST -H "$H" -H "$J" \
   -d '{"title":"X","userId":"'$UID'","source":"hermes"}' \
   "$BASE/api/tasks/create"
+
+# Team-Task (mehrere Assignees)
+curl -X POST -H "$H" -H "$J" \
+  -d '{"title":"X","assigneeUserIds":["'$LEON'","'$FELIX'"]}' \
+  "$BASE/api/tasks/create"
+
+# Task-Status ändern (Kanban-DnD-Pfad)
+curl -X PATCH -H "$H" -H "$J" \
+  -d '{"issueId":"<linear-id>","status":"in-progress"}' \
+  "$BASE/api/tasks/status"
 
 # Briefing prüfen
 curl -H "$H" "$BASE/api/briefing/build?userId=$UID" | jq .markdown
