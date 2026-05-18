@@ -130,6 +130,8 @@ export interface Kpi {
   due_date: string | null;
   completed: boolean;
   completed_at?: string | null;
+  /** Persistent Kanban-workflow status for type='step' rows. NULL = derive from completed+due_date. */
+  status?: 'todo' | 'in-progress' | 'on-hold' | null;
   created_at: string;
   source: KpiSource;
 }

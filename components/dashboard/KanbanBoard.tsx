@@ -147,7 +147,11 @@ export function KanbanBoard({
         ? await fetch(`/api/kpis/${encodeURIComponent(taskId)}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
-            body: JSON.stringify({ completed: targetCol === 'done' }),
+            body: JSON.stringify(
+              targetCol === 'done'
+                ? { completed: true }
+                : { completed: false, status: targetCol as 'todo' | 'in-progress' | 'on-hold' },
+            ),
           })
         : await fetch('/api/tasks/status', {
             method: 'PATCH',

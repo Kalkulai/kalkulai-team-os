@@ -16,12 +16,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     parent_id?: string | null;
     due_date?: string | null;
     completed?: boolean;
+    status?: 'todo' | 'in-progress' | 'on-hold' | null;
   } = {};
   if (typeof body.name === 'string' && body.name.trim()) defPatch.name = body.name.trim();
   if (typeof body.unit === 'string') defPatch.unit = body.unit.trim();
   if ('parent_id' in body) defPatch.parent_id = body.parent_id ?? null;
   if ('due_date' in body) defPatch.due_date = body.due_date ? String(body.due_date) : null;
   if (typeof body.completed === 'boolean') defPatch.completed = body.completed;
+  if ('status' in body) {
+    if (body.status === null || body.status === 'todo' || body.status === 'in-progress' || body.status === 'on-hold') {
+      defPatch.status = body.status;
+    } else {
+      return NextResponse.json({ error: 'status must be todo|in-progress|on-hold|null' }, { status: 400 });
+    }
+  }
 
   if (Object.keys(defPatch).length > 0) await updateKpiDefinition(id, defPatch);
 

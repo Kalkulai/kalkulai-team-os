@@ -249,6 +249,7 @@ export async function updateKpiDefinition(
     position?: number;
     due_date?: string | null;
     completed?: boolean;
+    status?: 'todo' | 'in-progress' | 'on-hold' | null;
   }
 ): Promise<void> {
   // Mirror `completed` into `completed_at` so the Activity-Stream can filter

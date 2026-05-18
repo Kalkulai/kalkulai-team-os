@@ -30,6 +30,10 @@ export function deriveLinearStatus(issue: LinearIssue): UnifiedStatus {
 
 export function deriveStepStatus(step: KpiWithWeek): UnifiedStatus {
   if (step.completed) return 'done';
+  // Persisted Kanban status wins over the auto-derived one.
+  if (step.status === 'todo' || step.status === 'in-progress' || step.status === 'on-hold') {
+    return step.status;
+  }
   if (step.due_date) {
     try {
       const days = differenceInCalendarDays(parseISO(step.due_date), new Date());
