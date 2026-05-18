@@ -15,8 +15,8 @@ export function HermesChatShell({ embedded = false }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
-    <div className={`hermes-shell ${embedded ? 'is-embedded' : ''}`}>
-      <aside className={`hermes-sidebar ${sidebarOpen ? '' : 'is-collapsed'}`} aria-label="Konversationen">
+    <div className={`hermes-shell ${embedded ? 'is-embedded' : ''} ${sidebarOpen ? '' : 'sidebar-collapsed'}`}>
+      <aside className="hermes-sidebar" aria-label="Konversationen">
         <div className="hermes-sidebar-head">
           <button type="button" className="hermes-sidebar-new" onClick={() => void startNewConversation()}>
             <Plus size={14} aria-hidden /> Neue Konversation

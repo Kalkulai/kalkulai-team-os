@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useHermes, type HermesMessage as Msg } from './HermesContext';
 
@@ -11,6 +11,35 @@ function HermesMessageRow({ m }: { m: Msg }) {
     <div className={`hermes-msg hermes-msg-${m.role}`}>
       {!isUser && !isSystem && <span className="hermes-msg-avatar" aria-hidden>H</span>}
       <div className={`hermes-msg-bubble ${isSystem ? 'is-system' : ''}`}>{m.content}</div>
+    </div>
+  );
+}
+
+const THINK_STAGES = [
+  'liest deine User-Datei …',
+  'durchsucht Vault + Notion …',
+  'denkt nach …',
+  'formuliert Antwort …',
+  'fast fertig …',
+];
+
+function HermesThinking() {
+  const [stage, setStage] = useState(0);
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const start = Date.now();
+    const tick = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
+    const advance = setInterval(() => setStage((s) => Math.min(s + 1, THINK_STAGES.length - 1)), 3500);
+    return () => { clearInterval(tick); clearInterval(advance); };
+  }, []);
+  return (
+    <div className="hermes-msg hermes-msg-assistant">
+      <span className="hermes-msg-avatar" aria-hidden>H</span>
+      <div className="hermes-msg-bubble is-typing">
+        <Loader2 size={14} className="hermes-spin" aria-hidden />
+        <span>Hermes {THINK_STAGES[stage]}</span>
+        <span className="hermes-typing-elapsed">{elapsed}s</span>
+      </div>
     </div>
   );
 }
@@ -35,15 +64,7 @@ export function HermesMessageList() {
   return (
     <div className="hermes-msg-list">
       {messages.map((m) => <HermesMessageRow key={m.id} m={m} />)}
-      {sending && (
-        <div className="hermes-msg hermes-msg-assistant">
-          <span className="hermes-msg-avatar" aria-hidden>H</span>
-          <div className="hermes-msg-bubble is-typing">
-            <Loader2 size={14} className="hermes-spin" aria-hidden />
-            <span>Hermes denkt nach …</span>
-          </div>
-        </div>
-      )}
+      {sending && <HermesThinking />}
       <div ref={endRef} />
     </div>
   );

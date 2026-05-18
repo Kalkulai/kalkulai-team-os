@@ -772,15 +772,20 @@ html.light .tl-row code { background: rgba(11, 11, 15, 0.05); }
 .hermes-shell {
   display: grid; grid-template-columns: 220px 1fr;
   width: 100%; height: 100%; min-height: 0;
+  transition: grid-template-columns 0.2s ease;
 }
 .hermes-shell.is-embedded { grid-template-columns: 200px 1fr; }
+.hermes-shell.sidebar-collapsed { grid-template-columns: 0 1fr; }
 .hermes-sidebar {
   display: flex; flex-direction: column; min-height: 0;
   border-right: 1px solid var(--line-1);
   background: rgba(255, 255, 255, 0.015);
-  transition: width 0.18s ease, opacity 0.18s ease;
+  overflow: hidden;
+  transition: opacity 0.18s ease;
 }
-.hermes-sidebar.is-collapsed { width: 0; opacity: 0; pointer-events: none; }
+.hermes-shell.sidebar-collapsed .hermes-sidebar {
+  opacity: 0; pointer-events: none; border-right: 0;
+}
 .hermes-sidebar-head { padding: 12px 12px 8px; border-bottom: 1px solid var(--line-1); }
 .hermes-sidebar-new {
   width: 100%; padding: 8px 10px; border-radius: 9px;
@@ -867,6 +872,11 @@ html.light .tl-row code { background: rgba(11, 11, 15, 0.05); }
 .hermes-msg-bubble.is-typing {
   display: inline-flex; align-items: center; gap: 8px;
   font: 500 12px/1 var(--font); color: var(--ink-3);
+}
+.hermes-typing-elapsed {
+  font: 500 11px/1 var(--mono); color: var(--ink-3);
+  padding: 2px 7px; margin-left: 4px; border-radius: 5px;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line-1);
 }
 .hermes-spin { animation: hermes-spin 0.9s linear infinite; }
 @keyframes hermes-spin { to { transform: rotate(360deg); } }
