@@ -22,6 +22,11 @@ export interface HermesMessage {
   created_at: string;
 }
 
+export interface HermesProgress {
+  currentTool: string | null;
+  toolCount: number;
+}
+
 interface HermesContextValue {
   ui: HermesUiState;
   open: () => void;       // opens bubble (or modal if a conversation is already active)
@@ -33,6 +38,7 @@ interface HermesContextValue {
   conversations: HermesConversationSummary[];
   messages: HermesMessage[];
   sending: boolean;
+  progress: HermesProgress;
   reloadConversations: () => Promise<void>;
   loadMessages: (conversationId: string) => Promise<void>;
   sendMessage: (text: string) => Promise<void>;
@@ -51,6 +57,7 @@ export function HermesProvider({ children }: { children: ReactNode }) {
   const [conversations, setConversations] = useState<HermesConversationSummary[]>([]);
   const [messages, setMessages] = useState<HermesMessage[]>([]);
   const [sending, setSending] = useState(false);
+  const [progress, setProgress] = useState<HermesProgress>({ currentTool: null, toolCount: 0 });
   const lastLoadedMemberRef = useRef<string | null>(null);
 
   // Auth header helper (DASHBOARD_API_SECRET is public-non-sensitive).
@@ -112,30 +119,64 @@ export function HermesProvider({ children }: { children: ReactNode }) {
     };
     setMessages((prev) => [...prev, tempUser]);
     setSending(true);
+    setProgress({ currentTool: null, toolCount: 0 });
     setUi('modal');
 
     try {
       const res = await fetch(`/api/hermes/conversations/${convId}/messages`, {
-        method: 'POST', headers: authHeaders,
+        method: 'POST',
+        headers: { ...authHeaders, Accept: 'text/event-stream' },
         body: JSON.stringify({ memberId, content: trimmed }),
       });
-      const data = await res.json().catch(() => ({})) as {
-        userMessage?: HermesMessage;
-        assistantMessage?: HermesMessage;
-        systemMessage?: HermesMessage;
-        error?: string;
-      };
-      // Replace temp user message with the real one (incl. real id) and append assistant/system.
-      setMessages((prev) => {
-        const withoutTemp = prev.filter((m) => m.id !== tempUser.id);
-        const next = [...withoutTemp];
-        if (data.userMessage) next.push(data.userMessage);
-        else next.push(tempUser); // fallback: keep temp
-        if (data.assistantMessage) next.push(data.assistantMessage);
-        if (data.systemMessage) next.push(data.systemMessage);
-        return next;
-      });
-      // refresh conv list so title/updated_at updates appear in sidebar
+      if (!res.ok || !res.body) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let sep: number;
+        while ((sep = buf.indexOf('\n\n')) !== -1) {
+          const raw = buf.slice(0, sep);
+          buf = buf.slice(sep + 2);
+          let evName: string | null = null;
+          let evData = '';
+          for (const line of raw.split('\n')) {
+            if (line.startsWith('event:')) evName = line.slice(6).trim();
+            else if (line.startsWith('data:')) evData += line.slice(5).trim();
+          }
+          if (!evName) continue;
+          let parsed: Record<string, unknown> = {};
+          try { parsed = evData ? JSON.parse(evData) : {}; } catch {/* keep empty */}
+
+          if (evName === 'user' && parsed.message) {
+            const real = parsed.message as HermesMessage;
+            setMessages((prev) => prev.map((m) => (m.id === tempUser.id ? real : m)));
+          } else if (evName === 'tool') {
+            const name = (parsed.name as string | undefined) ?? null;
+            const phase = parsed.phase as string | undefined;
+            if (phase === 'start') {
+              setProgress((p) => ({ currentTool: name, toolCount: p.toolCount + 1 }));
+            }
+          } else if (evName === 'persisted' && parsed.assistantMessage) {
+            const assistant = parsed.assistantMessage as HermesMessage;
+            setMessages((prev) => [...prev, assistant]);
+          } else if (evName === 'error') {
+            const sysMsg = parsed.systemMessage as HermesMessage | undefined;
+            if (sysMsg) setMessages((prev) => [...prev, sysMsg]);
+            else setMessages((prev) => [...prev, {
+              id: `sys-${Date.now()}`,
+              conversation_id: convId,
+              role: 'system',
+              content: `Fehler: ${parsed.message ?? 'unbekannt'}`,
+              created_at: new Date().toISOString(),
+            }]);
+          }
+        }
+      }
       reloadConversations();
     } catch (err) {
       setMessages((prev) => [
@@ -150,6 +191,7 @@ export function HermesProvider({ children }: { children: ReactNode }) {
       ]);
     } finally {
       setSending(false);
+      setProgress({ currentTool: null, toolCount: 0 });
     }
   }, [sending, memberId, ensureConversation, authHeaders, reloadConversations]);
 
@@ -215,6 +257,7 @@ export function HermesProvider({ children }: { children: ReactNode }) {
     conversations,
     messages,
     sending,
+    progress,
     reloadConversations,
     loadMessages,
     sendMessage,

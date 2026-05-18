@@ -15,29 +15,49 @@ function HermesMessageRow({ m }: { m: Msg }) {
   );
 }
 
-const THINK_STAGES = [
-  'liest deine User-Datei …',
-  'durchsucht Vault + Notion …',
-  'denkt nach …',
-  'formuliert Antwort …',
-  'fast fertig …',
-];
+const TOOL_LABEL: Record<string, string> = {
+  terminal: 'führt Shell-Befehl aus',
+  read_file: 'liest Datei',
+  search_files: 'durchsucht Dateien',
+  write_file: 'schreibt Datei',
+  edit_file: 'editiert Datei',
+  skill_view: 'lädt Skill',
+  obsidian: 'liest Vault',
+  vault_write: 'schreibt in Vault',
+  notion: 'fragt Notion ab',
+  google_workspace: 'fragt Google Workspace ab',
+  browser_navigate: 'öffnet Browser',
+  browser_click: 'klickt im Browser',
+  delegate_task: 'delegiert an Sub-Agent',
+  clarify: 'fragt nach',
+  execute_code: 'führt Code aus',
+};
+
+function labelFor(tool: string | null): string {
+  if (!tool) return 'denkt nach …';
+  const norm = tool.replace(/[^A-Za-z0-9_]/g, '');
+  if (TOOL_LABEL[norm]) return `${TOOL_LABEL[norm]} …`;
+  return `nutzt ${norm} …`;
+}
 
 function HermesThinking() {
-  const [stage, setStage] = useState(0);
+  const { progress } = useHermes();
   const [elapsed, setElapsed] = useState(0);
   useEffect(() => {
     const start = Date.now();
     const tick = setInterval(() => setElapsed(Math.floor((Date.now() - start) / 1000)), 1000);
-    const advance = setInterval(() => setStage((s) => Math.min(s + 1, THINK_STAGES.length - 1)), 3500);
-    return () => { clearInterval(tick); clearInterval(advance); };
+    return () => clearInterval(tick);
   }, []);
+  const label = labelFor(progress.currentTool);
   return (
     <div className="hermes-msg hermes-msg-assistant">
       <span className="hermes-msg-avatar" aria-hidden>H</span>
       <div className="hermes-msg-bubble is-typing">
         <Loader2 size={14} className="hermes-spin" aria-hidden />
-        <span>Hermes {THINK_STAGES[stage]}</span>
+        <span>Hermes {label}</span>
+        {progress.toolCount > 0 && (
+          <span className="hermes-typing-step">#{progress.toolCount}</span>
+        )}
         <span className="hermes-typing-elapsed">{elapsed}s</span>
       </div>
     </div>

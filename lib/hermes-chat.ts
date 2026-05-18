@@ -140,6 +140,36 @@ export async function sendToHermes(args: SendToHermesArgs): Promise<string> {
   return (data.reply ?? '').trim();
 }
 
+/** Open an SSE stream to the Hermes bridge. Caller is responsible for closing the response body. */
+export async function streamHermes(args: SendToHermesArgs): Promise<Response> {
+  const url = process.env.HERMES_BRIDGE_URL;
+  const token = process.env.HERMES_BRIDGE_TOKEN;
+  if (!url || !token) {
+    throw new Error('HERMES_BRIDGE_URL / HERMES_BRIDGE_TOKEN not configured');
+  }
+  const res = await fetch(`${url.replace(/\/$/, '')}/api/chat/stream`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'Accept': 'text/event-stream',
+    },
+    body: JSON.stringify({
+      message: args.message,
+      userLabel: args.userLabel ?? undefined,
+      userTelegramId: args.userTelegramId ?? undefined,
+      history: args.history ?? undefined,
+      stream: true,
+    }),
+    cache: 'no-store',
+  });
+  if (!res.ok || !res.body) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(`Hermes-Bridge stream ${res.status}: ${txt.slice(0, 300)}`);
+  }
+  return res;
+}
+
 export function buildHistoryFromMessages(messages: HermesMessage[]): Array<{ role: 'user' | 'assistant'; content: string }> {
   return messages
     .filter((m) => m.role === 'user' || m.role === 'assistant')

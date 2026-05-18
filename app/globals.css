@@ -709,42 +709,32 @@ html.light .tl-row code { background: rgba(11, 11, 15, 0.05); }
 
 /* Bubble (FAB-Klick → Pill faehrt vom FAB nach links raus) */
 .hermes-bubble-catcher {
-  position: fixed; inset: 0; z-index: 44; background: transparent;
+  position: fixed; inset: 0; z-index: 44;
+  background: rgba(0, 0, 0, 0.35);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
 }
-@keyframes hermes-bubble-slide {
-  from { opacity: 0; transform: translateX(40px) scaleX(0.92); }
-  to   { opacity: 1; transform: translateX(0) scaleX(1); }
+@keyframes hermes-bubble-rise {
+  from { opacity: 0; transform: translate(-50%, -42%) scale(0.96); }
+  to   { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 .hermes-bubble {
   position: fixed !important;
-  right: 100px !important;
-  bottom: 36px !important;
-  left: auto !important;
-  top: auto !important;
+  top: 50% !important;
+  left: 50% !important;
+  right: auto !important;
+  bottom: auto !important;
   z-index: 46;
-  width: min(420px, calc(100vw - 160px));
-  padding: 10px 12px 10px 16px;
-  border-radius: 26px;
-  display: flex; align-items: center; gap: 10px;
-  box-shadow: 0 14px 40px -12px rgba(0, 0, 0, 0.6);
-  transform-origin: right center;
-  animation: hermes-bubble-slide 0.28s cubic-bezier(0.22, 0.61, 0.36, 1) both;
-}
-.hermes-bubble-hint {
-  font: 500 12.5px/1 var(--mono); color: var(--ink-3);
-  letter-spacing: 0.02em; flex: none; white-space: nowrap;
+  width: min(560px, calc(100vw - 48px));
+  padding: 6px 6px 6px 6px;
+  border-radius: 18px;
+  display: flex; align-items: stretch; gap: 0;
+  box-shadow: 0 20px 60px -12px rgba(0, 0, 0, 0.6);
+  animation: hermes-bubble-rise 0.22s cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
 .hermes-input-bubble {
-  flex: 1; min-width: 0;
-  border-radius: 18px; padding: 4px 4px 4px 10px;
+  width: 100%;
+  border-radius: 14px; padding: 4px 4px 4px 12px;
   border: 1px solid var(--line-1); background: rgba(255, 255, 255, 0.04);
-}
-@media (max-width: 768px) {
-  .hermes-bubble {
-    right: 16px !important;
-    bottom: 90px !important;
-    width: calc(100vw - 32px);
-  }
 }
 
 /* Modal (Submit im Bubble → großes Chat-Modal) */
@@ -877,6 +867,11 @@ html.light .tl-row code { background: rgba(11, 11, 15, 0.05); }
   font: 500 11px/1 var(--mono); color: var(--ink-3);
   padding: 2px 7px; margin-left: 4px; border-radius: 5px;
   background: rgba(255, 255, 255, 0.05); border: 1px solid var(--line-1);
+}
+.hermes-typing-step {
+  font: 500 11px/1 var(--mono); color: var(--brand);
+  padding: 2px 7px; border-radius: 5px;
+  background: rgba(91, 140, 255, 0.1); border: 1px solid rgba(91, 140, 255, 0.25);
 }
 .hermes-spin { animation: hermes-spin 0.9s linear infinite; }
 @keyframes hermes-spin { to { transform: rotate(360deg); } }

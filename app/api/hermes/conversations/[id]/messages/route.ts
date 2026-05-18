@@ -4,14 +4,14 @@ import {
   getConversation,
   getMessages,
   addMessage,
-  sendToHermes,
+  streamHermes,
   buildHistoryFromMessages,
   ensureFirstTitle,
 } from '@/lib/hermes-chat';
 import { supabaseAdmin } from '@/lib/supabase';
 
 export const runtime = 'nodejs';
-export const maxDuration = 200;
+export const maxDuration = 240;
 
 interface MemberRow {
   id: string;
@@ -40,6 +40,10 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   return NextResponse.json(messages);
 }
 
+function sseLine(event: string, data: unknown): string {
+  return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+}
+
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!requireApiAuth(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const body = await req.json().catch(() => null) as { memberId?: string; content?: string } | null;
@@ -47,38 +51,101 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'memberId + content required' }, { status: 400 });
   }
   const { id: conversationId } = await params;
-  const conv = await getConversation(conversationId, body.memberId);
+  const memberId = body.memberId;
+  const userContent = body.content.trim();
+
+  const conv = await getConversation(conversationId, memberId);
   if (!conv) return NextResponse.json({ error: 'conversation not found' }, { status: 404 });
 
-  const member = await getMember(body.memberId);
+  const member = await getMember(memberId);
   if (!member) return NextResponse.json({ error: 'member not found' }, { status: 404 });
 
-  const userMsg = await addMessage(conversationId, 'user', body.content.trim());
-  await ensureFirstTitle(conversationId, body.memberId, body.content.trim());
+  const userMsg = await addMessage(conversationId, 'user', userContent);
+  await ensureFirstTitle(conversationId, memberId, userContent);
 
-  // Build history (excluding the message we just added, since it's "new")
   const prior = (await getMessages(conversationId)).filter((m) => m.id !== userMsg.id);
   const history = buildHistoryFromMessages(prior);
 
-  let reply: string;
-  try {
-    reply = await sendToHermes({
-      message: body.content.trim(),
-      userLabel: member.name,
-      userTelegramId: member.telegram_chat_id,
-      history,
-    });
-  } catch (err) {
-    const errMsg = err instanceof Error ? err.message : String(err);
-    const failMsg = await addMessage(conversationId, 'system', `Hermes konnte nicht antworten: ${errMsg}`);
-    return NextResponse.json({ userMessage: userMsg, error: errMsg, systemMessage: failMsg }, { status: 502 });
-  }
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      function emit(event: string, data: unknown) {
+        controller.enqueue(encoder.encode(sseLine(event, data)));
+      }
+      emit('user', { message: userMsg });
 
-  if (!reply) {
-    const failMsg = await addMessage(conversationId, 'system', 'Hermes hat eine leere Antwort zurückgegeben.');
-    return NextResponse.json({ userMessage: userMsg, systemMessage: failMsg });
-  }
+      let bridgeRes: Response;
+      try {
+        bridgeRes = await streamHermes({
+          message: userContent,
+          userLabel: member.name,
+          userTelegramId: member.telegram_chat_id,
+          history,
+        });
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        const sysMsg = await addMessage(conversationId, 'system', `Hermes-Bridge nicht erreichbar: ${errMsg}`);
+        emit('error', { message: errMsg, systemMessage: sysMsg });
+        controller.close();
+        return;
+      }
 
-  const assistantMsg = await addMessage(conversationId, 'assistant', reply);
-  return NextResponse.json({ userMessage: userMsg, assistantMessage: assistantMsg });
+      const reader = bridgeRes.body!.getReader();
+      const decoder = new TextDecoder();
+      let buf = '';
+      let replyText: string | null = null;
+
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += decoder.decode(value, { stream: true });
+
+          let sep: number;
+          while ((sep = buf.indexOf('\n\n')) !== -1) {
+            const raw = buf.slice(0, sep);
+            buf = buf.slice(sep + 2);
+            let evName: string | null = null;
+            let evData = '';
+            for (const line of raw.split('\n')) {
+              if (line.startsWith('event:')) evName = line.slice(6).trim();
+              else if (line.startsWith('data:')) evData += line.slice(5).trim();
+            }
+            if (!evName) continue;
+            const parsed = evData ? JSON.parse(evData) : {};
+            if (evName === 'reply') {
+              replyText = String(parsed.reply ?? '').trim();
+            }
+            emit(evName, parsed);
+          }
+        }
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        emit('error', { message: `stream-broke: ${errMsg}` });
+      }
+
+      if (replyText) {
+        try {
+          const assistantMsg = await addMessage(conversationId, 'assistant', replyText);
+          emit('persisted', { assistantMessage: assistantMsg });
+        } catch (err) {
+          emit('error', { message: `persist failed: ${err instanceof Error ? err.message : String(err)}` });
+        }
+      } else {
+        const sysMsg = await addMessage(conversationId, 'system', 'Hermes hat keine Antwort geliefert.');
+        emit('error', { message: 'empty reply', systemMessage: sysMsg });
+      }
+      emit('done', {});
+      controller.close();
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      'Connection': 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    },
+  });
 }
