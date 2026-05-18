@@ -44,7 +44,10 @@ export function ProjectsTracker({ userId }: { userId: string }) {
     // Default-Open: alle "late" Projekte (Verspätung sichtbar machen)
     const lateOpen = new Set<string>();
     for (const g of built) {
-      if (isLate(g.project.due_date)) lateOpen.add(g.project.id);
+      const total = g.steps.length;
+      const done = g.steps.filter((s) => s.completed).length;
+      const isComplete = total > 0 && done === total;
+      if (isLate(g.project.due_date, isComplete)) lateOpen.add(g.project.id);
     }
     setOpen(lateOpen);
   }, [userId]);
@@ -152,9 +155,10 @@ export function ProjectsTracker({ userId }: { userId: string }) {
         const total = steps.length;
         const done = steps.filter((s) => s.completed).length;
         const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+        const isComplete = total > 0 && done === total;
         const isOpen = open.has(project.id);
-        const late = isLate(project.due_date);
-        const dueLabel = projectDueLabel(project.due_date);
+        const late = isLate(project.due_date, isComplete);
+        const dueLabel = projectDueLabel(project.due_date, isComplete);
 
         return (
           <div key={project.id} className={`proj ${late ? 'late' : ''} ${isOpen ? 'open' : ''}`}>
@@ -196,7 +200,7 @@ export function ProjectsTracker({ userId }: { userId: string }) {
               <ul className="proj-tasks">
                 {steps.map((s) => {
                   const isBusy = busy.has(s.id);
-                  const meta = stepDueMeta(s.due_date);
+                  const meta = stepDueMeta(s.due_date, s.completed);
                   const isEditingThis = editingStepId === s.id;
                   return (
                     <li key={s.id} className={`proj-task ${s.completed ? 'done' : ''} ${isEditingThis ? 'is-editing' : ''}`}>
@@ -280,8 +284,8 @@ function sortSteps(a: KpiWithWeek, b: KpiWithWeek): number {
   return a.position - b.position;
 }
 
-function isLate(due: string | null): boolean {
-  if (!due) return false;
+function isLate(due: string | null, isComplete: boolean): boolean {
+  if (!due || isComplete) return false;
   try {
     return differenceInCalendarDays(parseISO(due), new Date()) < 0;
   } catch {
@@ -289,12 +293,13 @@ function isLate(due: string | null): boolean {
   }
 }
 
-function projectDueLabel(due: string | null): string | null {
+function projectDueLabel(due: string | null, isComplete: boolean): string | null {
   if (!due) return null;
   try {
     const date = parseISO(due);
     const days = differenceInCalendarDays(date, new Date());
     const base = format(date, 'd. MMM', { locale: de });
+    if (isComplete) return base;
     if (days < 0) return `${base} · ${Math.abs(days)} T.`;
     if (days === 0) return 'Heute';
     return base;
@@ -303,8 +308,8 @@ function projectDueLabel(due: string | null): string | null {
   }
 }
 
-function stepDueMeta(due: string | null): { label: string; pillClass: string } | null {
-  if (!due) return null;
+function stepDueMeta(due: string | null, completed: boolean): { label: string; pillClass: string } | null {
+  if (!due || completed) return null;
   try {
     const date = parseISO(due);
     const days = differenceInCalendarDays(date, new Date());
