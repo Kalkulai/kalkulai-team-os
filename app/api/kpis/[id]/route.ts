@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireApiAuth } from '@/lib/api-auth';
 import { updateKpiDefinition, setKpiTarget, deleteKpi } from '@/lib/kpis';
 import { currentWeekStart } from '@/lib/supabase';
+import { revalidateDashboard } from '@/lib/revalidate';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   if (!requireApiAuth(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -28,6 +29,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     await setKpiTarget(id, currentWeekStart(), body.target);
   }
 
+  revalidateDashboard();
   return NextResponse.json({ ok: true });
 }
 
@@ -35,5 +37,6 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   if (!requireApiAuth(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
   await deleteKpi(id);
+  revalidateDashboard();
   return NextResponse.json({ ok: true });
 }

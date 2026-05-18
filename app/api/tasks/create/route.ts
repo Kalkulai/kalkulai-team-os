@@ -3,6 +3,7 @@ import { createIssue, ensureLabelId, getLinearTeamId } from '@/lib/linear';
 import { requireApiAuth } from '@/lib/api-auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { buildTeamTaskDescription } from '@/lib/team-tasks';
+import { revalidateDashboard } from '@/lib/revalidate';
 
 const SOURCE_LABEL: Record<'hermes' | 'notion', string> = {
   hermes: 'Hermes',
@@ -84,6 +85,7 @@ export async function POST(req: NextRequest) {
           createIssue(teamId, title.trim(), linearId, labelIds, priority, dueDate ?? null, description),
         ),
       );
+      revalidateDashboard();
       return NextResponse.json({ tasks, teamTaskGroupId: groupId });
     }
 
@@ -113,6 +115,7 @@ export async function POST(req: NextRequest) {
       priority,
       dueDate ?? null,
     );
+    revalidateDashboard();
     return NextResponse.json(issue);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

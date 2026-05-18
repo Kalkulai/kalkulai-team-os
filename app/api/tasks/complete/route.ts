@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { setIssueStatus } from '@/lib/linear';
 import { requireApiAuth } from '@/lib/api-auth';
+import { revalidateDashboard } from '@/lib/revalidate';
 
 // Tasks-Done-Counter wird im Aggregator aus Linear (completedAt this week) gelesen,
 // nicht mehr aus kpi_daily. Diese Route setzt nur den Linear-State; das KPI-Bar
@@ -21,5 +22,6 @@ export async function POST(req: NextRequest) {
   }
 
   await setIssueStatus(body.issueId, stateId);
+  revalidateDashboard();
   return NextResponse.json({ ok: true });
 }

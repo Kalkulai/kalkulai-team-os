@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { setIssueStatus } from '@/lib/linear';
 import { requireApiAuth } from '@/lib/api-auth';
+import { revalidateDashboard } from '@/lib/revalidate';
 
 const STATE_MAP: Record<string, string | undefined> = {
   'todo': process.env.LINEAR_TODO_STATE_ID,
@@ -25,5 +26,6 @@ export async function PATCH(req: NextRequest) {
   }
 
   await setIssueStatus(body.issueId, stateId);
+  revalidateDashboard();
   return NextResponse.json({ ok: true });
 }

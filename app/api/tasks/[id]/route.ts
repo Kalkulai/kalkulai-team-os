@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateIssue } from '@/lib/linear';
 import { requireApiAuth } from '@/lib/api-auth';
+import { revalidateDashboard } from '@/lib/revalidate';
 
 export async function PATCH(
   req: NextRequest,
@@ -49,6 +50,7 @@ export async function PATCH(
 
   try {
     await updateIssue(id, patch);
+    revalidateDashboard();
     return NextResponse.json({ ok: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
