@@ -7,27 +7,23 @@ import { HermesInput } from './HermesInput';
 export function HermesBubble() {
   const { close, memberName } = useHermes();
   return (
-    <motion.div
-      className="hermes-bubble-bg"
-      onClick={close}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      transition={{ duration: 0.12 }}
-    >
+    <>
+      {/* Click-away catcher, transparent */}
+      <div className="hermes-bubble-catcher" onClick={close} aria-hidden />
+      {/* The pill itself, anchored next to the FAB, expanding leftward */}
       <motion.div
         className="hermes-bubble glass"
         onClick={(e) => e.stopPropagation()}
-        initial={{ opacity: 0, y: 30, scale: 0.96 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        exit={{ opacity: 0, y: 20, scale: 0.96 }}
-        transition={{ type: 'spring', stiffness: 320, damping: 22 }}
+        initial={{ opacity: 0, scaleX: 0.25, originX: 1 }}
+        animate={{ opacity: 1, scaleX: 1, originX: 1 }}
+        exit={{ opacity: 0, scaleX: 0.25, originX: 1 }}
+        transition={{ type: 'spring', stiffness: 340, damping: 26 }}
       >
         <span className="hermes-bubble-hint">
-          {memberName ? `Hey ${memberName}, was läuft?` : 'Schreib Hermes …'}
+          {memberName ? `Hey ${memberName} —` : 'Frag Hermes —'}
         </span>
-        <HermesInput variant="bubble" autoFocus placeholder="Frag Hermes irgendwas …" />
+        <HermesInput variant="bubble" autoFocus placeholder="Schreib hier rein …" />
       </motion.div>
-    </motion.div>
+    </>
   );
 }

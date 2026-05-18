@@ -14,8 +14,8 @@ interface PageDef {
 
 const PAGES: PageDef[] = [
   { href: '/dashboard',      title: 'Mein Tag',     Icon: Calendar },
-  { href: '/dashboard/team', title: 'Team',         Icon: Users },
   { href: '/dashboard/chat', title: 'Chat',         Icon: MessageCircle },
+  { href: '/dashboard/team', title: 'Team',         Icon: Users },
   { href: '/settings',       title: 'Einstellungen', Icon: Settings },
 ];
 
