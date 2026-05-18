@@ -47,7 +47,7 @@ export function ProjectsTracker({ userId }: { userId: string }) {
       const total = g.steps.length;
       const done = g.steps.filter((s) => s.completed).length;
       const isComplete = total > 0 && done === total;
-      if (isLate(g.project.due_date, isComplete)) lateOpen.add(g.project.id);
+      if (isLate(g.steps, isComplete)) lateOpen.add(g.project.id);
     }
     setOpen(lateOpen);
   }, [userId]);
@@ -149,19 +149,25 @@ export function ProjectsTracker({ userId }: { userId: string }) {
     );
   }
 
+  const visibleGroups = groups.filter(({ steps }) => {
+    const total = steps.length;
+    const done = steps.filter((s) => s.completed).length;
+    return !(total > 0 && done === total);
+  });
+
   return (
     <div>
-      {groups.map(({ project, steps }) => {
+      {visibleGroups.map(({ project, steps }) => {
         const total = steps.length;
         const done = steps.filter((s) => s.completed).length;
         const pct = total > 0 ? Math.round((done / total) * 100) : 0;
         const isComplete = total > 0 && done === total;
         const isOpen = open.has(project.id);
-        const late = isLate(project.due_date, isComplete);
-        const dueLabel = projectDueLabel(project.due_date, isComplete);
+        const late = isLate(steps, isComplete);
+        const dueLabel = projectDueLabel(project.due_date, isComplete, late);
 
         return (
-          <div key={project.id} className={`proj ${late ? 'late' : ''} ${isOpen ? 'open' : ''}`}>
+          <div key={project.id} className={`proj ${late ? 'late' : ''} ${isComplete ? 'complete' : ''} ${isOpen ? 'open' : ''}`}>
             <button type="button" onClick={() => toggleOpen(project.id)} className="proj-head">
               <svg
                 width="13"
@@ -284,23 +290,31 @@ function sortSteps(a: KpiWithWeek, b: KpiWithWeek): number {
   return a.position - b.position;
 }
 
-function isLate(due: string | null, isComplete: boolean): boolean {
-  if (!due || isComplete) return false;
-  try {
-    return differenceInCalendarDays(parseISO(due), new Date()) < 0;
-  } catch {
-    return false;
-  }
+function hasOverdueOpenStep(steps: KpiWithWeek[]): boolean {
+  const today = new Date();
+  return steps.some((s) => {
+    if (s.completed || !s.due_date) return false;
+    try {
+      return differenceInCalendarDays(parseISO(s.due_date), today) < 0;
+    } catch {
+      return false;
+    }
+  });
 }
 
-function projectDueLabel(due: string | null, isComplete: boolean): string | null {
+function isLate(steps: KpiWithWeek[], isComplete: boolean): boolean {
+  if (isComplete) return false;
+  return hasOverdueOpenStep(steps);
+}
+
+function projectDueLabel(due: string | null, isComplete: boolean, late: boolean): string | null {
   if (!due) return null;
   try {
     const date = parseISO(due);
     const days = differenceInCalendarDays(date, new Date());
     const base = format(date, 'd. MMM', { locale: de });
     if (isComplete) return base;
-    if (days < 0) return `${base} · ${Math.abs(days)} T.`;
+    if (late && days < 0) return `${base} · ${Math.abs(days)} T.`;
     if (days === 0) return 'Heute';
     return base;
   } catch {

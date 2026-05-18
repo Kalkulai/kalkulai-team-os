@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   DndContext,
   DragEndEvent,
@@ -101,6 +102,7 @@ export function KanbanBoard({
   doneTasks?: UnifiedTask[];
   members?: Array<{ id: string; name: string }>;
 }) {
+  const router = useRouter();
   const [tasks, setTasks] = useState(initialTasks);
   const [doneTasks, setDoneTasks] = useState(initialDone);
   const [activeTask, setActiveTask] = useState<UnifiedTask | null>(null);
@@ -151,6 +153,7 @@ export function KanbanBoard({
           body: JSON.stringify({ issueId: taskId, status: targetCol }),
         });
       }
+      router.refresh();
     } catch {
       window.location.reload();
     }

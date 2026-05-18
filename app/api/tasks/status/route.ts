@@ -5,7 +5,7 @@ import { requireApiAuth } from '@/lib/api-auth';
 const STATE_MAP: Record<string, string | undefined> = {
   'todo': process.env.LINEAR_TODO_STATE_ID,
   'in-progress': process.env.LINEAR_IN_PROGRESS_STATE_ID,
-  'on-hold': process.env.LINEAR_IN_PROGRESS_STATE_ID,
+  'on-hold': process.env.LINEAR_ON_HOLD_STATE_ID ?? process.env.LINEAR_IN_PROGRESS_STATE_ID,
   'done': process.env.LINEAR_DONE_STATE_ID,
 };
 

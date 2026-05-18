@@ -274,7 +274,7 @@ Mapping auf Linear-States (via Env-Vars):
 |---|---|
 | `todo` | `LINEAR_TODO_STATE_ID` |
 | `in-progress` | `LINEAR_IN_PROGRESS_STATE_ID` |
-| `on-hold` | `LINEAR_IN_PROGRESS_STATE_ID` (kein separater State) |
+| `on-hold` | `LINEAR_ON_HOLD_STATE_ID` (Fallback: `LINEAR_IN_PROGRESS_STATE_ID` wenn nicht gesetzt) |
 | `done` | `LINEAR_DONE_STATE_ID` |
 
 Dieser Endpoint wird vom Kanban-Board (`components/dashboard/KanbanBoard.tsx`) aufgerufen wenn ein Task per Drag & Drop in eine andere Spalte gezogen wird.
