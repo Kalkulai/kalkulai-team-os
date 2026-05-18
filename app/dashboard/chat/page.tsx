@@ -1,11 +1,11 @@
-import { HermesFrame } from '@/components/hermes/HermesFrame';
+import { HermesChatShell } from '@/components/hermes/HermesChatShell';
 
 export const dynamic = 'force-dynamic';
 
 export default function ChatPage() {
   return (
-    <div className="chat-page">
-      <HermesFrame className="chat-page-frame" />
+    <div className="chat-page glass">
+      <HermesChatShell />
     </div>
   );
 }

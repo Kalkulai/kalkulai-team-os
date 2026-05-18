@@ -707,65 +707,176 @@ html.light .tl-row code { background: rgba(11, 11, 15, 0.05); }
 }
 @media (max-width: 768px) { .hermes-fab { display: none; } }
 
+/* Bubble (FAB-Klick → kleines Input in der Mitte) */
+.hermes-bubble-bg {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(0, 0, 0, 0.25);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  display: grid; place-items: center;
+}
+.hermes-bubble {
+  width: min(560px, 92vw); padding: 18px 18px 14px;
+  border-radius: 18px;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.hermes-bubble-hint {
+  font: 500 12.5px/1 var(--mono); color: var(--ink-3);
+  letter-spacing: 0.02em; padding: 0 4px;
+}
+
+/* Modal (Submit im Bubble → großes Chat-Modal) */
 .hermes-modal-bg {
-  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45);
+  position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.45);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-  display: grid; place-items: center; z-index: 50; padding: 24px;
+  display: grid; place-items: center; padding: 24px;
 }
 .hermes-modal {
-  width: min(1100px, 100%); height: min(82vh, 820px);
-  border-radius: 18px; overflow: hidden;
+  width: min(1080px, 100%); height: min(85vh, 820px);
+  border-radius: 18px; overflow: hidden; position: relative;
   display: flex; flex-direction: column;
   box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.55);
 }
-.hermes-modal-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 16px; border-bottom: 1px solid var(--line-1);
-  background: rgba(255, 255, 255, 0.02);
-}
-.hermes-modal-title {
-  font: 600 13.5px/1 var(--font); color: var(--ink-1);
-  letter-spacing: 0.02em;
-}
-.hermes-modal-actions { display: inline-flex; align-items: center; gap: 6px; }
-.hermes-modal-icon-btn {
+.hermes-modal-close {
+  position: absolute; top: 10px; right: 10px; z-index: 5;
   display: inline-grid; place-items: center; width: 28px; height: 28px;
   border-radius: 8px; border: 1px solid var(--line-1);
-  background: transparent; color: var(--ink-2); cursor: pointer;
+  background: rgba(0, 0, 0, 0.25); color: var(--ink-2); cursor: pointer;
   transition: background 0.14s, color 0.14s;
 }
-.hermes-modal-icon-btn:hover { background: rgba(255, 255, 255, 0.06); color: var(--ink-1); }
-.hermes-modal-frame, .chat-page-frame { flex: 1; min-height: 0; }
+.hermes-modal-close:hover { background: rgba(0, 0, 0, 0.45); color: var(--ink-1); }
 
-.hermes-frame { position: relative; width: 100%; height: 100%; background: var(--glass-2); }
-.hermes-frame-iframe { width: 100%; height: 100%; border: 0; display: block; background: transparent; }
-.hermes-frame-loading {
-  position: absolute; inset: 0; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; gap: 14px;
-  color: var(--ink-2); font: 500 13px/1 var(--font);
-  pointer-events: none;
+/* Chat-Shell (Sidebar + Main) — shared zwischen Modal und Full-Page */
+.hermes-shell {
+  display: grid; grid-template-columns: 220px 1fr;
+  width: 100%; height: 100%; min-height: 0;
 }
-.hermes-frame-spinner {
-  width: 28px; height: 28px; border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.12); border-top-color: var(--brand);
-  animation: hermes-spin 0.9s linear infinite;
+.hermes-shell.is-embedded { grid-template-columns: 200px 1fr; }
+.hermes-sidebar {
+  display: flex; flex-direction: column; min-height: 0;
+  border-right: 1px solid var(--line-1);
+  background: rgba(255, 255, 255, 0.015);
+  transition: width 0.18s ease, opacity 0.18s ease;
 }
+.hermes-sidebar.is-collapsed { width: 0; opacity: 0; pointer-events: none; }
+.hermes-sidebar-head { padding: 12px 12px 8px; border-bottom: 1px solid var(--line-1); }
+.hermes-sidebar-new {
+  width: 100%; padding: 8px 10px; border-radius: 9px;
+  border: 1px solid var(--line-1); background: transparent;
+  color: var(--ink-1); font: 500 12.5px/1 var(--font); cursor: pointer;
+  display: inline-flex; align-items: center; gap: 7px; justify-content: center;
+  transition: background 0.14s, border-color 0.14s;
+}
+.hermes-sidebar-new:hover { background: rgba(255, 255, 255, 0.05); border-color: var(--line-2); }
+.hermes-sidebar-list { flex: 1; overflow-y: auto; padding: 8px 6px; display: flex; flex-direction: column; gap: 2px; }
+.hermes-sidebar-empty { padding: 12px 8px; font: 500 12px/1.4 var(--font); color: var(--ink-3); }
+.hermes-sidebar-row {
+  display: grid; grid-template-columns: 1fr auto; align-items: center;
+  border-radius: 8px; transition: background 0.12s;
+}
+.hermes-sidebar-row:hover { background: rgba(255, 255, 255, 0.05); }
+.hermes-sidebar-row.is-active { background: rgba(91, 140, 255, 0.13); }
+.hermes-sidebar-item {
+  text-align: left; border: 0; background: transparent; color: var(--ink-1);
+  font: 500 12.5px/1.3 var(--font); padding: 8px 8px; cursor: pointer;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.hermes-sidebar-del {
+  border: 0; background: transparent; color: var(--ink-3); cursor: pointer;
+  padding: 6px 8px; opacity: 0; transition: opacity 0.12s, color 0.12s;
+}
+.hermes-sidebar-row:hover .hermes-sidebar-del { opacity: 1; }
+.hermes-sidebar-del:hover { color: var(--danger); }
+
+.hermes-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+.hermes-main-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-bottom: 1px solid var(--line-1);
+  background: rgba(255, 255, 255, 0.02);
+}
+.hermes-sidebar-toggle {
+  display: inline-grid; place-items: center; width: 26px; height: 26px;
+  border-radius: 7px; border: 1px solid var(--line-1);
+  background: transparent; color: var(--ink-2); cursor: pointer;
+}
+.hermes-sidebar-toggle:hover { background: rgba(255, 255, 255, 0.06); color: var(--ink-1); }
+.hermes-main-title { font: 600 13px/1 var(--font); color: var(--ink-1); }
+.hermes-main-as { font-weight: 400; color: var(--ink-3); }
+.hermes-main-spacer { flex: 1; }
+.hermes-main-body { flex: 1; overflow-y: auto; padding: 18px 18px; min-height: 0; }
+.hermes-main-foot { padding: 12px 14px; border-top: 1px solid var(--line-1); background: rgba(255, 255, 255, 0.015); }
+
+/* Message-Liste */
+.hermes-msg-empty {
+  height: 100%; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px;
+  color: var(--ink-2); text-align: center; padding: 24px;
+}
+.hermes-msg-empty h3 { font: 600 16px/1.2 var(--font); color: var(--ink-1); margin: 0; }
+.hermes-msg-empty p { font: 400 13px/1.5 var(--font); color: var(--ink-3); margin: 0; max-width: 360px; }
+
+.hermes-msg-list { display: flex; flex-direction: column; gap: 12px; }
+.hermes-msg { display: flex; gap: 8px; max-width: 100%; }
+.hermes-msg-user { justify-content: flex-end; }
+.hermes-msg-assistant { justify-content: flex-start; }
+.hermes-msg-system { justify-content: center; }
+.hermes-msg-avatar {
+  display: inline-grid; place-items: center; width: 26px; height: 26px;
+  flex: none; border-radius: 50%;
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  color: #fff; font: 600 11px/1 var(--font);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+}
+.hermes-msg-bubble {
+  font: 400 13.5px/1.5 var(--font); color: var(--ink-1);
+  padding: 9px 13px; border-radius: 14px; max-width: 76%;
+  white-space: pre-wrap; word-break: break-word;
+  border: 1px solid var(--line-1); background: rgba(255, 255, 255, 0.04);
+}
+.hermes-msg-user .hermes-msg-bubble {
+  background: linear-gradient(135deg, rgba(91, 140, 255, 0.18), rgba(139, 107, 255, 0.18));
+  border-color: rgba(91, 140, 255, 0.32);
+}
+.hermes-msg-bubble.is-system {
+  font: 500 11.5px/1.4 var(--mono); color: var(--warn);
+  background: rgba(242, 184, 75, 0.08); border-color: rgba(242, 184, 75, 0.28);
+  max-width: 80%;
+}
+.hermes-msg-bubble.is-typing {
+  display: inline-flex; align-items: center; gap: 8px;
+  font: 500 12px/1 var(--font); color: var(--ink-3);
+}
+.hermes-spin { animation: hermes-spin 0.9s linear infinite; }
 @keyframes hermes-spin { to { transform: rotate(360deg); } }
-.hermes-frame-empty {
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 8px; height: 100%; padding: 24px; text-align: center;
-  color: var(--ink-2); font: 500 13px/1.5 var(--font);
-}
-.hermes-frame-empty .muted { color: var(--ink-3); font-size: 12px; }
-.hermes-frame-empty code { padding: 2px 6px; border-radius: 5px; background: rgba(255, 255, 255, 0.06); }
 
+/* Input (Bubble + Shell) */
+.hermes-input {
+  display: flex; align-items: flex-end; gap: 8px;
+  padding: 8px 10px; border-radius: 14px;
+  border: 1px solid var(--line-1); background: rgba(255, 255, 255, 0.04);
+  transition: border-color 0.14s, background 0.14s;
+}
+.hermes-input:focus-within { border-color: var(--line-3); background: rgba(255, 255, 255, 0.06); }
+.hermes-input-ta {
+  flex: 1; min-width: 0; resize: none; outline: none; border: 0;
+  background: transparent; color: var(--ink-1);
+  font: 400 13.5px/1.45 var(--font); padding: 6px 4px;
+  max-height: 180px; overflow-y: auto;
+}
+.hermes-input-ta::placeholder { color: var(--ink-3); }
+.hermes-input-send {
+  display: inline-grid; place-items: center; width: 32px; height: 32px;
+  flex: none; border-radius: 10px; border: 0; cursor: pointer;
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  color: #fff; transition: filter 0.14s, transform 0.14s;
+}
+.hermes-input-send:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
+.hermes-input-send:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Chat-Page (Full-Page-Variante) */
 .chat-page {
   display: flex; flex-direction: column;
   height: calc(100vh - 130px);
   border-radius: 16px; overflow: hidden;
-  border: 1px solid var(--line-1);
-  background: var(--glass);
-  -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
 }
 
 /* ─── Card-rise animation ─── */
