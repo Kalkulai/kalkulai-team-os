@@ -126,6 +126,9 @@ export function KanbanBoard({
     const task = tasks.find((t) => t.id === taskId);
     if (!task || task.status === targetCol) return;
 
+    const prevTasks = tasks;
+    const prevDone = doneTasks;
+
     if (targetCol === 'done') {
       setTasks((prev) => prev.filter((t) => t.id !== taskId));
       setDoneTasks((prev) =>
@@ -140,22 +143,26 @@ export function KanbanBoard({
     }
 
     try {
-      if (task.kind === 'step') {
-        await fetch(`/api/kpis/${encodeURIComponent(taskId)}`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
-          body: JSON.stringify({ completed: targetCol === 'done' }),
-        });
-      } else {
-        await fetch('/api/tasks/status', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
-          body: JSON.stringify({ issueId: taskId, status: targetCol }),
-        });
+      const res = task.kind === 'step'
+        ? await fetch(`/api/kpis/${encodeURIComponent(taskId)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
+            body: JSON.stringify({ completed: targetCol === 'done' }),
+          })
+        : await fetch('/api/tasks/status', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
+            body: JSON.stringify({ issueId: taskId, status: targetCol }),
+          });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status}: ${text.slice(0, 300)}`);
       }
       router.refresh();
-    } catch {
-      window.location.reload();
+    } catch (err) {
+      console.error('[Kanban] Persist failed, rolling back optimistic state', err);
+      setTasks(prevTasks);
+      setDoneTasks(prevDone);
     }
   }
 

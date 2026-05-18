@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Check, Pencil, X } from 'lucide-react';
 import type { KpiWithWeek } from '@/types';
-import { differenceInCalendarDays, format, parseISO } from 'date-fns';
+import { differenceInCalendarDays, format, parseISO, startOfWeek } from 'date-fns';
 import { de } from 'date-fns/locale';
 
 const SECRET = process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? '';
@@ -149,11 +149,22 @@ export function ProjectsTracker({ userId }: { userId: string }) {
     );
   }
 
-  const visibleGroups = groups.filter(({ steps }) => {
-    const total = steps.length;
-    const done = steps.filter((s) => s.completed).length;
-    return !(total > 0 && done === total);
-  });
+  const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+  const visibleGroups = groups
+    .filter(({ steps }) => {
+      const total = steps.length;
+      const done = steps.filter((s) => s.completed).length;
+      const isComplete = total > 0 && done === total;
+      if (!isComplete) return true;
+      const ts = projectCompletedAt(steps);
+      return ts !== null && ts.getTime() >= weekStart.getTime();
+    })
+    .sort((a, b) => {
+      const aComplete = a.steps.length > 0 && a.steps.every((s) => s.completed);
+      const bComplete = b.steps.length > 0 && b.steps.every((s) => s.completed);
+      if (aComplete !== bComplete) return aComplete ? 1 : -1;
+      return 0;
+    });
 
   return (
     <div>
@@ -288,6 +299,18 @@ function sortSteps(a: KpiWithWeek, b: KpiWithWeek): number {
   if (a.due_date) return -1;
   if (b.due_date) return 1;
   return a.position - b.position;
+}
+
+function projectCompletedAt(steps: KpiWithWeek[]): Date | null {
+  let max: Date | null = null;
+  for (const s of steps) {
+    if (!s.completed_at) continue;
+    try {
+      const d = parseISO(s.completed_at);
+      if (!max || d.getTime() > max.getTime()) max = d;
+    } catch { /* ignore */ }
+  }
+  return max;
 }
 
 function hasOverdueOpenStep(steps: KpiWithWeek[]): boolean {

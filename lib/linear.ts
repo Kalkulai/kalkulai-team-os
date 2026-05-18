@@ -13,6 +13,10 @@ async function gql(query: string, variables: Record<string, unknown> = {}): Prom
     body: JSON.stringify({ query, variables }),
     cache: 'no-store',
   });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`Linear API ${res.status}: ${text.slice(0, 500)}`);
+  }
   const json = await res.json();
   if (json.errors) throw new Error(String(json.errors[0].message));
   return json.data as Record<string, unknown>;
@@ -97,11 +101,15 @@ export async function getAllActiveIssues(): Promise<LinearIssue[]> {
 }
 
 export async function setIssueStatus(issueId: string, stateId: string): Promise<void> {
-  await gql(`
+  const data = await gql(`
     mutation UpdateIssueStatus($id: String!, $stateId: String!) {
       issueUpdate(id: $id, input: { stateId: $stateId }) { success }
     }
   `, { id: issueId, stateId });
+  const ok = (data as { issueUpdate?: { success?: boolean } } | null)?.issueUpdate?.success === true;
+  if (!ok) {
+    throw new Error(`Linear issueUpdate returned success=false for issue ${issueId}`);
+  }
 }
 
 export async function updateIssue(

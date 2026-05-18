@@ -275,6 +275,8 @@ Mapping auf Linear-States (via Env-Vars):
 | `todo` | `LINEAR_TODO_STATE_ID` |
 | `in-progress` | `LINEAR_IN_PROGRESS_STATE_ID` |
 | `on-hold` | `LINEAR_ON_HOLD_STATE_ID` (Fallback: `LINEAR_IN_PROGRESS_STATE_ID` wenn nicht gesetzt) |
+
+**Wichtig für Cross-Device-Sync von `on-hold`:** Das Read-Mapping in `lib/unified-tasks.ts:deriveLinearStatus` erkennt einen Linear-State als `on-hold` per Regex `/hold|block/i` auf `state.name`. Der Linear-State, auf den `LINEAR_ON_HOLD_STATE_ID` zeigt, MUSS daher „On Hold" oder „Blocked" (oder Variante mit „hold"/„block") im Namen tragen — sonst kommt er nach Page-Refresh als `todo` zurück. Aktueller State im KAL-Team: „On Hold" (ID `f2bd4842-1fbe-4cbf-a5a2-dd2064c810dc`, type `started`).
 | `done` | `LINEAR_DONE_STATE_ID` |
 
 Dieser Endpoint wird vom Kanban-Board (`components/dashboard/KanbanBoard.tsx`) aufgerufen wenn ein Task per Drag & Drop in eine andere Spalte gezogen wird.
