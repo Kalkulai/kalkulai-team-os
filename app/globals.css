@@ -711,13 +711,24 @@ html.light .tl-row code { background: rgba(11, 11, 15, 0.05); }
 .hermes-bubble-catcher {
   position: fixed; inset: 0; z-index: 44; background: transparent;
 }
+@keyframes hermes-bubble-slide {
+  from { opacity: 0; transform: translateX(40px) scaleX(0.92); }
+  to   { opacity: 1; transform: translateX(0) scaleX(1); }
+}
 .hermes-bubble {
-  position: fixed; bottom: 32px; right: 100px; z-index: 46;
-  width: min(440px, calc(100vw - 130px));
+  position: fixed !important;
+  right: 100px !important;
+  bottom: 36px !important;
+  left: auto !important;
+  top: auto !important;
+  z-index: 46;
+  width: min(420px, calc(100vw - 160px));
   padding: 10px 12px 10px 16px;
   border-radius: 26px;
   display: flex; align-items: center; gap: 10px;
-  box-shadow: 0 12px 36px -10px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 14px 40px -12px rgba(0, 0, 0, 0.6);
+  transform-origin: right center;
+  animation: hermes-bubble-slide 0.28s cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
 .hermes-bubble-hint {
   font: 500 12.5px/1 var(--mono); color: var(--ink-3);
@@ -729,7 +740,11 @@ html.light .tl-row code { background: rgba(11, 11, 15, 0.05); }
   border: 1px solid var(--line-1); background: rgba(255, 255, 255, 0.04);
 }
 @media (max-width: 768px) {
-  .hermes-bubble { right: 16px; bottom: 16px; width: calc(100vw - 32px); }
+  .hermes-bubble {
+    right: 16px !important;
+    bottom: 90px !important;
+    width: calc(100vw - 32px);
+  }
 }
 
 /* Modal (Submit im Bubble → großes Chat-Modal) */
@@ -880,10 +895,11 @@ html.light .tl-row code { background: rgba(11, 11, 15, 0.05); }
 .hermes-input-send:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
 .hermes-input-send:disabled { opacity: 0.4; cursor: not-allowed; }
 
-/* Chat-Page (Full-Page-Variante) */
+/* Chat-Page (Full-Page-Variante mit ViewToggle drüber) */
 .chat-page {
   display: flex; flex-direction: column;
-  height: calc(100vh - 130px);
+  height: calc(100vh - 200px);
+  min-height: 480px;
   border-radius: 16px; overflow: hidden;
 }
 
