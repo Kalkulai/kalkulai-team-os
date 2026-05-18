@@ -23,8 +23,8 @@ export interface UnifiedTask {
 export function deriveLinearStatus(issue: LinearIssue): UnifiedStatus {
   const t = issue.state.type;
   if (t === 'completed' || t === 'cancelled') return 'done';
-  if (t === 'started') return 'in-progress';
   if (/hold|block/i.test(issue.state.name)) return 'on-hold';
+  if (t === 'started') return 'in-progress';
   return 'todo';
 }
 

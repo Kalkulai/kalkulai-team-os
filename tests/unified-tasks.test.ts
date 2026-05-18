@@ -75,6 +75,12 @@ describe('deriveLinearStatus', () => {
   it('name On Hold → on-hold', () => {
     expect(deriveLinearStatus(makeIssue({ state: { name: 'On Hold', type: 'unstarted' } }))).toBe('on-hold');
   });
+  it('name On Hold with type=started → on-hold (regression: name check beats type check)', () => {
+    expect(deriveLinearStatus(makeIssue({ state: { name: 'On Hold', type: 'started' } }))).toBe('on-hold');
+  });
+  it('name Blocked with type=started → on-hold', () => {
+    expect(deriveLinearStatus(makeIssue({ state: { name: 'Blocked', type: 'started' } }))).toBe('on-hold');
+  });
   it('unstarted → todo', () => {
     expect(deriveLinearStatus(makeIssue({ state: { name: 'Todo', type: 'unstarted' } }))).toBe('todo');
   });
