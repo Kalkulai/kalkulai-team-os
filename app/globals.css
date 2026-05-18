@@ -683,6 +683,91 @@ html.light .tl-row code { background: rgba(11, 11, 15, 0.05); }
 }
 @keyframes modalRise { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: none; } }
 
+/* ─── Hermes Chat Widget ─── */
+@property --hermes-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes hermes-orb-spin { to { --hermes-angle: 360deg; } }
+.hermes-orb {
+  border-radius: 50%;
+  background: conic-gradient(from var(--hermes-angle),
+    var(--brand), var(--brand-2), var(--brand-3), var(--brand-2), var(--brand));
+  animation: hermes-orb-spin 5s linear infinite;
+  box-shadow: 0 0 18px -4px rgba(91, 140, 255, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.12) inset;
+}
+.hermes-fab {
+  position: fixed; bottom: 26px; right: 32px;
+  width: 60px; height: 60px; padding: 4px;
+  border-radius: 50%; border: 0; background: transparent; cursor: pointer;
+  z-index: 45;
+  display: grid; place-items: center;
+  animation: fabPop 0.4s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+@media (max-width: 768px) { .hermes-fab { display: none; } }
+
+.hermes-modal-bg {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  display: grid; place-items: center; z-index: 50; padding: 24px;
+}
+.hermes-modal {
+  width: min(1100px, 100%); height: min(82vh, 820px);
+  border-radius: 18px; overflow: hidden;
+  display: flex; flex-direction: column;
+  box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.55);
+}
+.hermes-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; border-bottom: 1px solid var(--line-1);
+  background: rgba(255, 255, 255, 0.02);
+}
+.hermes-modal-title {
+  font: 600 13.5px/1 var(--font); color: var(--ink-1);
+  letter-spacing: 0.02em;
+}
+.hermes-modal-actions { display: inline-flex; align-items: center; gap: 6px; }
+.hermes-modal-icon-btn {
+  display: inline-grid; place-items: center; width: 28px; height: 28px;
+  border-radius: 8px; border: 1px solid var(--line-1);
+  background: transparent; color: var(--ink-2); cursor: pointer;
+  transition: background 0.14s, color 0.14s;
+}
+.hermes-modal-icon-btn:hover { background: rgba(255, 255, 255, 0.06); color: var(--ink-1); }
+.hermes-modal-frame, .chat-page-frame { flex: 1; min-height: 0; }
+
+.hermes-frame { position: relative; width: 100%; height: 100%; background: var(--glass-2); }
+.hermes-frame-iframe { width: 100%; height: 100%; border: 0; display: block; background: transparent; }
+.hermes-frame-loading {
+  position: absolute; inset: 0; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 14px;
+  color: var(--ink-2); font: 500 13px/1 var(--font);
+  pointer-events: none;
+}
+.hermes-frame-spinner {
+  width: 28px; height: 28px; border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.12); border-top-color: var(--brand);
+  animation: hermes-spin 0.9s linear infinite;
+}
+@keyframes hermes-spin { to { transform: rotate(360deg); } }
+.hermes-frame-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 8px; height: 100%; padding: 24px; text-align: center;
+  color: var(--ink-2); font: 500 13px/1.5 var(--font);
+}
+.hermes-frame-empty .muted { color: var(--ink-3); font-size: 12px; }
+.hermes-frame-empty code { padding: 2px 6px; border-radius: 5px; background: rgba(255, 255, 255, 0.06); }
+
+.chat-page {
+  display: flex; flex-direction: column;
+  height: calc(100vh - 130px);
+  border-radius: 16px; overflow: hidden;
+  border: 1px solid var(--line-1);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
+}
+
 /* ─── Card-rise animation ─── */
 @keyframes card-rise { from { opacity: 0; transform: translateY(10px) scale(0.99); } to { opacity: 1; transform: none; } }
 .card-rise { animation: card-rise 0.42s cubic-bezier(0.22, 0.61, 0.36, 1) both; transition: transform 0.25s ease, box-shadow 0.25s ease; }

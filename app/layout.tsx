@@ -5,6 +5,7 @@ import { PageSwitcher } from '@/components/PageSwitcher';
 import { MemberPill } from '@/components/MemberPill';
 import { SyncPill } from '@/components/SyncPill';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { HermesWidget } from '@/components/hermes/HermesWidget';
 import './globals.css';
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' });
@@ -55,6 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </header>
 
         <main className="px-7 pt-6 pb-20 max-md:px-4 max-md:pb-15">{children}</main>
+        <HermesWidget />
       </body>
     </html>
   );
