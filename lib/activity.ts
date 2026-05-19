@@ -116,8 +116,11 @@ export async function buildActivityFeed(
     try {
       const sinceIso = new Date(now.getTime() - 2 * 86_400_000).toISOString();
       const commits = await getCommitsByAuthorSince(member.github_username, sinceIso, 50);
+      console.log(`[activity/github] ${member.github_username}: ${commits.length} commits since ${sinceIso}`);
+      let added = 0;
       for (const c of commits) {
         const dt = parseISO(c.date);
+        if (!Number.isFinite(dt.getTime())) continue;
         const time = format(dt, 'HH:mm');
         const repoShort = c.repo.split('/').pop() ?? c.repo;
         const ev: ActivityEvent = {
@@ -127,12 +130,15 @@ export async function buildActivityFeed(
           source: 'GitHub',
           kind: 'commit',
         };
-        if (isSameDay(dt, now)) todayEvents.push(ev);
-        else if (isYesterday(dt)) yesterdayEvents.push(ev);
+        if (isSameDay(dt, now)) { todayEvents.push(ev); added++; }
+        else if (isYesterday(dt)) { yesterdayEvents.push(ev); added++; }
       }
-    } catch {
-      // GitHub-Search-API rate-limit / Token-Issue → silent skip
+      console.log(`[activity/github] ${member.github_username}: ${added}/${commits.length} commits fit today/yesterday window`);
+    } catch (err) {
+      console.error('[activity/github] commit-search failed:', err instanceof Error ? err.message : String(err));
     }
+  } else {
+    console.log(`[activity/github] member has no github_username (${member.name})`);
   }
 
   // Linear-Issues die dieser Member heute/gestern completed hat → ok Events
