@@ -71,7 +71,7 @@ export default function MemberAnalyticsPage() {
           <ChevronLeft size={14} aria-hidden /> Team
         </Link>
         <h1 className="analytics-title">
-          {member ? member.name : 'Member'} <span className="analytics-sub">— Analytics</span>
+          {member ? member.name : 'Member'} <span className="analytics-sub">— Personal-Analytics</span>
         </h1>
       </div>
       <div className="analytics-toolbar">
@@ -89,7 +89,7 @@ export default function MemberAnalyticsPage() {
         )}
       </div>
       {loading && <p className="text-[13px] text-[var(--ink-3)]">Lade …</p>}
-      {!loading && data && <MetricGrid metrics={data} range={range} />}
+      {!loading && data && <MetricGrid metrics={data} range={range} mode="personal" />}
       {!loading && !data && (
         <p className="text-[13px] text-[var(--ink-3)]">
           Noch keine Metriken. Der Snapshot-Cron läuft täglich 23:30 UTC.

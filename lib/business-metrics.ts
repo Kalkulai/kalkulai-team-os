@@ -148,20 +148,22 @@ export async function getDailySparkline(
 }
 
 export const METRIC_KEYS = {
-  // DORA
+  // DORA / Dev velocity (personal)
   DEPLOYS_PER_DAY: 'deploys_per_day',
   LEAD_TIME_MIN_P50: 'lead_time_min_p50',
-  // Health
+  COMMITS_COUNT: 'commits_count',
+  TASKS_COMPLETED: 'tasks_completed',
+  // Health (personal)
   BUG_FIX_HOURS_P50: 'bug_fix_hours_p50',
   BUGS_OPENED: 'bugs_opened',
   BUGS_CLOSED: 'bugs_closed',
-  // Sales
+  // Sales (company)
   PIPELINE_VALUE_EUR: 'pipeline_value_eur',
   DEMOS_COMPLETED: 'demos_completed',
   DEMO_TO_PILOT_PCT: 'demo_to_pilot_pct',
-  // Pilot
+  // Pilot (company)
   PILOTS_ACTIVE: 'pilots_active',
-  // Founder
+  // Founder (personal)
   CUSTOMER_CONVERSATIONS: 'customer_conversations',
   COMMITMENT_HIT_PCT: 'commitment_hit_pct',
   DEEP_WORK_BLOCKS: 'deep_work_blocks',

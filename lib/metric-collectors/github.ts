@@ -29,14 +29,24 @@ export async function collectGithubMetrics(): Promise<Array<{ memberId: string; 
       getCommitsByAuthorSince(m.github_username, sinceIso, 50),
       getMergedPRsByAuthorSince(m.github_username, sinceIso, 30),
     ]);
+    const reposTouched = Array.from(new Set(commits.map((c) => c.repo)));
     await recordMetric({
       memberId: m.id,
       metricKey: METRIC_KEYS.DEPLOYS_PER_DAY,
       value: merges.length,
       meta: {
         merges: merges.map((p) => ({ repo: p.repo, number: p.number, title: p.title })),
-        commits_count: commits.length,
-        repos_touched: Array.from(new Set(commits.map((c) => c.repo))),
+        repos_touched: reposTouched,
+        since: sinceIso,
+      },
+    });
+    await recordMetric({
+      memberId: m.id,
+      metricKey: METRIC_KEYS.COMMITS_COUNT,
+      value: commits.length,
+      meta: {
+        repos_touched: reposTouched,
+        sample: commits.slice(0, 10).map((c) => ({ repo: c.repo, sha: c.sha, message: c.message })),
         since: sinceIso,
       },
     });
