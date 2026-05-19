@@ -3,6 +3,7 @@ import { requireApiAuth } from '@/lib/api-auth';
 import { collectLinearMetrics } from '@/lib/metric-collectors/linear';
 import { collectGithubMetrics } from '@/lib/metric-collectors/github';
 import { collectHubspotMetrics } from '@/lib/metric-collectors/hubspot';
+import { collectCalendarMetrics } from '@/lib/metric-collectors/calendar';
 import { syncWeeklyHealthReport } from '@/lib/vault-sync';
 
 export const runtime = 'nodejs';
@@ -23,9 +24,10 @@ export async function POST(req: NextRequest) {
   const errors: string[] = [];
 
   for (const [name, fn] of [
-    ['linear',  collectLinearMetrics],
-    ['github',  collectGithubMetrics],
-    ['hubspot', collectHubspotMetrics],
+    ['linear',   collectLinearMetrics],
+    ['github',   collectGithubMetrics],
+    ['hubspot',  collectHubspotMetrics],
+    ['calendar', collectCalendarMetrics],
   ] as const) {
     try {
       results[name] = await fn();
