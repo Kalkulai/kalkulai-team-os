@@ -2,9 +2,9 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Calendar, Users, MessageCircle, Settings, ChevronDown, Check } from 'lucide-react';
+import { Calendar, Users, MessageCircle, Settings, ChevronDown, Check, Building2 } from 'lucide-react';
 
-type Route = '/dashboard' | '/dashboard/team' | '/dashboard/chat' | '/settings';
+type Route = '/dashboard' | '/dashboard/team' | '/dashboard/chat' | '/dashboard/company' | '/settings';
 
 interface PageDef {
   href: Route;
@@ -13,19 +13,22 @@ interface PageDef {
 }
 
 const PAGES: PageDef[] = [
-  { href: '/dashboard',      title: 'Mein Tag',     Icon: Calendar },
-  { href: '/dashboard/chat', title: 'Chat',         Icon: MessageCircle },
-  { href: '/dashboard/team', title: 'Team',         Icon: Users },
-  { href: '/settings',       title: 'Einstellungen', Icon: Settings },
+  { href: '/dashboard',         title: 'Mein Tag',     Icon: Calendar },
+  { href: '/dashboard/chat',    title: 'Chat',         Icon: MessageCircle },
+  { href: '/dashboard/team',    title: 'Team',         Icon: Users },
+  { href: '/dashboard/company', title: 'Firma',        Icon: Building2 },
+  { href: '/settings',          title: 'Einstellungen', Icon: Settings },
 ];
 
 function activePageFor(pathname: string | null): PageDef {
   if (!pathname) return PAGES[0];
-  // /dashboard/team and /dashboard/chat must win over /dashboard
+  // sub-routes must win over /dashboard
   const team = PAGES.find((p) => p.href === '/dashboard/team');
   if (team && pathname.startsWith('/dashboard/team')) return team;
   const chat = PAGES.find((p) => p.href === '/dashboard/chat');
   if (chat && pathname.startsWith('/dashboard/chat')) return chat;
+  const company = PAGES.find((p) => p.href === '/dashboard/company');
+  if (company && pathname.startsWith('/dashboard/company')) return company;
   const settings = PAGES.find((p) => p.href === '/settings');
   if (settings && pathname.startsWith('/settings')) return settings;
   return PAGES[0];

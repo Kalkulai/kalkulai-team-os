@@ -967,6 +967,101 @@ html.light .tl-row code { background: rgba(11, 11, 15, 0.05); }
 .metric-widget.is-bad { border-color: rgba(255, 107, 92, 0.28); }
 .metric-widget.is-bad .metric-spark { color: var(--danger); }
 
+/* ─── Firma-Page (Cross-Member-Aggregate, KPIs + Velocity + Heatmap) ─── */
+.company-page { display: flex; flex-direction: column; gap: 18px; }
+.company-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-bottom: 4px;
+}
+.company-title { font: 600 18px/1.2 var(--font); color: var(--ink-1); margin: 0; }
+.company-sub { font-weight: 400; color: var(--ink-3); font-size: 14px; }
+
+.company-hero {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+}
+@media (max-width: 900px) { .company-hero { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 540px) { .company-hero { grid-template-columns: 1fr; } }
+.company-hero-tile {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 16px 18px; border-radius: 14px; min-height: 92px;
+}
+.company-hero-label {
+  font: 500 11px/1 var(--mono); color: var(--ink-3);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.company-hero-value {
+  font: 600 30px/1 var(--font); color: var(--ink-1);
+  display: inline-flex; align-items: baseline; gap: 4px;
+}
+.company-hero-unit { font: 500 13px/1 var(--mono); color: var(--ink-3); }
+
+.company-section { display: flex; flex-direction: column; gap: 4px; }
+.company-section-title { font: 600 14px/1.2 var(--font); color: var(--ink-1); margin: 0; }
+.company-section-sub { font: 400 12px/1.4 var(--font); color: var(--ink-3); margin: 0 0 8px 0; }
+
+/* Team-Velocity (30 stacked bars) */
+.company-velocity {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 14px; border-radius: 14px;
+  background: var(--glass); border: 1px solid var(--line-1);
+}
+.company-velocity-bars {
+  display: grid; grid-template-columns: repeat(30, 1fr); gap: 2px;
+  align-items: end; height: 140px;
+}
+.company-velocity-col {
+  display: flex; align-items: end; height: 100%;
+}
+.company-velocity-stack {
+  display: flex; flex-direction: column-reverse; gap: 1px;
+  width: 100%; height: 100%; justify-content: flex-start;
+}
+.company-velocity-seg {
+  width: 100%; height: var(--seg-h, 0%);
+  background: var(--seg-bg, var(--brand));
+  border-radius: 2px; opacity: 0.85;
+  transition: opacity 0.14s;
+}
+.company-velocity-seg:hover { opacity: 1; }
+.company-velocity-legend {
+  display: flex; flex-wrap: wrap; gap: 12px;
+  font: 500 12px/1 var(--font); color: var(--ink-2);
+  padding-top: 4px;
+}
+.company-velocity-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.company-velocity-dot {
+  display: inline-block; width: 9px; height: 9px; border-radius: 999px;
+  background: var(--dot-bg, var(--brand));
+}
+.company-velocity-legend-num { color: var(--ink-3); font-family: var(--mono); }
+
+/* Weekday-Heatmap */
+.company-heatmap {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 14px; border-radius: 14px;
+  background: var(--glass); border: 1px solid var(--line-1);
+}
+.company-heatmap-head,
+.company-heatmap-row {
+  display: grid; grid-template-columns: 100px repeat(7, 1fr); gap: 4px;
+  align-items: center;
+}
+.company-heatmap-corner { height: 18px; }
+.company-heatmap-weekday {
+  font: 500 11px/1 var(--mono); color: var(--ink-3);
+  text-align: center; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.company-heatmap-name {
+  font: 500 12px/1 var(--font); color: var(--ink-1);
+  padding-right: 6px;
+}
+.company-heatmap-cell {
+  height: 28px; border-radius: 6px;
+  background: var(--cell-bg, rgba(255, 255, 255, 0.04));
+  transition: transform 0.14s;
+}
+.company-heatmap-cell:hover { transform: scale(1.06); }
+
 /* ─── Custom DatePicker (react-day-picker, token-themed) ─── */
 .datepicker { position: relative; display: inline-block; }
 .datepicker-trigger {
