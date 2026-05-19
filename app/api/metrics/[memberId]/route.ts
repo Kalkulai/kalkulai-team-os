@@ -35,7 +35,7 @@ export async function GET(
 
   const sparklines: Record<string, Array<{ day: string; value: number }>> = {};
   for (const key of ALL_KEYS) {
-    sparklines[key] = await getDailySparkline(memberId, key, 14);
+    sparklines[key] = await getDailySparkline(memberId, key, 30);
   }
 
   return NextResponse.json({

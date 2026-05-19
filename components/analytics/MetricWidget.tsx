@@ -21,16 +21,31 @@ function trendColor(delta?: number | null, threshold?: Props['threshold'], curre
 
 function Sparkline({ data }: { data: Props['spark'] }) {
   if (data.length === 0) return <svg className="metric-spark" viewBox="0 0 100 30" aria-hidden />;
-  const max = Math.max(1, ...data.map((d) => d.value));
+  const values = data.map((d) => d.value);
+  const max = Math.max(1, ...values);
+  const min = Math.min(...values);
   const w = 100;
   const h = 30;
   const step = data.length > 1 ? w / (data.length - 1) : w;
-  const pts = data
-    .map((d, i) => `${(i * step).toFixed(2)},${(h - (d.value / max) * (h - 2) - 1).toFixed(2)}`)
-    .join(' ');
+  const yFor = (v: number) => h - (v / max) * (h - 2) - 1;
+  const pts = data.map((d, i) => `${(i * step).toFixed(2)},${yFor(d.value).toFixed(2)}`).join(' ');
+
+  const maxIdx = values.lastIndexOf(max);
+  const minIdx = values.indexOf(min);
+  const todayIdx = data.length - 1;
+
   return (
     <svg className="metric-spark" viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden>
       <polyline points={pts} fill="none" strokeWidth="1.4" />
+      {/* Min/max highlight dots (drop when flat). */}
+      {max > min && (
+        <>
+          <circle cx={maxIdx * step} cy={yFor(max)} r="1.6" className="metric-spark-dot is-max" />
+          <circle cx={minIdx * step} cy={yFor(min)} r="1.4" className="metric-spark-dot is-min" />
+        </>
+      )}
+      {/* Today marker — bigger filled dot at the right edge. */}
+      <circle cx={todayIdx * step} cy={yFor(data[todayIdx].value)} r="1.9" className="metric-spark-dot is-today" />
     </svg>
   );
 }
