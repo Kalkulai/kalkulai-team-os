@@ -304,3 +304,93 @@ export async function getBranchesForLinearId(linearId: string): Promise<GitHubBr
   const all = await getActiveBranches();
   return all.filter((b) => b.name.toLowerCase().includes(linearId.toLowerCase()));
 }
+
+// ─── Repo-agnostic search-by-author ─────────────────────────────────────
+// Uses GitHub's search-API so we capture activity from ANY repo (incl.
+// other people's repos the member contributes to), not just the configured
+// REPOS list. Rate-limit: 30 req/min for search endpoints.
+
+interface SearchCommitItem {
+  sha: string;
+  html_url: string;
+  commit: { author: { date: string }; message: string };
+  repository: { full_name: string };
+}
+
+export interface AuthoredCommit {
+  sha: string;
+  url: string;
+  date: string;
+  message: string;
+  repo: string;
+}
+
+export async function getCommitsByAuthorSince(
+  githubUsername: string,
+  sinceIso: string,
+  perPage = 50,
+): Promise<AuthoredCommit[]> {
+  if (!githubUsername) return [];
+  const since = sinceIso.slice(0, 10);
+  const q = encodeURIComponent(`author:${githubUsername} author-date:>=${since}`);
+  const url = `/search/commits?q=${q}&per_page=${perPage}&sort=author-date&order=desc`;
+  try {
+    const data = await ghFetch<{ items?: SearchCommitItem[] }>(url);
+    const items = data.items ?? [];
+    const cutoff = new Date(sinceIso).getTime();
+    return items
+      .filter((c) => new Date(c.commit.author.date).getTime() >= cutoff)
+      .map((c) => ({
+        sha: c.sha,
+        url: c.html_url,
+        date: c.commit.author.date,
+        message: (c.commit.message ?? '').split('\n')[0],
+        repo: c.repository.full_name,
+      }));
+  } catch {
+    return [];
+  }
+}
+
+interface SearchIssueItem {
+  number: number;
+  title: string;
+  html_url: string;
+  closed_at: string | null;
+  repository_url: string;
+  pull_request?: { merged_at?: string | null };
+}
+
+export interface AuthoredPR {
+  number: number;
+  title: string;
+  url: string;
+  mergedAt: string;
+  repo: string;
+}
+
+export async function getMergedPRsByAuthorSince(
+  githubUsername: string,
+  sinceIso: string,
+  perPage = 30,
+): Promise<AuthoredPR[]> {
+  if (!githubUsername) return [];
+  const since = sinceIso.slice(0, 10);
+  const q = encodeURIComponent(`is:pr is:merged author:${githubUsername} merged:>=${since}`);
+  const url = `/search/issues?q=${q}&per_page=${perPage}&sort=updated&order=desc`;
+  try {
+    const data = await ghFetch<{ items?: SearchIssueItem[] }>(url);
+    const items = data.items ?? [];
+    const cutoff = new Date(sinceIso).getTime();
+    return items
+      .map((it) => {
+        const mergedAt = it.pull_request?.merged_at ?? it.closed_at ?? '';
+        const repo = it.repository_url.replace('https://api.github.com/repos/', '');
+        return { number: it.number, title: it.title, url: it.html_url, mergedAt, repo };
+      })
+      .filter((p) => p.mergedAt && new Date(p.mergedAt).getTime() >= cutoff)
+      .sort((a, b) => b.mergedAt.localeCompare(a.mergedAt));
+  } catch {
+    return [];
+  }
+}

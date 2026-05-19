@@ -8,6 +8,7 @@ import type { CompletedStep, CounterActivity } from '@/lib/kpis';
 vi.mock('@/lib/github', () => ({
   getActiveBranches: vi.fn(),
   getRecentlyOpenedPRs: vi.fn(),
+  getCommitsByAuthorSince: vi.fn().mockResolvedValue([]),
 }));
 vi.mock('@/lib/linear', () => ({
   getCompletedIssuesSince: vi.fn(),
@@ -25,7 +26,7 @@ vi.mock('@/lib/kpis', () => ({
 }));
 
 import { buildActivityFeed } from '@/lib/activity';
-import { getActiveBranches, getRecentlyOpenedPRs } from '@/lib/github';
+import { getActiveBranches, getRecentlyOpenedPRs, getCommitsByAuthorSince } from '@/lib/github';
 import { getCompletedIssuesSince, getCreatedIssuesSince } from '@/lib/linear';
 import { getCallsThisWeek } from '@/lib/hubspot';
 import { getSalesLogsSince } from '@/lib/supabase';
@@ -142,32 +143,26 @@ describe('buildActivityFeed', () => {
 
   // --- GitHub branches/commits -----------------------------------------
 
-  it('adds own commit on a branch as commit event', async () => {
-    vi.mocked(getActiveBranches).mockResolvedValue([
+  it('adds own commit as commit event (repo-agnostic via search-API)', async () => {
+    vi.mocked(getCommitsByAuthorSince).mockResolvedValue([
       {
-        name: 'feat/x',
-        commit: { sha: 'abc', url: '' },
-        lastCommitDate: todayMinusMinutes(30),
-        authorLogin: 'felix-gh',
+        sha: 'abc',
+        url: 'https://github.com/lp-kai/2nd-brain/commit/abc',
+        date: todayMinusMinutes(30),
+        message: 'feat: new skill',
+        repo: 'lp-kai/2nd-brain',
       },
     ]);
     const days = await buildActivityFeed(makeMember(), []);
     const today = days.find((d) => d.label === 'Heute')!;
     const commitEvents = today.events.filter((e) => e.kind === 'commit');
     expect(commitEvents).toHaveLength(1);
-    expect(commitEvents[0].code).toBe('feat/x');
+    expect(commitEvents[0].code).toBe('2nd-brain');
     expect(commitEvents[0].source).toBe('GitHub');
   });
 
-  it('ignores commits from other authors', async () => {
-    vi.mocked(getActiveBranches).mockResolvedValue([
-      {
-        name: 'feat/y',
-        commit: { sha: 'def', url: '' },
-        lastCommitDate: todayMinusMinutes(30),
-        authorLogin: 'someone-else',
-      },
-    ]);
+  it('ignores commits when search returns empty (other authors filtered upstream)', async () => {
+    vi.mocked(getCommitsByAuthorSince).mockResolvedValue([]);
     const days = await buildActivityFeed(makeMember(), []);
     expect(days.find((d) => d.label === 'Heute')!.events).toHaveLength(0);
   });

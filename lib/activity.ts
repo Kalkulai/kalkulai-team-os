@@ -1,5 +1,5 @@
 import type { TeamMember, CalendarEvent, HubSpotCall } from '@/types';
-import { getActiveBranches, getRecentlyOpenedPRs, type MergedPR } from './github';
+import { getActiveBranches, getRecentlyOpenedPRs, type MergedPR, getCommitsByAuthorSince } from './github';
 import { getCompletedIssuesSince, getCreatedIssuesSince } from './linear';
 import { getCallsThisWeek } from './hubspot';
 import { getSalesLogsSince } from './supabase';
@@ -109,18 +109,21 @@ export async function buildActivityFeed(
     }
   }
 
-  // Eigene aktive Branches → commit Events (heute/gestern)
+  // Eigene Commits (heute/gestern) — repo-agnostic via GitHub-Search-API,
+  // damit jede Aktivität auf JEDEM Repo des Members angezeigt wird, nicht
+  // nur die konfigurierten REPOS.
   if (member.github_username) {
     try {
-      const branches = await getActiveBranches();
-      for (const b of branches) {
-        if (b.authorLogin !== member.github_username || !b.lastCommitDate) continue;
-        const dt = parseISO(b.lastCommitDate);
+      const sinceIso = new Date(now.getTime() - 2 * 86_400_000).toISOString();
+      const commits = await getCommitsByAuthorSince(member.github_username, sinceIso, 50);
+      for (const c of commits) {
+        const dt = parseISO(c.date);
         const time = format(dt, 'HH:mm');
+        const repoShort = c.repo.split('/').pop() ?? c.repo;
         const ev: ActivityEvent = {
           time,
-          text: 'Letzter Commit auf',
-          code: b.name,
+          text: c.message.length > 70 ? `${c.message.slice(0, 70)}…` : c.message,
+          code: repoShort,
           source: 'GitHub',
           kind: 'commit',
         };
@@ -128,7 +131,7 @@ export async function buildActivityFeed(
         else if (isYesterday(dt)) yesterdayEvents.push(ev);
       }
     } catch {
-      // GitHub-Token fehlt o.ä. → silent skip; Empty-State im UI
+      // GitHub-Search-API rate-limit / Token-Issue → silent skip
     }
   }
 
