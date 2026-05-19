@@ -21,6 +21,28 @@ async function ghFetch<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export type GithubHealthStatus = 'ok' | 'unauthorized' | 'rate-limited' | 'unreachable';
+
+/** Cheap probe: /rate_limit needs only a valid token, no scope. */
+export async function getGithubHealth(): Promise<GithubHealthStatus> {
+  if (!TOKEN) return 'unauthorized';
+  try {
+    const res = await fetch('https://api.github.com/rate_limit', {
+      headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/vnd.github+json' },
+      cache: 'no-store',
+    });
+    if (res.status === 401 || res.status === 403) {
+      const body = await res.text().catch(() => '');
+      if (body.includes('Bad credentials') || res.status === 401) return 'unauthorized';
+      return 'rate-limited';
+    }
+    if (!res.ok) return 'unreachable';
+    return 'ok';
+  } catch {
+    return 'unreachable';
+  }
+}
+
 export function isBotBranch(b: { name: string; authorLogin?: string }): boolean {
   if (b.name.startsWith('dependabot/') || b.name.startsWith('renovate/')) return true;
   const a = b.authorLogin?.toLowerCase();

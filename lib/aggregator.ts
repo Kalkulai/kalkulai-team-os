@@ -6,7 +6,12 @@ import {
   getTasksCompletedThisWeek,
 } from './linear';
 import { getTodayEvents, countSalesCallsToday } from './calendar';
-import { getActiveBranches, getActiveBranchesByAuthor, getCommitsThisWeek } from './github';
+import {
+  getActiveBranches,
+  getActiveBranchesByAuthor,
+  getCommitsThisWeek,
+  getGithubHealth,
+} from './github';
 import type { GitHubBranch } from '@/types';
 import { getCallsThisWeek } from './hubspot';
 import { getTopUnprocessedInsights } from './notion';
@@ -22,6 +27,13 @@ import { format } from 'date-fns';
 export async function buildDailyBriefing(member: TeamMember): Promise<DailyBriefing> {
   const weekStart = currentWeekStart();
   const today = format(new Date(), 'yyyy-MM-dd');
+
+  // Surface GitHub auth state up-front. Silent 401s used to swallow every
+  // commit/branch call and leave the dashboard looking empty.
+  const ghHealth = await getGithubHealth();
+  if (ghHealth !== 'ok') {
+    console.error(`[briefing/github] sync disabled: ${ghHealth} (check GITHUB_TOKEN in Vercel env)`);
+  }
 
   const results = await Promise.allSettled([
     member.linear_user_id ? getIssuesForUser(member.linear_user_id) : Promise.resolve([]),
