@@ -967,6 +967,103 @@ html.light .tl-row code { background: rgba(11, 11, 15, 0.05); }
 .metric-widget.is-bad { border-color: rgba(255, 107, 92, 0.28); }
 .metric-widget.is-bad .metric-spark { color: var(--danger); }
 
+/* ─── Custom DatePicker (react-day-picker, token-themed) ─── */
+.datepicker { position: relative; display: inline-block; }
+.datepicker-trigger {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 10px; border-radius: 9px;
+  border: 1px solid var(--line-1); background: rgba(255, 255, 255, 0.04);
+  font: 500 12.5px/1 var(--font); color: var(--ink-1); cursor: pointer;
+  transition: background 0.14s, border-color 0.14s, color 0.14s;
+}
+.datepicker-trigger:hover:not(:disabled) {
+  border-color: var(--line-2); background: rgba(255, 255, 255, 0.07);
+}
+.datepicker-trigger:disabled { opacity: 0.45; cursor: not-allowed; }
+.datepicker-trigger.is-empty { color: var(--ink-3); }
+.datepicker-clear {
+  display: inline-grid; place-items: center; width: 16px; height: 16px;
+  border-radius: 4px; margin-left: 2px;
+  color: var(--ink-3); transition: background 0.14s, color 0.14s;
+}
+.datepicker-clear:hover { background: rgba(255, 255, 255, 0.08); color: var(--ink-1); }
+.datepicker-popover {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 60;
+  padding: 10px; border-radius: 14px;
+  background: var(--glass-2); border: 1px solid var(--line-1);
+  box-shadow: 0 24px 60px -16px rgba(0, 0, 0, 0.55);
+  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+}
+
+/* react-day-picker token overrides */
+.datepicker-popover .rdp-root {
+  --rdp-accent-color: var(--brand);
+  --rdp-accent-background-color: rgba(91, 140, 255, 0.2);
+  --rdp-day_button-width: 32px;
+  --rdp-day_button-height: 32px;
+  --rdp-day_button-border-radius: 8px;
+  font: 500 12.5px var(--font); color: var(--ink-1);
+}
+.datepicker-popover .rdp-caption_label { font-weight: 600; color: var(--ink-1); }
+.datepicker-popover .rdp-weekday { font: 500 11px/1 var(--mono); color: var(--ink-3); padding: 6px 0; }
+.datepicker-popover .rdp-day:not(.rdp-disabled):not(.rdp-selected) .rdp-day_button:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+.datepicker-popover .rdp-day.rdp-outside .rdp-day_button { color: var(--ink-3); opacity: 0.55; }
+.datepicker-popover .rdp-day.rdp-selected .rdp-day_button {
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  color: #fff; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.15) inset;
+}
+.datepicker-popover .rdp-day.rdp-today:not(.rdp-selected) .rdp-day_button {
+  color: var(--brand); font-weight: 700;
+}
+.datepicker-popover .rdp-nav button {
+  color: var(--ink-2); background: transparent; border-radius: 6px;
+}
+.datepicker-popover .rdp-nav button:hover { background: rgba(255, 255, 255, 0.06); color: var(--ink-1); }
+
+/* ─── Kanban inline-add ─── */
+.kanban-col-header-actions { display: inline-flex; align-items: center; gap: 6px; }
+.kanban-add-btn {
+  display: inline-grid; place-items: center; width: 22px; height: 22px;
+  border-radius: 6px; border: 1px dashed var(--line-2);
+  background: transparent; color: var(--ink-3); cursor: pointer;
+  transition: border-color 0.14s, color 0.14s, background 0.14s;
+}
+.kanban-add-btn:hover {
+  color: var(--ink-1); border-color: var(--line-3); background: rgba(255, 255, 255, 0.04);
+}
+.kanban-add-form {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 10px; border-radius: 11px;
+  border: 1px dashed var(--line-2); background: rgba(255, 255, 255, 0.025);
+}
+.kanban-add-input {
+  width: 100%; resize: none; outline: none; border: 0; padding: 6px 4px;
+  background: transparent; color: var(--ink-1);
+  font: 500 13px/1.35 var(--font);
+}
+.kanban-add-input::placeholder { color: var(--ink-3); }
+.kanban-add-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.kanban-add-spacer { flex: 1; }
+.kanban-add-submit {
+  display: inline-grid; place-items: center; width: 28px; height: 28px;
+  border-radius: 8px; border: 0; cursor: pointer;
+  background: linear-gradient(135deg, var(--brand), var(--brand-2));
+  color: #fff; transition: filter 0.14s, transform 0.14s;
+}
+.kanban-add-submit:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }
+.kanban-add-submit:disabled { opacity: 0.45; cursor: not-allowed; }
+.kanban-add-prio { display: inline-flex; gap: 4px; }
+.kanban-add-prio button {
+  font: 500 11px/1 var(--mono); padding: 4px 8px; border-radius: 6px;
+  border: 1px solid var(--line-1); background: transparent; color: var(--ink-3);
+  cursor: pointer; transition: all 0.14s;
+}
+.kanban-add-prio button.is-on {
+  color: var(--ink-1); border-color: var(--line-3); background: rgba(255, 255, 255, 0.05);
+}
+
 /* ─── Card-rise animation ─── */
 @keyframes card-rise { from { opacity: 0; transform: translateY(10px) scale(0.99); } to { opacity: 1; transform: none; } }
 .card-rise { animation: card-rise 0.42s cubic-bezier(0.22, 0.61, 0.36, 1) both; transition: transform 0.25s ease, box-shadow 0.25s ease; }

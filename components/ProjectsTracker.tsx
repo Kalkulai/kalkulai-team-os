@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Check, Pencil, X } from 'lucide-react';
+import { DatePicker } from '@/components/ui/DatePicker';
 import type { KpiWithWeek } from '@/types';
 import { differenceInCalendarDays, format, parseISO, startOfWeek } from 'date-fns';
 import { de } from 'date-fns/locale';
@@ -234,12 +235,11 @@ export function ProjectsTracker({ userId }: { userId: string }) {
                             placeholder="Schrittname"
                             className="proj-step-edit-input"
                           />
-                          <input
-                            type="date"
-                            value={editStepDue}
-                            onChange={(e) => setEditStepDue(e.target.value)}
-                            aria-label="Fälligkeitsdatum"
-                            className="task-date-input"
+                          <DatePicker
+                            value={editStepDue || null}
+                            onChange={(v) => setEditStepDue(v ?? '')}
+                            placeholder="Datum"
+                            ariaLabel="Fälligkeitsdatum"
                           />
                           <button
                             type="submit"

@@ -2,6 +2,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Check, Plus, X, ChevronRight, Pencil, Undo2 } from 'lucide-react';
+import { DatePicker } from '@/components/ui/DatePicker';
 import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import type { LinearIssue, KpiWithWeek, TaskSource } from '@/types';
@@ -312,12 +313,11 @@ function TaskEditForm({
           </button>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="date"
-            value={due}
-            onChange={(e) => setDue(e.target.value)}
-            aria-label="Fälligkeitsdatum"
-            className="task-date-input"
+          <DatePicker
+            value={due || null}
+            onChange={(v) => setDue(v ?? '')}
+            placeholder="Datum"
+            ariaLabel="Fälligkeitsdatum"
           />
           {!isStep && (
             <div className="prio-group" role="radiogroup" aria-label="Priorität">
@@ -801,12 +801,11 @@ export function TaskList({
             </button>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <input
-              type="date"
-              value={draftDue}
-              onChange={(e) => setDraftDue(e.target.value)}
-              aria-label="Fälligkeitsdatum"
-              className="task-date-input"
+            <DatePicker
+              value={draftDue || null}
+              onChange={(v) => setDraftDue(v ?? '')}
+              placeholder="Datum"
+              ariaLabel="Fälligkeitsdatum"
             />
             <div className="prio-group" role="radiogroup" aria-label="Priorität">
               {([

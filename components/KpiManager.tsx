@@ -5,6 +5,7 @@ import type { KpiWithWeek, KpiType, KpiSource, TeamMember } from '@/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { DatePicker } from '@/components/ui/DatePicker';
 
 const SECRET = process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? '';
 
@@ -348,12 +349,11 @@ export function KpiManager({ userId, member }: { userId: string; member?: TeamMe
           ) : (
             <div className="space-y-1.5">
               <Label htmlFor="kpi-due" className="text-xs">Fällig (optional)</Label>
-              <Input
-                id="kpi-due"
-                type="date"
-                value={draft.due_date}
-                onChange={(e) => setDraft({ ...draft, due_date: e.target.value })}
-                className="min-h-[44px]"
+              <DatePicker
+                value={draft.due_date || null}
+                onChange={(v) => setDraft({ ...draft, due_date: v ?? '' })}
+                placeholder="Datum"
+                ariaLabel="Fällig"
               />
             </div>
           )}
@@ -407,11 +407,11 @@ export function KpiManager({ userId, member }: { userId: string; member?: TeamMe
                 placeholder="z.B. Brief an Investoren schreiben"
                 className="min-h-[40px] flex-1 text-sm"
               />
-              <Input
-                type="date"
-                value={pendingStep.due_date}
-                onChange={(e) => setPendingStep({ ...pendingStep, due_date: e.target.value })}
-                className="min-h-[40px] w-auto text-sm"
+              <DatePicker
+                value={pendingStep.due_date || null}
+                onChange={(v) => setPendingStep({ ...pendingStep, due_date: v ?? '' })}
+                placeholder="Datum"
+                ariaLabel="Step-Fälligkeit"
               />
               <Button
                 type="button"
@@ -458,11 +458,11 @@ export function KpiManager({ userId, member }: { userId: string; member?: TeamMe
                           className="min-h-[44px]"
                           placeholder="Name"
                         />
-                        <Input
-                          type="date"
-                          value={e.due_date}
-                          onChange={(ev) => setEditing((pp) => ({ ...pp, [p.id]: { ...e, due_date: ev.target.value } }))}
-                          className="min-h-[44px]"
+                        <DatePicker
+                          value={e.due_date || null}
+                          onChange={(v) => setEditing((pp) => ({ ...pp, [p.id]: { ...e, due_date: v ?? '' } }))}
+                          placeholder="Datum"
+                          ariaLabel="Fällig"
                         />
                       </div>
                       <div className="flex gap-2">
@@ -532,11 +532,11 @@ export function KpiManager({ userId, member }: { userId: string; member?: TeamMe
                           placeholder="Neuer Step…"
                           className="min-h-[40px] flex-1 text-sm"
                         />
-                        <Input
-                          type="date"
-                          value={sd.due_date}
-                          onChange={(ev) => setStepDraft((prev) => ({ ...prev, [p.id]: { ...sd, due_date: ev.target.value } }))}
-                          className="min-h-[40px] w-auto text-sm"
+                        <DatePicker
+                          value={sd.due_date || null}
+                          onChange={(v) => setStepDraft((prev) => ({ ...prev, [p.id]: { ...sd, due_date: v ?? '' } }))}
+                          placeholder="Datum"
+                          ariaLabel="Step-Fälligkeit"
                         />
                         <Button
                           type="button"
