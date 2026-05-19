@@ -30,9 +30,10 @@ export async function buildDailyBriefing(member: TeamMember): Promise<DailyBrief
 
   // Surface GitHub auth state up-front. Silent 401s used to swallow every
   // commit/branch call and leave the dashboard looking empty.
-  const ghHealth = await getGithubHealth();
+  const ghHealth = await getGithubHealth(member.github_token);
   if (ghHealth !== 'ok') {
-    console.error(`[briefing/github] sync disabled: ${ghHealth} (check GITHUB_TOKEN in Vercel env)`);
+    const source = member.github_token ? `${member.name}'s personal PAT` : 'env GITHUB_TOKEN';
+    console.error(`[briefing/github] sync disabled for ${member.name}: ${ghHealth} (source: ${source})`);
   }
 
   const results = await Promise.allSettled([
@@ -40,7 +41,7 @@ export async function buildDailyBriefing(member: TeamMember): Promise<DailyBrief
     getTodayEvents(member),
     Promise.all([
       member.github_username
-        ? getActiveBranchesByAuthor(member.github_username, 7)
+        ? getActiveBranchesByAuthor(member.github_username, 7, member.github_token)
         : Promise.resolve([]),
       getActiveBranches({ withPRMeta: true }),
     ]),

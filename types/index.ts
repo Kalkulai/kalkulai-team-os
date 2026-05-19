@@ -9,6 +9,10 @@ export interface TeamMember {
   telegram_chat_id: string | null;
   linear_user_id: string | null;
   github_username: string | null;
+  /** PAT used to read this member's commits/branches/PRs. Stripped from public payloads. */
+  github_token?: string | null;
+  /** ISO date `YYYY-MM-DD` the token expires. Drives the 14d-Telegram-warning cron. */
+  github_token_expires_at?: string | null;
   hubspot_owner_id: string | null;
   google_calendar_id: string | null;
   google_refresh_token: string | null;

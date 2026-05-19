@@ -115,7 +115,12 @@ export async function buildActivityFeed(
   if (member.github_username) {
     try {
       const sinceIso = new Date(now.getTime() - 2 * 86_400_000).toISOString();
-      const commits = await getCommitsByAuthorSince(member.github_username, sinceIso, 50);
+      const commits = await getCommitsByAuthorSince(
+        member.github_username,
+        sinceIso,
+        50,
+        member.github_token,
+      );
       console.log(`[activity/github] ${member.github_username}: ${commits.length} commits since ${sinceIso}`);
       let added = 0;
       for (const c of commits) {

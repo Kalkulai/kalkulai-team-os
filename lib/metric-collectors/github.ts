@@ -5,6 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 interface MemberLite {
   id: string;
   github_username: string | null;
+  github_token: string | null;
 }
 
 /**
@@ -16,7 +17,7 @@ interface MemberLite {
 export async function collectGithubMetrics(): Promise<Array<{ memberId: string; commits_24h: number; merges_24h: number }>> {
   const { data: members, error } = await supabaseAdmin
     .from('team_members')
-    .select('id, github_username')
+    .select('id, github_username, github_token')
     .not('github_username', 'is', null);
   if (error) throw error;
 
@@ -26,8 +27,8 @@ export async function collectGithubMetrics(): Promise<Array<{ memberId: string; 
   for (const m of (members ?? []) as MemberLite[]) {
     if (!m.github_username) continue;
     const [commits, merges] = await Promise.all([
-      getCommitsByAuthorSince(m.github_username, sinceIso, 50),
-      getMergedPRsByAuthorSince(m.github_username, sinceIso, 30),
+      getCommitsByAuthorSince(m.github_username, sinceIso, 50, m.github_token),
+      getMergedPRsByAuthorSince(m.github_username, sinceIso, 30, m.github_token),
     ]);
     const reposTouched = Array.from(new Set(commits.map((c) => c.repo)));
     await recordMetric({

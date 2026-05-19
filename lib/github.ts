@@ -6,13 +6,24 @@ const REPOS: string[] = (process.env.GITHUB_REPOS || process.env.GITHUB_REPO || 
   .map((s) => s.trim())
   .filter(Boolean);
 
-const TOKEN = process.env.GITHUB_TOKEN!;
+const ENV_TOKEN = process.env.GITHUB_TOKEN ?? '';
 const PROTECTED = ['main', 'main_dev', 'staging', 'master', 'development', 'dev'];
 
-async function ghFetch<T>(path: string): Promise<T> {
+/**
+ * Resolve which token to use:
+ * - explicit `token` arg (per-member call) wins
+ * - falls back to env GITHUB_TOKEN for member-agnostic queries (active-branches
+ *   across the REPOS list, conflict-checker, etc.)
+ */
+function resolveToken(token?: string | null): string {
+  return (token && token.trim()) || ENV_TOKEN;
+}
+
+async function ghFetch<T>(path: string, opts?: { token?: string | null }): Promise<T> {
+  const auth = resolveToken(opts?.token);
   const res = await fetch(`https://api.github.com${path}`, {
     headers: {
-      Authorization: `Bearer ${TOKEN}`,
+      Authorization: `Bearer ${auth}`,
       Accept: 'application/vnd.github+json',
     },
     next: { revalidate: 30 },
@@ -24,11 +35,12 @@ async function ghFetch<T>(path: string): Promise<T> {
 export type GithubHealthStatus = 'ok' | 'unauthorized' | 'rate-limited' | 'unreachable';
 
 /** Cheap probe: /rate_limit needs only a valid token, no scope. */
-export async function getGithubHealth(): Promise<GithubHealthStatus> {
-  if (!TOKEN) return 'unauthorized';
+export async function getGithubHealth(token?: string | null): Promise<GithubHealthStatus> {
+  const auth = resolveToken(token);
+  if (!auth) return 'unauthorized';
   try {
     const res = await fetch('https://api.github.com/rate_limit', {
-      headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/vnd.github+json' },
+      headers: { Authorization: `Bearer ${auth}`, Accept: 'application/vnd.github+json' },
       cache: 'no-store',
     });
     if (res.status === 401 || res.status === 403) {
@@ -190,7 +202,7 @@ async function getRecentlyMergedPRsForRepo(repo: string, sinceDays: number): Pro
     const res = await fetch('https://api.github.com/graphql', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${TOKEN}`,
+        Authorization: `Bearer ${ENV_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ query }),
@@ -259,7 +271,7 @@ async function getRecentlyOpenedPRsForRepo(repo: string, sinceDays: number): Pro
     const res = await fetch('https://api.github.com/graphql', {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${TOKEN}`,
+        Authorization: `Bearer ${ENV_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({ query }),
@@ -351,13 +363,14 @@ export async function getCommitsByAuthorSince(
   githubUsername: string,
   sinceIso: string,
   perPage = 50,
+  token?: string | null,
 ): Promise<AuthoredCommit[]> {
   if (!githubUsername) return [];
   const since = sinceIso.slice(0, 10);
   const q = encodeURIComponent(`author:${githubUsername} author-date:>=${since}`);
   const url = `/search/commits?q=${q}&per_page=${perPage}&sort=author-date&order=desc`;
   try {
-    const data = await ghFetch<{ items?: SearchCommitItem[] }>(url);
+    const data = await ghFetch<{ items?: SearchCommitItem[] }>(url, { token });
     const items = data.items ?? [];
     const cutoff = new Date(sinceIso).getTime();
     return items
@@ -395,13 +408,14 @@ export async function getMergedPRsByAuthorSince(
   githubUsername: string,
   sinceIso: string,
   perPage = 30,
+  token?: string | null,
 ): Promise<AuthoredPR[]> {
   if (!githubUsername) return [];
   const since = sinceIso.slice(0, 10);
   const q = encodeURIComponent(`is:pr is:merged author:${githubUsername} merged:>=${since}`);
   const url = `/search/issues?q=${q}&per_page=${perPage}&sort=updated&order=desc`;
   try {
-    const data = await ghFetch<{ items?: SearchIssueItem[] }>(url);
+    const data = await ghFetch<{ items?: SearchIssueItem[] }>(url, { token });
     const items = data.items ?? [];
     const cutoff = new Date(sinceIso).getTime();
     return items
@@ -447,12 +461,14 @@ export interface AuthoredBranch {
 export async function getActiveBranchesByAuthor(
   githubUsername: string,
   sinceDays = 7,
+  token?: string | null,
 ): Promise<AuthoredBranch[]> {
   if (!githubUsername) return [];
   const cutoff = Date.now() - sinceDays * 86400000;
   try {
     const events = await ghFetch<UserEvent[]>(
       `/users/${encodeURIComponent(githubUsername)}/events?per_page=100`,
+      { token },
     );
     const byKey = new Map<string, AuthoredBranch>();
     for (const ev of events) {
