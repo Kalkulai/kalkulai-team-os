@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import { ChevronDown, GitBranch } from 'lucide-react';
 import { MultiRingChart, type RingDatum } from '@/components/MultiRingChart';
 import { ActivityTimeline, type ActivityDay } from '@/components/dashboard/ActivityTimeline';
@@ -61,9 +62,14 @@ export function MemberCard({
         </span>
       </header>
 
-      <div className="relative z-[1] mb-4 grid place-items-center">
+      <Link
+        href={`/dashboard/team/${member.id}/analytics`}
+        className="relative z-[1] mb-4 grid place-items-center rounded-xl px-2 py-1 transition-colors hover:bg-white/[0.04]"
+        title="Analytics → Wochen-/Monatsansicht"
+      >
         <MultiRingChart data={rings} />
-      </div>
+        <span className="mt-2 text-[11px] font-medium text-[var(--ink-3)]">Analytics ansehen →</span>
+      </Link>
 
       {branches.length > 0 && (
         <div className="relative z-[1] mb-3 flex flex-wrap gap-1.5">
