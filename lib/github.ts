@@ -394,3 +394,71 @@ export async function getMergedPRsByAuthorSince(
     return [];
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Repo-agnostic branches via the GitHub user-events feed.
+// /users/{u}/events returns PushEvents across every repo the user touched,
+// so we can list "branches with recent activity by Leon" without hard-coding
+// repo names.
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface UserEvent {
+  type: string;
+  created_at: string;
+  repo: { name: string };
+  payload?: {
+    ref?: string;
+    head?: string;
+    commits?: Array<{ sha: string; url: string; message: string }>;
+  };
+}
+
+export interface AuthoredBranch {
+  name: string;
+  repo: string;
+  authorLogin: string;
+  lastPushAt: string;
+  url: string;
+  sha?: string;
+}
+
+export async function getActiveBranchesByAuthor(
+  githubUsername: string,
+  sinceDays = 7,
+): Promise<AuthoredBranch[]> {
+  if (!githubUsername) return [];
+  const cutoff = Date.now() - sinceDays * 86400000;
+  try {
+    const events = await ghFetch<UserEvent[]>(
+      `/users/${encodeURIComponent(githubUsername)}/events?per_page=100`,
+    );
+    const byKey = new Map<string, AuthoredBranch>();
+    for (const ev of events) {
+      if (ev.type !== 'PushEvent') continue;
+      const created = new Date(ev.created_at).getTime();
+      if (!Number.isFinite(created) || created < cutoff) continue;
+      const ref = ev.payload?.ref ?? '';
+      if (!ref.startsWith('refs/heads/')) continue;
+      const branch = ref.slice('refs/heads/'.length);
+      if (PROTECTED.includes(branch)) continue;
+      const repo = ev.repo.name;
+      const key = `${repo}#${branch}`;
+      const existing = byKey.get(key);
+      const headSha = ev.payload?.head ?? ev.payload?.commits?.at(-1)?.sha;
+      const entry: AuthoredBranch = {
+        name: branch,
+        repo,
+        authorLogin: githubUsername,
+        lastPushAt: ev.created_at,
+        url: `https://github.com/${repo}/tree/${encodeURIComponent(branch)}`,
+        sha: headSha,
+      };
+      if (!existing || existing.lastPushAt < entry.lastPushAt) {
+        byKey.set(key, entry);
+      }
+    }
+    return Array.from(byKey.values()).sort((a, b) => b.lastPushAt.localeCompare(a.lastPushAt));
+  } catch {
+    return [];
+  }
+}

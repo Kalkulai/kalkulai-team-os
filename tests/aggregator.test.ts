@@ -12,6 +12,7 @@ vi.mock('@/lib/calendar', () => ({
 }));
 vi.mock('@/lib/github', () => ({
   getActiveBranches: vi.fn(),
+  getActiveBranchesByAuthor: vi.fn(),
   getCommitsThisWeek: vi.fn(),
 }));
 vi.mock('@/lib/hubspot', () => ({
@@ -35,7 +36,7 @@ vi.mock('@/lib/supabase', () => ({
 import { buildDailyBriefing } from '@/lib/aggregator';
 import { getIssuesForUser, getBugsFixedThisWeek, getTasksCompletedThisWeek } from '@/lib/linear';
 import { getTodayEvents, countSalesCallsToday } from '@/lib/calendar';
-import { getActiveBranches, getCommitsThisWeek } from '@/lib/github';
+import { getActiveBranches, getActiveBranchesByAuthor, getCommitsThisWeek } from '@/lib/github';
 import { getCallsThisWeek } from '@/lib/hubspot';
 import { getTopUnprocessedInsights } from '@/lib/notion';
 import { getWeekTargets, getWeekActuals, supabaseAdmin, getSalesCallsThisWeek } from '@/lib/supabase';
@@ -68,6 +69,7 @@ describe('buildDailyBriefing', () => {
     vi.mocked(getTodayEvents).mockResolvedValue([]);
     vi.mocked(countSalesCallsToday).mockReturnValue(0);
     vi.mocked(getActiveBranches).mockResolvedValue([]);
+    vi.mocked(getActiveBranchesByAuthor).mockResolvedValue([]);
     vi.mocked(getCommitsThisWeek).mockResolvedValue(0);
     vi.mocked(getBugsFixedThisWeek).mockResolvedValue(0);
     vi.mocked(getTasksCompletedThisWeek).mockResolvedValue(0);

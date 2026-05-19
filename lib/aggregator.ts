@@ -6,7 +6,8 @@ import {
   getTasksCompletedThisWeek,
 } from './linear';
 import { getTodayEvents, countSalesCallsToday } from './calendar';
-import { getActiveBranches, getCommitsThisWeek } from './github';
+import { getActiveBranches, getActiveBranchesByAuthor, getCommitsThisWeek } from './github';
+import type { GitHubBranch } from '@/types';
 import { getCallsThisWeek } from './hubspot';
 import { getTopUnprocessedInsights } from './notion';
 import {
@@ -25,7 +26,12 @@ export async function buildDailyBriefing(member: TeamMember): Promise<DailyBrief
   const results = await Promise.allSettled([
     member.linear_user_id ? getIssuesForUser(member.linear_user_id) : Promise.resolve([]),
     getTodayEvents(member),
-    getActiveBranches({ withPRMeta: true }),
+    Promise.all([
+      member.github_username
+        ? getActiveBranchesByAuthor(member.github_username, 7)
+        : Promise.resolve([]),
+      getActiveBranches({ withPRMeta: true }),
+    ]),
     getWeekTargets(member.id, weekStart),
     getTopUnprocessedInsights(2),
     member.role === 'sales' ? getSalesCallsThisWeek(member.id) : Promise.resolve(0),
@@ -45,7 +51,28 @@ export async function buildDailyBriefing(member: TeamMember): Promise<DailyBrief
 
   const tasks = results[0].status === 'fulfilled' ? results[0].value : [];
   const meetings = results[1].status === 'fulfilled' ? results[1].value : [];
-  const branches = results[2].status === 'fulfilled' ? results[2].value : [];
+  const branchPair =
+    results[2].status === 'fulfilled'
+      ? (results[2].value as [Awaited<ReturnType<typeof getActiveBranchesByAuthor>>, GitHubBranch[]])
+      : ([[], []] as [Awaited<ReturnType<typeof getActiveBranchesByAuthor>>, GitHubBranch[]]);
+  const [authoredBranches, repoBranches] = branchPair;
+
+  // Project the events-API result onto the GitHubBranch shape so downstream
+  // renderers (briefing, dashboard) keep working unchanged.
+  const authoredAsGitHub: GitHubBranch[] = authoredBranches.map((b) => ({
+    name: b.name,
+    commit: { sha: b.sha ?? '', url: b.url },
+    lastCommitDate: b.lastPushAt,
+    authorLogin: b.authorLogin,
+    repo: b.repo,
+  }));
+
+  // Merge: prefer REPOS-entry when it exists (carries PR-Meta + bot-detection),
+  // fall back to events-API entry otherwise. Key by (repo, name).
+  const branchesByKey = new Map<string, GitHubBranch>();
+  for (const b of authoredAsGitHub) branchesByKey.set(`${b.repo ?? ''}#${b.name}`, b);
+  for (const b of repoBranches) branchesByKey.set(`${b.repo ?? ''}#${b.name}`, b);
+  const branches = Array.from(branchesByKey.values());
   const weekTargets = results[3].status === 'fulfilled'
     ? results[3].value
     : { tasks_target: 5, calls_target: 0, bugs_target: 0 };

@@ -705,7 +705,13 @@ html.light .tl-row code { background: rgba(11, 11, 15, 0.05); }
   display: grid; place-items: center;
   animation: fabPop 0.4s cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
-@media (max-width: 768px) { .hermes-fab { display: none; } }
+@media (max-width: 768px) {
+  .hermes-fab {
+    bottom: max(16px, env(safe-area-inset-bottom, 16px));
+    right: 16px;
+    width: 56px; height: 56px;
+  }
+}
 
 /* Bubble (FAB-Klick → Pill faehrt vom FAB nach links raus) */
 /* Catcher: pure click-away, NO backdrop blur — dashboard stays visible */
