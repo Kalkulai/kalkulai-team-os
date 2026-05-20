@@ -78,6 +78,7 @@ export async function buildDailyBriefing(member: TeamMember): Promise<DailyBrief
     lastCommitDate: b.lastPushAt,
     authorLogin: b.authorLogin,
     repo: b.repo,
+    isProtected: b.isProtected,
   }));
 
   // Merge: prefer REPOS-entry when it exists (carries PR-Meta + bot-detection),

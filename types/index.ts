@@ -61,6 +61,12 @@ export interface GitHubBranch {
   isBot?: boolean;
   /** Repo this branch lives in, e.g. "Kalkulai/kalkulai". Populated when multi-repo tracking is enabled. */
   repo?: string;
+  /**
+   * true when this branch is a protected one (main/master/dev/staging) AND the
+   * member is actively pushing to it. Surfaces "you're committing direct to
+   * main" so the user can either move to a feature branch or accept the risk.
+   */
+  isProtected?: boolean;
 }
 
 export interface CalendarEvent {

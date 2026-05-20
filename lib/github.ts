@@ -456,6 +456,7 @@ export interface AuthoredBranch {
   lastPushAt: string;
   url: string;
   sha?: string;
+  isProtected?: boolean;
 }
 
 export async function getActiveBranchesByAuthor(
@@ -478,7 +479,9 @@ export async function getActiveBranchesByAuthor(
       const ref = ev.payload?.ref ?? '';
       if (!ref.startsWith('refs/heads/')) continue;
       const branch = ref.slice('refs/heads/'.length);
-      if (PROTECTED.includes(branch)) continue;
+      // Protected branches stay in the list (so users notice direct-on-main
+      // work) but get a flag the renderer turns into an orange warning pill.
+      const isProtected = PROTECTED.includes(branch);
       const repo = ev.repo.name;
       const key = `${repo}#${branch}`;
       const existing = byKey.get(key);
@@ -490,6 +493,7 @@ export async function getActiveBranchesByAuthor(
         lastPushAt: ev.created_at,
         url: `https://github.com/${repo}/tree/${encodeURIComponent(branch)}`,
         sha: headSha,
+        isProtected,
       };
       if (!existing || existing.lastPushAt < entry.lastPushAt) {
         byKey.set(key, entry);

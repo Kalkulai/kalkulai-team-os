@@ -14,7 +14,7 @@ import { listUserKpis } from '@/lib/kpis';
 import { ViewToggle } from '@/components/dashboard/ViewToggle';
 import { differenceInCalendarDays, format, getISOWeek, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
-import { GitBranch } from 'lucide-react';
+import { GitBranch, AlertTriangle } from 'lucide-react';
 
 const ACTIVE_MEMBER_COOKIE = 'kalkulai-active-member';
 
@@ -97,13 +97,20 @@ export default async function DashboardPage({
           {briefing.activeBranches.map((br) => {
             const repoShort = br.repo ? br.repo.split('/').pop() : null;
             const key = `${br.repo ?? ''}#${br.name}`;
+            const pillCls = br.isProtected
+              ? 'inline-flex items-center gap-1.5 rounded-[7px] border border-[rgba(242,184,75,0.45)] bg-[rgba(242,184,75,0.10)] px-2.5 py-1 text-[11.5px] font-medium text-[var(--warn)] mono'
+              : 'inline-flex items-center gap-1.5 rounded-[7px] border border-[var(--line-1)] bg-white/[0.06] px-2.5 py-1 text-[11.5px] font-medium text-[var(--ink-2)] mono';
             return (
               <span
                 key={key}
-                className="inline-flex items-center gap-1.5 rounded-[7px] border border-[var(--line-1)] bg-white/[0.06] px-2.5 py-1 text-[11.5px] font-medium text-[var(--ink-2)] mono"
-                title={br.repo ?? undefined}
+                className={pillCls}
+                title={br.isProtected ? `direkt auf ${br.name} — ${br.repo}` : (br.repo ?? undefined)}
               >
-                <GitBranch size={11} className="text-[var(--ink-3)]" aria-hidden />
+                {br.isProtected ? (
+                  <AlertTriangle size={11} className="text-[var(--warn)]" aria-hidden />
+                ) : (
+                  <GitBranch size={11} className="text-[var(--ink-3)]" aria-hidden />
+                )}
                 {br.name}
                 {br.prNumber && (
                   <span className="text-[var(--ink-3)]">#{br.prNumber}</span>
