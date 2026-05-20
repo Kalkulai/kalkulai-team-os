@@ -15,6 +15,7 @@ function safeTime(iso: string): string {
 }
 
 function durationMin(m: CalendarEvent): number | null {
+  if (m.allDay) return null;
   try {
     return Math.max(0, differenceInMinutes(parseISO(m.end), parseISO(m.start)));
   } catch {
@@ -23,6 +24,8 @@ function durationMin(m: CalendarEvent): number | null {
 }
 
 function isHappeningNow(m: CalendarEvent, now: Date): boolean {
+  // All-day events are not "live" — they'd otherwise stay highlighted all day.
+  if (m.allDay) return false;
   try {
     return parseISO(m.start) <= now && parseISO(m.end) > now;
   } catch {
@@ -44,13 +47,15 @@ export function MeetingList({ meetings }: { meetings: CalendarEvent[] }) {
         const dur = durationMin(m);
         const tail = m.isSalesCall ? (
           <span className="pill pill-amber">Sales</span>
+        ) : m.allDay ? (
+          <span className="tag">Ganztägig</span>
         ) : dur !== null ? (
           <span className="tag">{dur} min</span>
         ) : null;
 
         const inner = (
           <>
-            <span className="t">{safeTime(m.start)}</span>
+            <span className="t">{m.allDay ? '—' : safeTime(m.start)}</span>
             <span className="name">{m.summary}</span>
             {tail}
           </>

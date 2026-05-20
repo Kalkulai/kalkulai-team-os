@@ -71,6 +71,12 @@ export interface CalendarEvent {
   isSalesCall: boolean;
   /** Direct Google-Calendar URL for opening the event in a new tab. */
   htmlLink?: string;
+  /**
+   * true when Google sends `start.date` (Ganztägig) instead of `start.dateTime`.
+   * UI must not treat all-day events as "live now" or compute end-start as a
+   * meaningful duration (would yield 1440 min for a birthday).
+   */
+  allDay?: boolean;
 }
 
 export interface HubSpotCall {

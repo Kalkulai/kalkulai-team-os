@@ -89,6 +89,17 @@ export async function buildActivityFeed(
   // Termine heute: laufende → "läuft seit X min", beendete → "beendet"
   for (const m of todayMeetings) {
     try {
+      // All-day events (birthdays, holidays) have no real start/end time —
+      // render them as a static once-per-day entry, never as "läuft seit X min".
+      if (m.allDay) {
+        todayEvents.push({
+          time: '—',
+          text: m.summary,
+          kind: 'standup',
+          source: 'Calendar · Ganztägig',
+        });
+        continue;
+      }
       const start = parseISO(m.start);
       const end = parseISO(m.end);
       if (start > now) continue; // zukünftig: gehört nicht in den Activity-Stream

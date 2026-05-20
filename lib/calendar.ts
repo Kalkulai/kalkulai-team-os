@@ -120,14 +120,18 @@ export async function getTodayEvents(member: TeamMember): Promise<CalendarEvent[
     tz: APP_TIMEZONE,
   });
 
-  return items.map((e) => ({
-    id: e.id,
-    summary: e.summary ?? '(kein Titel)',
-    start: e.start?.dateTime ?? e.start?.date ?? '',
-    end: e.end?.dateTime ?? e.end?.date ?? '',
-    isSalesCall: SALES_KEYWORDS.some((kw) => (e.summary ?? '').toLowerCase().includes(kw)),
-    htmlLink: e.htmlLink,
-  }));
+  return items.map((e) => {
+    const allDay = !e.start?.dateTime;
+    return {
+      id: e.id,
+      summary: e.summary ?? '(kein Titel)',
+      start: e.start?.dateTime ?? e.start?.date ?? '',
+      end: e.end?.dateTime ?? e.end?.date ?? '',
+      isSalesCall: SALES_KEYWORDS.some((kw) => (e.summary ?? '').toLowerCase().includes(kw)),
+      htmlLink: e.htmlLink,
+      allDay,
+    };
+  });
 }
 
 export function countSalesCallsToday(events: CalendarEvent[]): number {
