@@ -1,7 +1,7 @@
 import type { GitHubBranch } from '@/types';
 import { startOfWeek } from 'date-fns';
 
-const REPOS: string[] = (process.env.GITHUB_REPOS || process.env.GITHUB_REPO || '')
+const REPOS: string[] = (process.env.GITHUB_REPOS || '')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);

@@ -82,10 +82,12 @@ export async function buildDailyBriefing(member: TeamMember): Promise<DailyBrief
   }));
 
   // Merge: prefer REPOS-entry when it exists (carries PR-Meta + bot-detection),
-  // fall back to events-API entry otherwise. Key by (repo, name).
+  // fall back to events-API entry otherwise. Key on lowercase(repo)#name so an
+  // ownership rename (Kalkulai → kalkulai-tech) doesn't surface as two pills.
   const branchesByKey = new Map<string, GitHubBranch>();
-  for (const b of authoredAsGitHub) branchesByKey.set(`${b.repo ?? ''}#${b.name}`, b);
-  for (const b of repoBranches) branchesByKey.set(`${b.repo ?? ''}#${b.name}`, b);
+  const keyOf = (b: GitHubBranch) => `${(b.repo ?? '').toLowerCase()}#${b.name}`;
+  for (const b of authoredAsGitHub) branchesByKey.set(keyOf(b), b);
+  for (const b of repoBranches) branchesByKey.set(keyOf(b), b);
   const branches = Array.from(branchesByKey.values());
   const weekTargets = results[3].status === 'fulfilled'
     ? results[3].value
