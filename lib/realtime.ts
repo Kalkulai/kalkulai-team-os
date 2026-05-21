@@ -14,8 +14,6 @@
  *   - Broadcast is fire-and-forget, fits the webhook's quick-response need.
  */
 
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
-
 export interface KanbanEvent {
   kind: 'issue-state-change';
   identifier: string | null;
@@ -25,43 +23,46 @@ export interface KanbanEvent {
 
 export const KANBAN_CHANNEL = 'kanban-events';
 
-let _serverClient: SupabaseClient | null = null;
-
-function getServerClient(): SupabaseClient {
-  if (_serverClient) return _serverClient;
+/**
+ * Server-to-client broadcast via Supabase Realtime REST API.
+ *
+ * The Supabase JS SDK's channel.send() opens a websocket, which is unreliable
+ * in serverless functions (the connection takes seconds to handshake and may
+ * be killed when the function returns). The REST endpoint
+ * `POST /realtime/v1/api/broadcast` is stateless — single HTTP call, fits
+ * Vercel's request/response lifecycle.
+ *
+ * Docs: https://supabase.com/docs/guides/realtime/broadcast#broadcast-from-server-rest-api
+ */
+export async function broadcastKanbanEvent(event: KanbanEvent): Promise<void> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
-    throw new Error('realtime: NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY missing');
+    console.error('[realtime] missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+    return;
   }
-  _serverClient = createClient(url, key, { auth: { persistSession: false } });
-  return _serverClient;
-}
-
-export async function broadcastKanbanEvent(event: KanbanEvent): Promise<void> {
   try {
-    const client = getServerClient();
-    const channel = client.channel(KANBAN_CHANNEL);
-
-    // Critical: subscribe() returns the channel synchronously; the actual
-    // websocket handshake completes asynchronously. We MUST wait for the
-    // 'SUBSCRIBED' status before sending, otherwise the broadcast packet is
-    // dropped on the floor (channel still in 'joining' state).
-    await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('subscribe timeout')), 5000);
-      channel.subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          clearTimeout(timeout);
-          resolve();
-        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
-          clearTimeout(timeout);
-          reject(new Error(`subscribe failed: ${status}`));
-        }
-      });
+    const res = await fetch(`${url}/realtime/v1/api/broadcast`, {
+      method: 'POST',
+      headers: {
+        apikey: key,
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages: [
+          {
+            topic: KANBAN_CHANNEL,
+            event: 'kanban',
+            payload: event,
+            private: false,
+          },
+        ],
+      }),
     });
-
-    await channel.send({ type: 'broadcast', event: 'kanban', payload: event });
-    await client.removeChannel(channel);
+    if (!res.ok) {
+      console.error('[realtime] broadcast HTTP', res.status, await res.text().catch(() => ''));
+    }
   } catch (err) {
     console.error('[realtime] broadcast failed:', err instanceof Error ? err.message : String(err));
   }
