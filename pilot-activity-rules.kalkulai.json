@@ -1,0 +1,86 @@
+[
+  {
+    "slug": "boeck",
+    "name": "Stefan Böck",
+    "owner": "Paul",
+    "staleAfterHours": 72,
+    "searchTerms": [
+      "malerboeck.de",
+      "info@malerboeck.de",
+      "Stefan Böck",
+      "Stefan Boeck",
+      "Malerbetrieb Stefan Boeck",
+      "malerboeck"
+    ]
+  },
+  {
+    "slug": "beutner",
+    "name": "Beutner Malerbetrieb",
+    "owner": "Paul",
+    "staleAfterHours": 72,
+    "searchTerms": [
+      "maler-beutner.de",
+      "kontakt@maler-beutner.de",
+      "kontakt@marla-beutner.de",
+      "Robin Beutner",
+      "Marla Beutner",
+      "Rommelbeutner Malermeister GmbH"
+    ]
+  },
+  {
+    "slug": "daeumer",
+    "name": "Guido Däumer (Meya)",
+    "owner": "Paul",
+    "staleAfterHours": 72,
+    "searchTerms": [
+      "guido.daeumer@web.de",
+      "guido.daumer@web.de",
+      "Guido Däumer",
+      "Guido Daeumer",
+      "Malerbetrieb Guido Däumer",
+      "Meya"
+    ]
+  },
+  {
+    "slug": "kraft",
+    "name": "Kraft",
+    "owner": "Paul",
+    "staleAfterHours": 72,
+    "searchTerms": [
+      "malerkraft.de",
+      "info@malerkraft.de",
+      "arbeit@malerkraft.de",
+      "rechnungseingang@malerkraft.de",
+      "Maler Kraft Meisterbetrieb",
+      "Arvid Kraft"
+    ]
+  },
+  {
+    "slug": "mueller",
+    "name": "Bastian Müller",
+    "owner": "Paul",
+    "staleAfterHours": 72,
+    "searchTerms": [
+      "malerbetriebmueller@t-online.de",
+      "Bastian Müller",
+      "Bastian Mueller",
+      "Jens Müller",
+      "Müller & Weißling",
+      "mueller-weissling.de"
+    ]
+  },
+  {
+    "slug": "rhoen-maler",
+    "name": "Rhön Maler",
+    "owner": "Paul",
+    "staleAfterHours": 72,
+    "searchTerms": [
+      "rhoen-maler.de",
+      "info@rhoen-maler.de",
+      "RHÖNMALER",
+      "Rhön Maler",
+      "Rhoen Maler",
+      "Thomas & Honomichl"
+    ]
+  }
+]

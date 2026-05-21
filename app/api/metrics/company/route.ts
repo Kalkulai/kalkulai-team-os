@@ -3,6 +3,7 @@ import { requireApiAuth } from '@/lib/api-auth';
 import { supabaseAdmin } from '@/lib/supabase';
 import { METRIC_KEYS, currentWeekIsoStart } from '@/lib/business-metrics';
 import { format } from 'date-fns';
+import { getPilotActivity } from '@/lib/pilot-activity';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -49,6 +50,7 @@ export async function GET(req: NextRequest) {
     .order('name', { ascending: true });
   if (memErr) return NextResponse.json({ error: memErr.message }, { status: 500 });
   const members = (membersRaw ?? []) as MemberLite[];
+  const pilotActivity = await getPilotActivity();
 
   const since30 = isoDay(new Date(today.getTime() - 29 * 86400000));
   const weekStart = currentWeekIsoStart();
@@ -128,5 +130,6 @@ export async function GET(req: NextRequest) {
     hero,
     series,
     heatmap,
+    pilot_activity: pilotActivity,
   });
 }
