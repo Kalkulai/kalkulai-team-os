@@ -82,10 +82,15 @@ export async function buildDailyBriefing(member: TeamMember): Promise<DailyBrief
   }));
 
   // Merge: prefer REPOS-entry when it exists (carries PR-Meta + bot-detection),
-  // fall back to events-API entry otherwise. Key on lowercase(repo)#name so an
-  // ownership rename (Kalkulai → kalkulai-tech) doesn't surface as two pills.
+  // fall back to events-API entry otherwise. Key on lowercase(repo-short)#name
+  // — owner-agnostic so a repo transfer (Kalkulai/kalkulai →
+  // kalkulai-tech/kalkulai) doesn't surface the same branch twice. Collision
+  // risk across orgs is acceptable for the active-branch surface.
   const branchesByKey = new Map<string, GitHubBranch>();
-  const keyOf = (b: GitHubBranch) => `${(b.repo ?? '').toLowerCase()}#${b.name}`;
+  const keyOf = (b: GitHubBranch) => {
+    const short = (b.repo ?? '').split('/').pop() ?? '';
+    return `${short.toLowerCase()}#${b.name}`;
+  };
   for (const b of authoredAsGitHub) branchesByKey.set(keyOf(b), b);
   for (const b of repoBranches) branchesByKey.set(keyOf(b), b);
   const branches = Array.from(branchesByKey.values());
