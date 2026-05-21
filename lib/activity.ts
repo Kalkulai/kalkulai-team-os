@@ -1,5 +1,5 @@
 import type { TeamMember, CalendarEvent, HubSpotCall } from '@/types';
-import { getActiveBranches, getRecentlyOpenedPRs, type MergedPR, getCommitsByAuthorSince } from './github';
+import { getRecentlyOpenedPRs, type MergedPR, getCommitsByAuthorSince } from './github';
 import { getCompletedIssuesSince, getCreatedIssuesSince } from './linear';
 import { getCallsThisWeek } from './hubspot';
 import { getSalesLogsSince } from './supabase';

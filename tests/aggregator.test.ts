@@ -136,34 +136,29 @@ describe('buildDailyBriefing', () => {
     expect(getSalesCallsThisWeek).not.toHaveBeenCalled();
   });
 
-  it('collects all branches authored by the user across repos', async () => {
-    const branches: GitHubBranch[] = [
-      { name: 'main', commit: { sha: 'a', url: '' } },
-      { name: 'feature/email', commit: { sha: 'b', url: '' }, authorLogin: 'felix-gh', lastCommitDate: '2026-05-10T10:00:00Z', repo: 'Kalkulai/kalkulai' },
-      { name: 'feature/api', commit: { sha: 'b2', url: '' }, authorLogin: 'felix-gh', lastCommitDate: '2026-05-11T09:00:00Z', repo: 'Kalkulai/kalkulai-team-os' },
-      { name: 'fix/other', commit: { sha: 'c', url: '' }, authorLogin: 'someone-else' },
-    ];
-    vi.mocked(getActiveBranches).mockResolvedValue(branches);
+  it('forwards events-API branches into activeBranches in order', async () => {
+    vi.mocked(getActiveBranchesByAuthor).mockResolvedValue([
+      { name: 'feature/api', repo: 'Kalkulai/kalkulai-team-os', authorLogin: 'felix-gh', lastPushAt: '2026-05-11T09:00:00Z', url: '' },
+      { name: 'feature/email', repo: 'Kalkulai/kalkulai', authorLogin: 'felix-gh', lastPushAt: '2026-05-10T10:00:00Z', url: '' },
+    ]);
     const result = await buildDailyBriefing(makeMember({ github_username: 'felix-gh' }));
     expect(result.activeBranches.map((b) => b.name)).toEqual(['feature/api', 'feature/email']);
   });
 
-  it('also matches branches assigned via prAssignee or prRequestedReviewer', async () => {
-    const branches: GitHubBranch[] = [
-      { name: 'review/me', commit: { sha: 'r', url: '' }, authorLogin: 'someone-else', prRequestedReviewer: 'felix-gh', lastCommitDate: '2026-05-09T08:00:00Z' },
-      { name: 'assigned/me', commit: { sha: 'a', url: '' }, authorLogin: 'someone-else', prAssignee: 'felix-gh', lastCommitDate: '2026-05-10T08:00:00Z' },
-    ];
-    vi.mocked(getActiveBranches).mockResolvedValue(branches);
-    const result = await buildDailyBriefing(makeMember({ github_username: 'felix-gh' }));
-    expect(result.activeBranches.map((b) => b.name)).toEqual(['assigned/me', 'review/me']);
+  it('returns empty activeBranches when github_username is missing', async () => {
+    const result = await buildDailyBriefing(makeMember({ github_username: null }));
+    expect(result.activeBranches).toEqual([]);
+    expect(getActiveBranchesByAuthor).not.toHaveBeenCalled();
   });
 
-  it('returns empty activeBranches when no branch matches the user', async () => {
-    vi.mocked(getActiveBranches).mockResolvedValue([
-      { name: 'main', commit: { sha: 'a', url: '' }, authorLogin: 'someone-else' },
+  it('marks protected refs (main/master) with isProtected so the UI can warn', async () => {
+    vi.mocked(getActiveBranchesByAuthor).mockResolvedValue([
+      { name: 'master', repo: 'Kalkulai/kalkulai-team-os', authorLogin: 'felix-gh', lastPushAt: '2026-05-11T09:00:00Z', url: '', isProtected: true },
+      { name: 'feature/api', repo: 'Kalkulai/kalkulai-team-os', authorLogin: 'felix-gh', lastPushAt: '2026-05-11T08:00:00Z', url: '' },
     ]);
     const result = await buildDailyBriefing(makeMember({ github_username: 'felix-gh' }));
-    expect(result.activeBranches).toEqual([]);
+    expect(result.activeBranches.find((b) => b.name === 'master')?.isProtected).toBe(true);
+    expect(result.activeBranches.find((b) => b.name === 'feature/api')?.isProtected).toBeUndefined();
   });
 
   it('is resilient to a single failing API (Promise.allSettled)', async () => {

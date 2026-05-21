@@ -7,7 +7,6 @@ import {
 } from './linear';
 import { getTodayEvents, countSalesCallsToday } from './calendar';
 import {
-  getActiveBranches,
   getActiveBranchesByAuthor,
   getCommitsThisWeek,
   getGithubHealth,
@@ -39,12 +38,9 @@ export async function buildDailyBriefing(member: TeamMember): Promise<DailyBrief
   const results = await Promise.allSettled([
     member.linear_user_id ? getIssuesForUser(member.linear_user_id) : Promise.resolve([]),
     getTodayEvents(member),
-    Promise.all([
-      member.github_username
-        ? getActiveBranchesByAuthor(member.github_username, 7, member.github_token)
-        : Promise.resolve([]),
-      getActiveBranches({ withPRMeta: true }),
-    ]),
+    member.github_username
+      ? getActiveBranchesByAuthor(member.github_username, 7, member.github_token)
+      : Promise.resolve([]),
     getWeekTargets(member.id, weekStart),
     getTopUnprocessedInsights(2),
     member.role === 'sales' ? getSalesCallsThisWeek(member.id) : Promise.resolve(0),
@@ -64,15 +60,14 @@ export async function buildDailyBriefing(member: TeamMember): Promise<DailyBrief
 
   const tasks = results[0].status === 'fulfilled' ? results[0].value : [];
   const meetings = results[1].status === 'fulfilled' ? results[1].value : [];
-  const branchPair =
+  const authoredBranches =
     results[2].status === 'fulfilled'
-      ? (results[2].value as [Awaited<ReturnType<typeof getActiveBranchesByAuthor>>, GitHubBranch[]])
-      : ([[], []] as [Awaited<ReturnType<typeof getActiveBranchesByAuthor>>, GitHubBranch[]]);
-  const [authoredBranches, repoBranches] = branchPair;
+      ? (results[2].value as Awaited<ReturnType<typeof getActiveBranchesByAuthor>>)
+      : [];
 
   // Project the events-API result onto the GitHubBranch shape so downstream
   // renderers (briefing, dashboard) keep working unchanged.
-  const authoredAsGitHub: GitHubBranch[] = authoredBranches.map((b) => ({
+  const branches: GitHubBranch[] = authoredBranches.map((b) => ({
     name: b.name,
     commit: { sha: b.sha ?? '', url: b.url },
     lastCommitDate: b.lastPushAt,
@@ -80,20 +75,6 @@ export async function buildDailyBriefing(member: TeamMember): Promise<DailyBrief
     repo: b.repo,
     isProtected: b.isProtected,
   }));
-
-  // Merge: prefer REPOS-entry when it exists (carries PR-Meta + bot-detection),
-  // fall back to events-API entry otherwise. Key on lowercase(repo-short)#name
-  // — owner-agnostic so a repo transfer (Kalkulai/kalkulai →
-  // kalkulai-tech/kalkulai) doesn't surface the same branch twice. Collision
-  // risk across orgs is acceptable for the active-branch surface.
-  const branchesByKey = new Map<string, GitHubBranch>();
-  const keyOf = (b: GitHubBranch) => {
-    const short = (b.repo ?? '').split('/').pop() ?? '';
-    return `${short.toLowerCase()}#${b.name}`;
-  };
-  for (const b of authoredAsGitHub) branchesByKey.set(keyOf(b), b);
-  for (const b of repoBranches) branchesByKey.set(keyOf(b), b);
-  const branches = Array.from(branchesByKey.values());
   const weekTargets = results[3].status === 'fulfilled'
     ? results[3].value
     : { tasks_target: 5, calls_target: 0, bugs_target: 0 };
