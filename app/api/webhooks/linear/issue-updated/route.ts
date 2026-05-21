@@ -55,19 +55,37 @@ export async function POST(req: NextRequest) {
     payload.action === 'update' &&
     !!payload.updatedFrom?.stateId;
 
+  let broadcastResult: string = 'skipped';
   if (isIssueStateChange) {
     revalidateDashboard();
-    await broadcastKanbanEvent({
-      kind: 'issue-state-change',
-      identifier: payload.data?.identifier ?? null,
-      newState: payload.data?.state?.name ?? null,
-      at: new Date().toISOString(),
-    });
-    console.log('[webhook/linear] issue state change', {
+    try {
+      await broadcastKanbanEvent({
+        kind: 'issue-state-change',
+        identifier: payload.data?.identifier ?? null,
+        newState: payload.data?.state?.name ?? null,
+        at: new Date().toISOString(),
+      });
+      broadcastResult = 'ok';
+    } catch (err) {
+      broadcastResult = `err: ${err instanceof Error ? err.message : String(err)}`;
+    }
+    console.log('[webhook/linear] state change', {
       id: payload.data?.identifier,
       newState: payload.data?.state?.name,
+      broadcast: broadcastResult,
     });
   }
 
-  return NextResponse.json({ ok: true, handled: isIssueStateChange });
+  return NextResponse.json({
+    ok: true,
+    handled: isIssueStateChange,
+    broadcast: broadcastResult,
+    received: {
+      action: payload.action,
+      type: payload.type,
+      identifier: payload.data?.identifier,
+      hasUpdatedFrom: !!payload.updatedFrom,
+      updatedFromKeys: payload.updatedFrom ? Object.keys(payload.updatedFrom) : [],
+    },
+  });
 }
