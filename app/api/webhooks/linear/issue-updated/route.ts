@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { revalidateDashboard } from '@/lib/revalidate';
+import { broadcastKanbanEvent } from '@/lib/realtime';
 
 export const runtime = 'nodejs';
 export const maxDuration = 15;
@@ -56,6 +57,12 @@ export async function POST(req: NextRequest) {
 
   if (isIssueStateChange) {
     revalidateDashboard();
+    await broadcastKanbanEvent({
+      kind: 'issue-state-change',
+      identifier: payload.data?.identifier ?? null,
+      newState: payload.data?.state?.name ?? null,
+      at: new Date().toISOString(),
+    });
     console.log('[webhook/linear] issue state change', {
       id: payload.data?.identifier,
       newState: payload.data?.state?.name,

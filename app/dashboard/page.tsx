@@ -12,6 +12,7 @@ import { getRecentlyMergedPRs } from '@/lib/github';
 import { getAllMembers, getSalesLogsTodayByType, currentWeekStart } from '@/lib/supabase';
 import { listUserKpis } from '@/lib/kpis';
 import { ViewToggle } from '@/components/dashboard/ViewToggle';
+import { KanbanRealtimeListener } from '@/components/dashboard/KanbanRealtimeListener';
 import { differenceInCalendarDays, format, getISOWeek, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { GitBranch, AlertTriangle } from 'lucide-react';
@@ -91,6 +92,7 @@ export default async function DashboardPage({
 
   return (
     <>
+      <KanbanRealtimeListener />
       <ViewToggle currentView="day" memberId={me.id} />
       {briefing.activeBranches.length > 0 && (
         <div className="mb-5 flex flex-wrap items-center gap-2.5">

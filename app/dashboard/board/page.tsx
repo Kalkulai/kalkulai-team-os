@@ -4,6 +4,7 @@ import { getIssuesForUser, getCompletedIssuesSince } from '@/lib/linear';
 import { listUserKpis } from '@/lib/kpis';
 import { mergeTasks, mergeDoneTasks } from '@/lib/unified-tasks';
 import { KanbanBoard } from '@/components/dashboard/KanbanBoard';
+import { KanbanRealtimeListener } from '@/components/dashboard/KanbanRealtimeListener';
 import { ViewToggle } from '@/components/dashboard/ViewToggle';
 
 const ACTIVE_MEMBER_COOKIE = 'kalkulai-active-member';
@@ -51,6 +52,7 @@ export default async function BoardPage({
 
   return (
     <>
+      <KanbanRealtimeListener />
       <ViewToggle currentView="board" memberId={me.id} />
       <KanbanBoard tasks={tasks} doneTasks={doneTasks} members={members} />
     </>
