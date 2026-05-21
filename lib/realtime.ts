@@ -42,11 +42,27 @@ export async function broadcastKanbanEvent(event: KanbanEvent): Promise<void> {
   try {
     const client = getServerClient();
     const channel = client.channel(KANBAN_CHANNEL);
-    await channel.subscribe();
+
+    // Critical: subscribe() returns the channel synchronously; the actual
+    // websocket handshake completes asynchronously. We MUST wait for the
+    // 'SUBSCRIBED' status before sending, otherwise the broadcast packet is
+    // dropped on the floor (channel still in 'joining' state).
+    await new Promise<void>((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('subscribe timeout')), 5000);
+      channel.subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          clearTimeout(timeout);
+          resolve();
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          clearTimeout(timeout);
+          reject(new Error(`subscribe failed: ${status}`));
+        }
+      });
+    });
+
     await channel.send({ type: 'broadcast', event: 'kanban', payload: event });
     await client.removeChannel(channel);
   } catch (err) {
-    // Best-effort — broadcast failure must not break the webhook handler.
     console.error('[realtime] broadcast failed:', err instanceof Error ? err.message : String(err));
   }
 }
