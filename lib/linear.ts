@@ -112,6 +112,19 @@ export async function setIssueStatus(issueId: string, stateId: string): Promise<
   }
 }
 
+export async function addIssueComment(issueId: string, body: string): Promise<void> {
+  const data = await gql(
+    `mutation AddComment($id: String!, $body: String!) {
+       commentCreate(input: { issueId: $id, body: $body }) { success }
+     }`,
+    { id: issueId, body },
+  );
+  const ok = (data as { commentCreate?: { success?: boolean } } | null)?.commentCreate?.success === true;
+  if (!ok) {
+    throw new Error(`Linear commentCreate returned success=false for issue ${issueId}`);
+  }
+}
+
 export async function updateIssue(
   issueId: string,
   patch: { title?: string; priority?: number | null; dueDate?: string | null },
