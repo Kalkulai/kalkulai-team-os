@@ -144,7 +144,11 @@ export async function updateIssue(
 export async function createIssue(
   teamId: string,
   title: string,
-  assigneeId?: string,
+  // Required. Unassigned issues don't surface in any per-member dashboard view
+  // (every query filters by assignee.id). Pass null only when an unassigned
+  // issue is genuinely intended — the explicit null makes the intent visible
+  // at the call site. See KAL-86 / KAL-88.
+  assigneeId: string | null,
   labelIds: string[] = [],
   priority?: number,
   dueDate?: string | null,
@@ -180,7 +184,7 @@ export async function createIssue(
     {
       teamId,
       title,
-      assigneeId: assigneeId ?? null,
+      assigneeId,
       labelIds,
       priority: typeof priority === 'number' && priority >= 0 && priority <= 4 ? priority : null,
       dueDate: dueDate || null,
