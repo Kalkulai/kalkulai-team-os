@@ -1,6 +1,7 @@
 import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import type { UnifiedTask } from '@/lib/unified-tasks';
+import type { ClaudeSession } from '@/types';
 import { AvatarStack } from '@/components/dashboard/AvatarStack';
 
 function duePill(iso: string | null): { label: string; cls: string } | null {
@@ -29,10 +30,13 @@ export function KanbanCard({
   task,
   done = false,
   members = [],
+  activeClaude = [],
 }: {
   task: UnifiedTask;
   done?: boolean;
   members?: Array<{ id: string; name: string }>;
+  /** Live Claude-Code sessions touching this card right now (see KAL-89). */
+  activeClaude?: ClaudeSession[];
 }) {
   const due = duePill(task.dueDate);
   const prio = task.priority ?? 0;
@@ -70,6 +74,14 @@ export function KanbanCard({
       <div className="kanban-card-meta">
         {task.identifier && (
           <span className="pill pill-mute mono text-[10px]">{task.identifier}</span>
+        )}
+        {activeClaude.length > 0 && (
+          <span
+            className="pill pill-ok mono text-[10px]"
+            title={`Live: ${activeClaude.map((s) => s.host ?? 'unknown').join(', ')}`}
+          >
+            🤖 live
+          </span>
         )}
         {prio > 0 && (
           <span className={`pill ${PRIORITY_PILL[prio]} text-[10px]`}>{PRIORITY_LABEL[prio]}</span>

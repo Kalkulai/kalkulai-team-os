@@ -18,6 +18,7 @@ import {
   pointerWithin,
 } from '@dnd-kit/core';
 import type { UnifiedTask, UnifiedStatus } from '@/lib/unified-tasks';
+import type { ClaudeSession } from '@/types';
 import { KanbanCard } from './KanbanCard';
 
 const SECRET = process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? '';
@@ -32,10 +33,12 @@ function DraggableCard({
   task,
   done,
   members,
+  activeClaude,
 }: {
   task: UnifiedTask;
   done?: boolean;
   members: Array<{ id: string; name: string }>;
+  activeClaude?: ClaudeSession[];
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: task.id,
@@ -49,7 +52,7 @@ function DraggableCard({
       {...attributes}
       className={`kanban-draggable${isDragging ? ' is-dragging' : ''}`}
     >
-      <KanbanCard task={task} done={done} members={members} />
+      <KanbanCard task={task} done={done} members={members} activeClaude={activeClaude} />
     </div>
   );
 }
@@ -59,6 +62,7 @@ function DroppableColumn({
   label,
   cards,
   members,
+  activeClaudeByIdentifier,
   done,
   addOpen,
   onToggleAdd,
@@ -68,6 +72,7 @@ function DroppableColumn({
   label: string;
   cards: UnifiedTask[];
   members: Array<{ id: string; name: string }>;
+  activeClaudeByIdentifier?: Record<string, ClaudeSession[]>;
   done?: boolean;
   addOpen?: boolean;
   onToggleAdd?: () => void;
@@ -136,7 +141,13 @@ function DroppableColumn({
       ) : (
         <div className="kanban-cards">
           {cards.map((task) => (
-            <DraggableCard key={task.id} task={task} done={done} members={members} />
+            <DraggableCard
+              key={task.id}
+              task={task}
+              done={done}
+              members={members}
+              activeClaude={task.identifier ? activeClaudeByIdentifier?.[task.identifier] : undefined}
+            />
           ))}
           {addOpen && onSubmitAdd && (
             <form className="kanban-add-form" onSubmit={submit}>
@@ -191,10 +202,14 @@ export function KanbanBoard({
   tasks: initialTasks,
   doneTasks: initialDone = [],
   members = [],
+  activeClaudeByIdentifier,
 }: {
   tasks: UnifiedTask[];
   doneTasks?: UnifiedTask[];
   members?: Array<{ id: string; name: string }>;
+  /** Map of Linear-identifier → live Claude-Code sessions touching that card.
+   * Powers the 🤖 live badge. Server-fetched in page.tsx. */
+  activeClaudeByIdentifier?: Record<string, ClaudeSession[]>;
 }) {
   const router = useRouter();
   const { activeId: memberId } = useActiveMember();
@@ -317,6 +332,7 @@ export function KanbanBoard({
             label={col.label}
             cards={tasks.filter((t) => t.status === col.id)}
             members={members}
+            activeClaudeByIdentifier={activeClaudeByIdentifier}
             addOpen={addOpen === col.id}
             onToggleAdd={() => setAddOpen(addOpen === col.id ? null : col.id)}
             onSubmitAdd={(args) => handleCreate(col.id, args)}

@@ -3,6 +3,8 @@ import { getAllMembers, currentWeekStart } from '@/lib/supabase';
 import { getIssuesForUser, getCompletedIssuesSince } from '@/lib/linear';
 import { listUserKpis } from '@/lib/kpis';
 import { mergeTasks, mergeDoneTasks } from '@/lib/unified-tasks';
+import { getActiveSessionsByIdentifier } from '@/lib/claude-sessions';
+import type { ClaudeSession } from '@/types';
 import { KanbanBoard } from '@/components/dashboard/KanbanBoard';
 import { KanbanRealtimeListener } from '@/components/dashboard/KanbanRealtimeListener';
 import { ViewToggle } from '@/components/dashboard/ViewToggle';
@@ -50,11 +52,27 @@ export default async function BoardPage({
   const tasks = mergeTasks(issues, steps, projects);
   const doneTasks = mergeDoneTasks(completedLinear, completedSteps, projects, 3);
 
+  // Live Claude-Code session tracking (KAL-89). Best-effort — if the table
+  // hasn't been migrated yet on this environment, the board still renders.
+  const identifiers = tasks.map((t) => t.identifier).filter((x): x is string => !!x);
+  let activeClaudeByIdentifier: Record<string, ClaudeSession[]> = {};
+  try {
+    const map = await getActiveSessionsByIdentifier(identifiers);
+    activeClaudeByIdentifier = Object.fromEntries(map);
+  } catch (err) {
+    console.warn('[board] claude_sessions lookup failed (table missing?):', err);
+  }
+
   return (
     <>
       <KanbanRealtimeListener />
       <ViewToggle currentView="board" memberId={me.id} />
-      <KanbanBoard tasks={tasks} doneTasks={doneTasks} members={members} />
+      <KanbanBoard
+        tasks={tasks}
+        doneTasks={doneTasks}
+        members={members}
+        activeClaudeByIdentifier={activeClaudeByIdentifier}
+      />
     </>
   );
 }

@@ -158,3 +158,16 @@ export interface KpiWithWeek extends Kpi {
   /** Daily actual snapshots from kpi_history, oldest → newest. Length matches HISTORY_DAYS. */
   history?: number[];
 }
+
+/** Which Linear ticket a Claude Code session is currently working on.
+ * One row per active Claude-Code-Session-UUID. Rows older than ~10 min
+ * are considered stale and swept by a cron. See migration 015. */
+export interface ClaudeSession {
+  session_id: string;
+  user_id: string;
+  linear_identifier: string | null;
+  title: string | null;
+  host: string | null;
+  started_at: string;
+  last_seen_at: string;
+}
