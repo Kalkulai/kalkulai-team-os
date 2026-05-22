@@ -49,19 +49,48 @@ export default function MemberAnalyticsPage() {
 
   useEffect(() => {
     if (!memberId) return;
+    let cancelled = false;
+    let lastFetchAt = 0;
+    const MIN_GAP_MS = 30_000;
+
+    async function fetchOnce(force: boolean) {
+      const now = Date.now();
+      if (!force && now - lastFetchAt < MIN_GAP_MS) return;
+      lastFetchAt = now;
+      try {
+        const [metrics, members] = await Promise.all([
+          fetch(`/api/metrics/${memberId}?range=${range}`, {
+            headers: { Authorization: `Bearer ${SECRET}` },
+            cache: 'no-store',
+          }).then((r) => r.json()),
+          fetch('/api/members', { cache: 'no-store' }).then((r) => r.json()),
+        ]);
+        if (!cancelled) {
+          setData(metrics as MetricsPayload);
+          setMember((members as Member[]).find((m) => m.id === memberId) ?? null);
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
     setLoading(true);
-    Promise.all([
-      fetch(`/api/metrics/${memberId}?range=${range}`, {
-        headers: { Authorization: `Bearer ${SECRET}` },
-        cache: 'no-store',
-      }).then((r) => r.json()),
-      fetch('/api/members', { cache: 'no-store' }).then((r) => r.json()),
-    ])
-      .then(([metrics, members]: [MetricsPayload, Member[]]) => {
-        setData(metrics);
-        setMember(members.find((m) => m.id === memberId) ?? null);
-      })
-      .finally(() => setLoading(false));
+    fetchOnce(true);
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') fetchOnce(false);
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    const intervalId = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchOnce(false);
+    }, 60_000);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisibility);
+      clearInterval(intervalId);
+    };
   }, [memberId, range]);
 
   return (

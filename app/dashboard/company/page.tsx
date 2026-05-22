@@ -91,14 +91,45 @@ export default function CompanyPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setLoading(true);
-    fetch('/api/metrics/company', {
-      headers: { Authorization: `Bearer ${SECRET}` },
-      cache: 'no-store',
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((payload: CompanyData | null) => setData(payload))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    let lastFetchAt = 0;
+    const MIN_GAP_MS = 30_000;
+
+    async function fetchOnce(_reason: string) {
+      const now = Date.now();
+      if (now - lastFetchAt < MIN_GAP_MS) return;
+      lastFetchAt = now;
+      try {
+        const res = await fetch('/api/metrics/company', {
+          headers: { Authorization: `Bearer ${SECRET}` },
+          cache: 'no-store',
+        });
+        const payload = res.ok ? ((await res.json()) as CompanyData) : null;
+        if (!cancelled) setData(payload);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    // Initial fetch.
+    fetchOnce('mount');
+
+    // Layer: visibilitychange — re-fetch when tab wakes from background.
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') fetchOnce('visibility-wake');
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    // Layer: 60 s polling while tab visible (iPad stale-data fix).
+    const intervalId = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchOnce('poll-60s');
+    }, 60_000);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisibility);
+      clearInterval(intervalId);
+    };
   }, []);
 
   function askHermes() {
