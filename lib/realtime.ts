@@ -21,6 +21,15 @@ export interface KanbanEvent {
   at: string; // ISO 8601 UTC
 }
 
+/** Generic "something on the dashboard changed" — covers any mutation that
+ * should trigger connected tabs to refresh. The client treats every event
+ * on this channel as a refresh trigger regardless of `kind`. */
+export interface DashboardChangeEvent {
+  kind: 'dashboard-change';
+  source: string; // e.g. 'tasks/status', 'kpis/adjust', 'sales/log-call'
+  at: string; // ISO 8601 UTC
+}
+
 export const KANBAN_CHANNEL = 'kanban-events';
 
 /**
@@ -34,7 +43,7 @@ export const KANBAN_CHANNEL = 'kanban-events';
  *
  * Docs: https://supabase.com/docs/guides/realtime/broadcast#broadcast-from-server-rest-api
  */
-export async function broadcastKanbanEvent(event: KanbanEvent): Promise<void> {
+async function broadcastRaw(payload: KanbanEvent | DashboardChangeEvent): Promise<void> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
@@ -54,7 +63,7 @@ export async function broadcastKanbanEvent(event: KanbanEvent): Promise<void> {
           {
             topic: KANBAN_CHANNEL,
             event: 'kanban',
-            payload: event,
+            payload,
             private: false,
           },
         ],
@@ -66,4 +75,19 @@ export async function broadcastKanbanEvent(event: KanbanEvent): Promise<void> {
   } catch (err) {
     console.error('[realtime] broadcast failed:', err instanceof Error ? err.message : String(err));
   }
+}
+
+export async function broadcastKanbanEvent(event: KanbanEvent): Promise<void> {
+  return broadcastRaw(event);
+}
+
+/** Fire a generic dashboard-change broadcast so all connected tabs refresh.
+ * Used by `revalidateDashboard()` so every mutation already wired to that
+ * helper gets live propagation for free. */
+export async function broadcastDashboardChange(source: string): Promise<void> {
+  return broadcastRaw({
+    kind: 'dashboard-change',
+    source,
+    at: new Date().toISOString(),
+  });
 }
