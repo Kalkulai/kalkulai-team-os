@@ -75,10 +75,10 @@ export async function GET(req: NextRequest) {
       ? getCreatedIssuesSince(member.linear_user_id, sinceISO).catch(() => [])
       : Promise.resolve([]),
     member.github_username
-      ? getCommitsByAuthorSince(member.github_username, sinceISO).catch(() => [])
+      ? getCommitsByAuthorSince(member.github_username, sinceISO, 50, member.github_token).catch(() => [])
       : Promise.resolve([]),
     member.github_username
-      ? getMergedPRsByAuthorSince(member.github_username, sinceISO).catch(() => [])
+      ? getMergedPRsByAuthorSince(member.github_username, sinceISO, 30, member.github_token).catch(() => [])
       : Promise.resolve([]),
     supabaseAdmin
       .from('sales_logs')
