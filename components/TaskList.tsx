@@ -5,7 +5,7 @@ import { Check, Plus, X, ChevronRight, Pencil, Undo2 } from 'lucide-react';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
-import type { LinearIssue, KpiWithWeek, TaskSource } from '@/types';
+import type { LinearIssue, KpiWithWeek, TaskSource, ClaudeSession } from '@/types';
 import { mergeTasks, type UnifiedTask, type UnifiedStatus } from '@/lib/unified-tasks';
 import { AvatarStack } from '@/components/dashboard/AvatarStack';
 
@@ -133,6 +133,7 @@ function TaskRow({
   onUndo,
   onStartEdit,
   members,
+  activeClaude,
 }: {
   task: UnifiedTask;
   isPending: boolean;
@@ -140,6 +141,7 @@ function TaskRow({
   onUndo: (id: string) => void;
   onStartEdit: (task: UnifiedTask) => void;
   members: Array<{ id: string; name: string }>;
+  activeClaude?: ClaudeSession[];
 }) {
   const prio = task.priority ?? 0;
   const isStep = task.kind === 'step';
@@ -191,6 +193,14 @@ function TaskRow({
           )}
           <span className="title">
             {task.identifier && <span className="ref">{task.identifier}</span>}
+            {activeClaude && activeClaude.length > 0 && (
+              <span
+                className="pill pill-ok mono text-[10px] mr-1"
+                title={`Live: ${activeClaude.map((s) => s.host ?? 'unknown').join(', ')}`}
+              >
+                🤖 live
+              </span>
+            )}
             {task.title}
           </span>
           {hasMeta && (
@@ -354,12 +364,14 @@ export function TaskList({
   steps = [],
   projects = [],
   members = [],
+  activeClaudeByIdentifier = {},
 }: {
   tasks: LinearIssue[];
   userId: string;
   steps?: KpiWithWeek[];
   projects?: KpiWithWeek[];
   members?: Array<{ id: string; name: string }>;
+  activeClaudeByIdentifier?: Record<string, ClaudeSession[]>;
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState('');
@@ -732,8 +744,14 @@ export function TaskList({
   const localIssues = localStore.map(toIssue);
   const allUnified = mergeTasks([...localIssues, ...tasks], steps, projects);
   const visible = allUnified.filter((t) => !hidden.has(t.id));
-  const top3 = visible.slice(0, 3);
-  const rest = visible.slice(3);
+  // Surface live Claude-Code work first — whatever an agent is actively editing
+  // is the highest-signal task on this list. Stable-sort: equal-live order
+  // preserved from the upstream sortTasks(briefing.tasks) call.
+  const isLive = (t: UnifiedTask): boolean =>
+    !!t.identifier && (activeClaudeByIdentifier?.[t.identifier]?.length ?? 0) > 0;
+  const visibleSorted = [...visible].sort((a, b) => Number(isLive(b)) - Number(isLive(a)));
+  const top3 = visibleSorted.slice(0, 3);
+  const rest = visibleSorted.slice(3);
   const restLabel =
     rest.length === 1 ? 'Weitere 1 Task anzeigen' : `Weitere ${rest.length} Tasks anzeigen`;
 
@@ -760,6 +778,7 @@ export function TaskList({
         onUndo={handleUndo}
         onStartEdit={handleStartEdit}
         members={members}
+        activeClaude={t.identifier ? activeClaudeByIdentifier?.[t.identifier] : undefined}
       />
     );
   }

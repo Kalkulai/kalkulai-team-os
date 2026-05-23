@@ -11,6 +11,8 @@ import { buildActivityFeed } from '@/lib/activity';
 import { getRecentlyMergedPRs } from '@/lib/github';
 import { getAllMembers, getSalesLogsTodayByType, currentWeekStart } from '@/lib/supabase';
 import { listUserKpis } from '@/lib/kpis';
+import { getActiveSessionsByIdentifier } from '@/lib/claude-sessions';
+import type { ClaudeSession } from '@/types';
 import { ViewToggle } from '@/components/dashboard/ViewToggle';
 import { KanbanRealtimeListener } from '@/components/dashboard/KanbanRealtimeListener';
 import { differenceInCalendarDays, format, getISOWeek, parseISO } from 'date-fns';
@@ -90,6 +92,19 @@ export default async function DashboardPage({
   const showSalesFab = me.role === 'sales';
   const activityCount = activityDays.reduce((n, d) => n + d.events.length, 0);
 
+  // Live Claude-Code session tracking — same lookup as /dashboard/board so the
+  // 🤖 live pill appears on the default landing page, not only the Kanban.
+  const taskIdentifiers = tasksSorted
+    .map((t) => t.identifier)
+    .filter((x): x is string => !!x);
+  let activeClaudeByIdentifier: Record<string, ClaudeSession[]> = {};
+  try {
+    const map = await getActiveSessionsByIdentifier(taskIdentifiers);
+    activeClaudeByIdentifier = Object.fromEntries(map);
+  } catch (err) {
+    console.warn('[dashboard] claude_sessions lookup failed:', err);
+  }
+
   return (
     <>
       <KanbanRealtimeListener />
@@ -138,7 +153,14 @@ export default async function DashboardPage({
           <HorizonSection label="Termine" end={<span className="mono">{briefing.meetings.length} heute</span>}>
             <MeetingList meetings={briefing.meetings} />
           </HorizonSection>
-          <TaskList tasks={tasksSorted} userId={me.id} steps={kpiSteps} projects={kpiProjects} members={members} />
+          <TaskList
+            tasks={tasksSorted}
+            userId={me.id}
+            steps={kpiSteps}
+            projects={kpiProjects}
+            members={members}
+            activeClaudeByIdentifier={activeClaudeByIdentifier}
+          />
         </HorizonCard>
 
         <HorizonCard number={2} title="Diese Woche" meta={<span className="mono">KW {weekNo}</span>} delayMs={120}>
