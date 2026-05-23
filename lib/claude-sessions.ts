@@ -80,3 +80,21 @@ export async function getActiveSessionsByIdentifier(
   }
   return out;
 }
+
+/** All live Claude Code sessions for a single user — both ticket-pinned
+ * (linear_identifier set) and orphan (linear_identifier=null) rows. Powers
+ * the "live sessions" header pill on /dashboard so every running terminal
+ * appears even if /task-set was never issued.
+ *
+ * Filters to last STALE_THRESHOLD_MIN minutes; sorted newest-first. */
+export async function getActiveSessionsForUser(userId: string): Promise<ClaudeSession[]> {
+  const sinceIso = new Date(Date.now() - STALE_THRESHOLD_MIN * 60_000).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('claude_sessions')
+    .select('session_id, user_id, linear_identifier, title, host, started_at, last_seen_at')
+    .eq('user_id', userId)
+    .gt('last_seen_at', sinceIso)
+    .order('last_seen_at', { ascending: false });
+  if (error) throw new Error(`getActiveSessionsForUser: ${error.message}`);
+  return (data ?? []) as ClaudeSession[];
+}

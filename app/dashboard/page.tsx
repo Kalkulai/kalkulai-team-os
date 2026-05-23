@@ -11,7 +11,7 @@ import { buildActivityFeed } from '@/lib/activity';
 import { getRecentlyMergedPRs } from '@/lib/github';
 import { getAllMembers, getSalesLogsTodayByType, currentWeekStart } from '@/lib/supabase';
 import { listUserKpis } from '@/lib/kpis';
-import { getActiveSessionsByIdentifier } from '@/lib/claude-sessions';
+import { getActiveSessionsByIdentifier, getActiveSessionsForUser } from '@/lib/claude-sessions';
 import type { ClaudeSession } from '@/types';
 import { ViewToggle } from '@/components/dashboard/ViewToggle';
 import { KanbanRealtimeListener } from '@/components/dashboard/KanbanRealtimeListener';
@@ -98,9 +98,14 @@ export default async function DashboardPage({
     .map((t) => t.identifier)
     .filter((x): x is string => !!x);
   let activeClaudeByIdentifier: Record<string, ClaudeSession[]> = {};
+  let allLiveSessions: ClaudeSession[] = [];
   try {
-    const map = await getActiveSessionsByIdentifier(taskIdentifiers);
+    const [map, all] = await Promise.all([
+      getActiveSessionsByIdentifier(taskIdentifiers),
+      getActiveSessionsForUser(me.id),
+    ]);
     activeClaudeByIdentifier = Object.fromEntries(map);
+    allLiveSessions = all;
   } catch (err) {
     console.warn('[dashboard] claude_sessions lookup failed:', err);
   }
@@ -144,6 +149,34 @@ export default async function DashboardPage({
             {briefing.activeBranches.length === 1
               ? `aktiver Branch · ${me.name}`
               : `${briefing.activeBranches.length} aktive Branches · ${me.name}`}
+          </span>
+        </div>
+      )}
+
+      {allLiveSessions.length > 0 && (
+        <div className="mb-5 flex flex-wrap items-center gap-2.5">
+          {allLiveSessions.map((s) => {
+            const label = s.linear_identifier ?? '·';
+            const tooltip = `${s.title ?? '(no title)'} · ${s.host ?? 'unknown host'}`;
+            const pillCls = s.linear_identifier
+              ? 'inline-flex items-center gap-1.5 rounded-[7px] border border-[rgba(64,205,113,0.45)] bg-[rgba(64,205,113,0.10)] px-2.5 py-1 text-[11.5px] font-medium text-[var(--ok)] mono'
+              : 'inline-flex items-center gap-1.5 rounded-[7px] border border-[var(--line-1)] bg-white/[0.06] px-2.5 py-1 text-[11.5px] font-medium text-[var(--ink-3)] mono';
+            return (
+              <span key={s.session_id} className={pillCls} title={tooltip}>
+                <span aria-hidden>🤖</span>
+                {label}
+                {s.host && (
+                  <span className="ml-0.5 rounded-[4px] bg-white/[0.04] px-1 text-[10px] font-normal text-[var(--ink-3)]">
+                    {s.host}
+                  </span>
+                )}
+              </span>
+            );
+          })}
+          <span className="text-[12px] text-[var(--ink-3)]">
+            {allLiveSessions.length === 1
+              ? `live Claude session · ${me.name}`
+              : `${allLiveSessions.length} live Claude sessions · ${me.name}`}
           </span>
         </div>
       )}
