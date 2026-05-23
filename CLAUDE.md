@@ -40,3 +40,25 @@ Manueller Test-Run:
 ```bash
 ssh leon@178.104.220.160 "sudo docker exec kalkulai-hermes /opt/hermes/.venv/bin/hermes cron run 48ad93dd7650"
 ```
+
+## Commit-Message-Convention (Pflicht für Daily-Recap-Coverage)
+
+Jeder Commit, der ein Linear-Ticket adressiert, MUSS einen `closes` / `fixes` / `resolved` Marker enthalten. Sonst erscheint der Commit-Outcome nicht im `daily-recap` (audit_recap.py filtert auf diesen Marker um WIP-commits auszuschließen).
+
+**Format:**
+```
+<type>(<scope>): <description> (closes KAL-XX)
+```
+
+**Beispiele:**
+- `feat(quote-editor): Position-Delete-Button (closes KAL-112)`
+- `fix(task-tracker): auto-assign on /task-set (closes KAL-127)`
+- `polish(quote-editor): Mockup-Alignment (closes KAL-92)`
+
+**Side-Effects:**
+- Linear-Ticket geht automatisch auf Done (via post-bash Hook `task-router-post-bash.js`)
+- Commit erscheint in `daily-recap` unter `github_commits_with_closes`
+- audit_recap.py Coverage-Score `commits_with_marker_pct` steigt
+- `closed_linear_with_pr_pct` steigt zusätzlich wenn der **PR-Title** das KAL-XX enthält (post-bash Hook injiziert das jetzt automatisch beim `gh pr create`)
+
+**Soft-rule:** WIP-Commits (rebase, format, refactor ohne Outcome) brauchen keinen Marker. Aber alles was ein Ticket schließt, muss den Marker tragen.
