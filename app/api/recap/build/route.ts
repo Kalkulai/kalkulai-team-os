@@ -22,6 +22,13 @@ interface KpiHistoryRow {
   kpis: { name: string; unit: string; user_id: string } | null;
 }
 
+interface VaultTouchRow {
+  path: string;
+  last_modified_at: string;
+  size_bytes: number;
+  source_host: string | null;
+}
+
 interface ClaudeSessionRow {
   session_id: string;
   linear_identifier: string | null;
@@ -68,6 +75,7 @@ export async function GET(req: NextRequest) {
     salesLogsRes,
     kpiHistoryRes,
     claudeSessionsRes,
+    vaultTouchesRes,
   ] = await Promise.all([
     member.linear_user_id
       ? getCompletedIssuesSince(member.linear_user_id, sinceISO).catch(() => [])
@@ -100,11 +108,22 @@ export async function GET(req: NextRequest) {
       .gte('last_seen_at', sinceISO)
       .lte('last_seen_at', untilISO)
       .order('last_seen_at', { ascending: true }),
+    // KAL-134: non-committed vault edits — touched files whose last_modified_at
+    // falls in the day window. Shared across all users (single vault writer
+    // today). Returned with the recap so the daily summary can surface SOPs
+    // and drafts that never landed in a git push.
+    supabaseAdmin
+      .from('vault_touches')
+      .select('path, last_modified_at, size_bytes, source_host')
+      .gte('last_modified_at', sinceISO)
+      .lte('last_modified_at', untilISO)
+      .order('last_modified_at', { ascending: true }),
   ]);
 
   const salesLogs = (salesLogsRes.data ?? []) as SalesLog[];
   const kpiHistory = (kpiHistoryRes.data ?? []) as unknown as KpiHistoryRow[];
   const claudeSessions = (claudeSessionsRes.data ?? []) as ClaudeSessionRow[];
+  const vaultTouches = (vaultTouchesRes.data ?? []) as VaultTouchRow[];
 
   // Tickets actively pinned during the day — both currently-pinned identifiers
   // and any ticket that appears in any session's task_history (set/hold/done
@@ -149,6 +168,7 @@ export async function GET(req: NextRequest) {
         })),
         claude_sessions: claudeSessions,
         session_active_identifiers: Array.from(activeIdentifiers).sort(),
+        vault_touches: vaultTouches,
       },
     },
   });
