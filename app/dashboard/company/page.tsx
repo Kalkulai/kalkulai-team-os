@@ -17,6 +17,11 @@ interface PilotPerson {
   last_seen_label: string;
 }
 
+interface PilotEventCount {
+  event: string;
+  count: number;
+}
+
 interface PilotActivity {
   slug: string;
   name: string;
@@ -30,6 +35,39 @@ interface PilotActivity {
   status: 'healthy' | 'warning' | 'stale' | 'unconfigured';
   needs_action: boolean;
   people: PilotPerson[];
+  daily_counts_14d: number[];
+  top_events_30d: PilotEventCount[];
+  top_paths_30d: PilotEventCount[];
+}
+
+function prettyEventName(event: string): string {
+  if (event === '$autocapture') return 'Clicks (autocapture)';
+  if (event === '$pageview') return 'Page views';
+  if (event === '$pageleave') return 'Page leaves';
+  if (event === '$web_vitals') return 'Web vitals';
+  if (event === '$rageclick') return 'Rage clicks';
+  return event;
+}
+
+function Sparkline({ values, height = 28 }: { values: number[]; height?: number }) {
+  if (values.length === 0 || values.every((v) => v === 0)) {
+    return <div className="company-pilot-spark-empty">keine Aktivität (14d)</div>;
+  }
+  const max = Math.max(...values, 1);
+  const width = 100;
+  const step = width / (values.length - 1 || 1);
+  const points = values
+    .map((v, i) => `${(i * step).toFixed(1)},${(height - (v / max) * height).toFixed(1)}`)
+    .join(' ');
+  const total = values.reduce((a, b) => a + b, 0);
+  return (
+    <div className="company-pilot-spark">
+      <svg viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" className="company-pilot-spark-svg">
+        <polyline points={points} fill="none" stroke="currentColor" strokeWidth="1.4" />
+      </svg>
+      <span className="company-pilot-spark-label">{total} events / 14d</span>
+    </div>
+  );
 }
 
 interface CompanyData {
@@ -280,6 +318,36 @@ export default function CompanyPage() {
                         ))
                       )}
                     </ul>
+
+                    <Sparkline values={pilot.daily_counts_14d ?? []} />
+
+                    {(pilot.top_events_30d?.length ?? 0) > 0 && (
+                      <div className="company-pilot-events">
+                        <div className="company-pilot-events-title">Top features (30d)</div>
+                        <ul className="company-pilot-events-list">
+                          {pilot.top_events_30d.slice(0, 5).map((row) => (
+                            <li key={row.event} className="company-pilot-events-row">
+                              <span className="company-pilot-events-name">{prettyEventName(row.event)}</span>
+                              <span className="company-pilot-events-count">{row.count}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+
+                    {(pilot.top_paths_30d?.length ?? 0) > 0 && (
+                      <div className="company-pilot-events">
+                        <div className="company-pilot-events-title">Top pages (30d)</div>
+                        <ul className="company-pilot-events-list">
+                          {pilot.top_paths_30d.slice(0, 4).map((row) => (
+                            <li key={row.event} className="company-pilot-events-row">
+                              <span className="company-pilot-events-name">{row.event}</span>
+                              <span className="company-pilot-events-count">{row.count}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   </article>
                 ))}
               </div>

@@ -26,6 +26,11 @@ export interface PilotPersonSummary {
   last_seen_label: string;
 }
 
+export interface PilotEventCount {
+  event: string;
+  count: number;
+}
+
 export interface PilotActivitySummary {
   slug: string;
   name: string;
@@ -39,6 +44,16 @@ export interface PilotActivitySummary {
   status: 'healthy' | 'warning' | 'stale' | 'unconfigured';
   needs_action: boolean;
   people: PilotPersonSummary[];
+  /** Per-day event counts for the last 14 days (oldest → newest). Empty when
+   *  no matched persons or PostHog query failed. Powers the inline sparkline
+   *  on the dashboard pilot cards. */
+  daily_counts_14d: number[];
+  /** Top custom + autocapture event names for this pilot, last 30 days.
+   *  Internal PostHog events ($identify, $set, $feature_flag_called) are
+   *  filtered out so the list is meaningful at a glance. */
+  top_events_30d: PilotEventCount[];
+  /** Top URL paths visited by this pilot, last 30 days. */
+  top_paths_30d: PilotEventCount[];
 }
 
 const DEFAULT_HOST = 'https://eu.posthog.com';
@@ -130,6 +145,119 @@ async function fetchPersons(host: string, projectId: string, apiKey: string, sea
   return [];
 }
 
+async function hogql(
+  host: string,
+  projectId: string,
+  apiKey: string,
+  query: string,
+): Promise<Array<Array<string | number | null>>> {
+  const body = JSON.stringify({ query: { kind: 'HogQLQuery', query } });
+  const paths = [`/api/environments/${projectId}/query`, `/api/projects/${projectId}/query`];
+  for (const path of paths) {
+    const res = await fetch(`${host}${path}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body,
+      cache: 'no-store',
+    });
+    if (res.status === 404) continue;
+    if (!res.ok) throw new Error(`PostHog HogQL ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    const json = (await res.json()) as { results?: Array<Array<string | number | null>> };
+    return json.results ?? [];
+  }
+  return [];
+}
+
+interface PilotEventDetail {
+  daily_counts_14d: number[];
+  top_events_30d: PilotEventCount[];
+  top_paths_30d: PilotEventCount[];
+}
+
+const EMPTY_PILOT_DETAIL: PilotEventDetail = {
+  daily_counts_14d: [],
+  top_events_30d: [],
+  top_paths_30d: [],
+};
+
+const SYSTEM_EVENTS = new Set([
+  '$identify',
+  '$set',
+  '$feature_flag_called',
+  '$groupidentify',
+  '$create_alias',
+]);
+
+/** Per-pilot HogQL drilldown — sparkline + top events + top paths. Pulls
+ *  events filtered to the union of matched person emails so we attribute
+ *  to the right pilot. Returns empty detail when no emails match (the
+ *  caller's `tracked_users === 0` branch). */
+async function getPilotEventDetail(
+  host: string,
+  projectId: string,
+  apiKey: string,
+  matchedEmails: string[],
+): Promise<PilotEventDetail> {
+  if (matchedEmails.length === 0) return EMPTY_PILOT_DETAIL;
+  const emailList = matchedEmails
+    .map((e) => `'${e.replace(/'/g, "''")}'`)
+    .join(',');
+  const where = `where timestamp > now() - interval 30 day
+                   and person.properties.email in (${emailList})`;
+
+  // Three parallel queries — same auth, same project, batched at the network layer.
+  const [dailyRaw, topEventsRaw, topPathsRaw] = await Promise.all([
+    hogql(host, projectId, apiKey,
+      `select toDate(timestamp) as day, count() as c
+       from events
+       where timestamp > now() - interval 14 day
+         and person.properties.email in (${emailList})
+       group by day order by day asc`,
+    ).catch(() => []),
+    hogql(host, projectId, apiKey,
+      `select event, count() as c from events
+       ${where}
+       group by event order by c desc limit 6`,
+    ).catch(() => []),
+    hogql(host, projectId, apiKey,
+      `select properties.$pathname as path, count() as c from events
+       ${where}
+         and event = '$pageview'
+         and properties.$pathname is not null
+       group by path order by c desc limit 5`,
+    ).catch(() => []),
+  ]);
+
+  // Backfill daily counts so the sparkline always has exactly 14 slots.
+  const countsByDay = new Map<string, number>();
+  for (const row of dailyRaw) {
+    countsByDay.set(String(row[0]), Number(row[1] ?? 0));
+  }
+  const dailyCounts14d: number[] = [];
+  const now = new Date();
+  for (let i = 13; i >= 0; i -= 1) {
+    const d = new Date(now);
+    d.setUTCDate(d.getUTCDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    dailyCounts14d.push(countsByDay.get(key) ?? 0);
+  }
+
+  const topEvents = topEventsRaw
+    .map((row): PilotEventCount => ({ event: String(row[0] ?? ''), count: Number(row[1] ?? 0) }))
+    .filter((r) => r.event && !SYSTEM_EVENTS.has(r.event))
+    .slice(0, 5);
+
+  const topPaths = topPathsRaw
+    .map((row): PilotEventCount => ({ event: String(row[0] ?? ''), count: Number(row[1] ?? 0) }))
+    .filter((r) => r.event);
+
+  return {
+    daily_counts_14d: dailyCounts14d,
+    top_events_30d: topEvents,
+    top_paths_30d: topPaths,
+  };
+}
+
 function buildLastSeenLabel(lastSeenAt: string | null): string {
   if (!lastSeenAt) return 'nie';
   try {
@@ -184,6 +312,9 @@ export async function getPilotActivity(): Promise<PilotActivitySummary[]> {
       status: 'unconfigured',
       needs_action: false,
       people: [],
+      daily_counts_14d: [],
+      top_events_30d: [],
+      top_paths_30d: [],
     }));
   }
 
@@ -226,6 +357,14 @@ export async function getPilotActivity(): Promise<PilotActivitySummary[]> {
       else if (hours > 24 || active24h === 0) status = 'warning';
     }
 
+    const matchedEmails = people
+      .map((p) => p.email)
+      .filter((e): e is string => !!e)
+      .map((e) => e.toLowerCase());
+    const detail = await getPilotEventDetail(host, projectId, apiKey, matchedEmails).catch(
+      () => EMPTY_PILOT_DETAIL,
+    );
+
     results.push({
       slug: rule.slug,
       name: rule.name,
@@ -239,6 +378,9 @@ export async function getPilotActivity(): Promise<PilotActivitySummary[]> {
       status,
       needs_action: status === 'warning' || status === 'stale',
       people: people.slice(0, 5),
+      daily_counts_14d: detail.daily_counts_14d,
+      top_events_30d: detail.top_events_30d,
+      top_paths_30d: detail.top_paths_30d,
     });
   }
 
