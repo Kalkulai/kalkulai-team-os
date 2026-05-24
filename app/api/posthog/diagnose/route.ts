@@ -207,6 +207,41 @@ async function runDiagnose() {
      group by event order by c desc limit 30`,
   );
 
+  // 3a. Autocapture detail — what properties does $autocapture actually carry?
+  // Answers: can we derive feature usage from $autocapture alone, or do we
+  // need custom events? Pulls top click targets across 30 days.
+  const autocaptureDetail = await hogql(
+    host,
+    projectId,
+    apiKey,
+    `select
+       properties.$current_url as url,
+       properties.$event_type as click_type,
+       properties.$el_text as element_text,
+       count() as c
+     from events
+     where timestamp > now() - interval 30 day
+       and event = '$autocapture'
+       and properties.$el_text is not null
+     group by url, click_type, element_text
+     order by c desc
+     limit 60`,
+  );
+
+  // 3b. Top URLs from $pageview — answers "do they even open feature X?"
+  // 30d window because pilot activity is sparse.
+  const topPageviews = await hogql(
+    host,
+    projectId,
+    apiKey,
+    `select properties.$pathname as path, count(distinct distinct_id) as users, count() as views
+     from events
+     where timestamp > now() - interval 30 day
+       and event = '$pageview'
+       and properties.$pathname is not null
+     group by path order by views desc limit 30`,
+  );
+
   // 4. Anonymous vs identified split
   const split = await hogql(
     host,
@@ -297,6 +332,17 @@ async function runDiagnose() {
     top_event_names_7d: topEvents.map((row) => ({
       event: row[0],
       count: Number(row[1] ?? 0),
+    })),
+    autocapture_top_clicks_30d: autocaptureDetail.map((row) => ({
+      url: row[0],
+      click_type: row[1],
+      element_text: row[2],
+      count: Number(row[3] ?? 0),
+    })),
+    top_pageviews_30d: topPageviews.map((row) => ({
+      path: row[0],
+      users: Number(row[1] ?? 0),
+      views: Number(row[2] ?? 0),
     })),
     pilots,
     diagnosis: diagnose(totalsByCategory),
