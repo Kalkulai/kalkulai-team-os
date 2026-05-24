@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { revalidateDashboard } from '@/lib/revalidate';
 import { broadcastKanbanEvent } from '@/lib/realtime';
+import { resolveAutoAssign, type LinearWebhookPayload } from '@/lib/auto-assign';
+import { getAllMembers } from '@/lib/supabase';
+import { updateIssueAssignee, addIssueComment } from '@/lib/linear';
 
 export const runtime = 'nodejs';
 export const maxDuration = 15;
@@ -21,17 +24,6 @@ function verifyLinearSignature(body: string, signature: string | null): boolean 
   } catch {
     return false;
   }
-}
-
-interface LinearWebhookPayload {
-  action: 'create' | 'update' | 'remove';
-  type: string; // "Issue" | "Comment" | ...
-  data?: {
-    id?: string;
-    identifier?: string;
-    state?: { name?: string; type?: string };
-  };
-  updatedFrom?: { stateId?: string } | null;
 }
 
 export async function POST(req: NextRequest) {
@@ -76,10 +68,52 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // KAL-132: auto-assign closed-but-unassigned tickets to the actor who
+  // closed them. Runs after the state-change broadcast so the realtime UI
+  // still updates immediately; the assignee mutation lands a moment later
+  // and triggers a second webhook with the assignee populated.
+  let autoAssign: { result: string; identifier: string | null; member: string | null } = {
+    result: 'skipped',
+    identifier: null,
+    member: null,
+  };
+  try {
+    const members = await getAllMembers();
+    const target = resolveAutoAssign(payload, members);
+    if (target) {
+      await updateIssueAssignee(target.issueId, target.assigneeLinearId);
+      await addIssueComment(
+        target.issueId,
+        `Auto-assigned to **${target.matchedMemberName}** via webhook (matched by ${target.matchedBy}).`,
+      ).catch((err) => {
+        // Comment is best-effort — the assignment already landed.
+        console.warn('[webhook/linear] auto-assign comment failed', err);
+      });
+      autoAssign = {
+        result: 'assigned',
+        identifier: target.identifier,
+        member: target.matchedMemberName,
+      };
+      console.log('[webhook/linear] auto-assigned', {
+        identifier: target.identifier,
+        member: target.matchedMemberName,
+        matchedBy: target.matchedBy,
+      });
+    }
+  } catch (err) {
+    autoAssign = {
+      result: `err: ${err instanceof Error ? err.message : String(err)}`,
+      identifier: payload.data?.identifier ?? null,
+      member: null,
+    };
+    console.error('[webhook/linear] auto-assign failed', err);
+  }
+
   return NextResponse.json({
     ok: true,
     handled: isIssueStateChange,
     broadcast: broadcastResult,
+    autoAssign,
     received: {
       action: payload.action,
       type: payload.type,

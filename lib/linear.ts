@@ -125,6 +125,19 @@ export async function addIssueComment(issueId: string, body: string): Promise<vo
   }
 }
 
+export async function updateIssueAssignee(issueId: string, assigneeId: string): Promise<void> {
+  const data = await gql(
+    `mutation UpdateIssueAssignee($id: String!, $assigneeId: String!) {
+       issueUpdate(id: $id, input: { assigneeId: $assigneeId }) { success }
+     }`,
+    { id: issueId, assigneeId },
+  );
+  const ok = (data as { issueUpdate?: { success?: boolean } } | null)?.issueUpdate?.success === true;
+  if (!ok) {
+    throw new Error(`Linear issueUpdate assignee returned success=false for issue ${issueId}`);
+  }
+}
+
 export async function updateIssue(
   issueId: string,
   patch: { title?: string; priority?: number | null; dueDate?: string | null },
