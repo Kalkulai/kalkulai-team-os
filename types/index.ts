@@ -170,4 +170,15 @@ export interface ClaudeSession {
   host: string | null;
   started_at: string;
   last_seen_at: string;
+  /** Append-only log of tickets this session touched today.
+   *  Mirrors the local ~/.claude/task-sessions/<sid>.json shape. See KAL-133. */
+  task_history?: TaskHistoryEntry[];
+}
+
+export interface TaskHistoryEntry {
+  linear_id: string;
+  /** 'hold' = pinned task got replaced, 'done' = /task-done, 'switch' = explicit /task-switch */
+  action: 'hold' | 'done' | 'switch' | string;
+  /** ISO-8601 timestamp at which the transition was recorded. */
+  at: string;
 }

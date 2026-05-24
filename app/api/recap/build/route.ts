@@ -29,6 +29,7 @@ interface ClaudeSessionRow {
   host: string | null;
   started_at: string;
   last_seen_at: string;
+  task_history: { linear_id: string; action: string; at: string }[] | null;
 }
 
 export async function GET(req: NextRequest) {
@@ -94,7 +95,7 @@ export async function GET(req: NextRequest) {
       .eq('day', dateParam),
     supabaseAdmin
       .from('claude_sessions')
-      .select('session_id, linear_identifier, title, host, started_at, last_seen_at')
+      .select('session_id, linear_identifier, title, host, started_at, last_seen_at, task_history')
       .eq('user_id', userId)
       .gte('last_seen_at', sinceISO)
       .lte('last_seen_at', untilISO)
@@ -104,6 +105,21 @@ export async function GET(req: NextRequest) {
   const salesLogs = (salesLogsRes.data ?? []) as SalesLog[];
   const kpiHistory = (kpiHistoryRes.data ?? []) as unknown as KpiHistoryRow[];
   const claudeSessions = (claudeSessionsRes.data ?? []) as ClaudeSessionRow[];
+
+  // Tickets actively pinned during the day — both currently-pinned identifiers
+  // and any ticket that appears in any session's task_history (set/hold/done
+  // transitions within today). Used by the daily-recap to render a "Heute
+  // aktiv bearbeitet" bucket beyond just closed tickets. See KAL-133.
+  const activeIdentifiers = new Set<string>();
+  for (const s of claudeSessions) {
+    if (s.linear_identifier) activeIdentifiers.add(s.linear_identifier);
+    for (const entry of s.task_history ?? []) {
+      if (!entry?.linear_id || !entry.at) continue;
+      if (entry.at >= sinceISO && entry.at <= untilISO) {
+        activeIdentifiers.add(entry.linear_id);
+      }
+    }
+  }
 
   return NextResponse.json({
     date: dateParam,
@@ -132,6 +148,7 @@ export async function GET(req: NextRequest) {
           unit: r.kpis?.unit ?? null,
         })),
         claude_sessions: claudeSessions,
+        session_active_identifiers: Array.from(activeIdentifiers).sort(),
       },
     },
   });

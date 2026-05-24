@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import type { ClaudeSession } from '@/types';
+import type { ClaudeSession, TaskHistoryEntry } from '@/types';
 
 /**
  * Claude Code session tracker — the data layer behind the Kanban "active task"
@@ -18,22 +18,26 @@ export interface UpsertSessionInput {
   linear_identifier?: string | null;
   title?: string | null;
   host?: string | null;
+  /** Optional snapshot of the local task_history array. When provided, the
+   *  server overwrites the persisted history wholesale — safe because the
+   *  local state file is the authoritative source per session (one writer,
+   *  see KAL-133). */
+  task_history?: TaskHistoryEntry[];
 }
 
 export async function upsertClaudeSession(input: UpsertSessionInput): Promise<void> {
+  const row: Record<string, unknown> = {
+    session_id: input.session_id,
+    user_id: input.user_id,
+    linear_identifier: input.linear_identifier ?? null,
+    title: input.title ?? null,
+    host: input.host ?? null,
+    last_seen_at: new Date().toISOString(),
+  };
+  if (input.task_history !== undefined) row.task_history = input.task_history;
   const { error } = await supabaseAdmin
     .from('claude_sessions')
-    .upsert(
-      {
-        session_id: input.session_id,
-        user_id: input.user_id,
-        linear_identifier: input.linear_identifier ?? null,
-        title: input.title ?? null,
-        host: input.host ?? null,
-        last_seen_at: new Date().toISOString(),
-      },
-      { onConflict: 'session_id' }
-    );
+    .upsert(row, { onConflict: 'session_id' });
   if (error) throw new Error(`upsertClaudeSession: ${error.message}`);
 }
 
@@ -66,7 +70,7 @@ export async function getActiveSessionsByIdentifier(
   const sinceIso = new Date(Date.now() - STALE_THRESHOLD_MIN * 60_000).toISOString();
   const { data, error } = await supabaseAdmin
     .from('claude_sessions')
-    .select('session_id, user_id, linear_identifier, title, host, started_at, last_seen_at')
+    .select('session_id, user_id, linear_identifier, title, host, started_at, last_seen_at, task_history')
     .in('linear_identifier', identifiers)
     .gt('last_seen_at', sinceIso);
   if (error) throw new Error(`getActiveSessionsByIdentifier: ${error.message}`);
@@ -91,7 +95,7 @@ export async function getActiveSessionsForUser(userId: string): Promise<ClaudeSe
   const sinceIso = new Date(Date.now() - STALE_THRESHOLD_MIN * 60_000).toISOString();
   const { data, error } = await supabaseAdmin
     .from('claude_sessions')
-    .select('session_id, user_id, linear_identifier, title, host, started_at, last_seen_at')
+    .select('session_id, user_id, linear_identifier, title, host, started_at, last_seen_at, task_history')
     .eq('user_id', userId)
     .gt('last_seen_at', sinceIso)
     .order('last_seen_at', { ascending: false });

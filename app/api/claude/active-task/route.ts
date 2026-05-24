@@ -25,8 +25,13 @@ export async function POST(req: NextRequest) {
   }
 
   // "touch-only" payload (just session_id + user_id) = PreToolUse heartbeat.
-  // Anything richer = real /task-set or /task-new push.
-  const hasContent = 'linear_identifier' in body || 'title' in body || 'host' in body;
+  // Anything richer = real /task-set or /task-new push (incl. task_history
+  // mirror from task-state.js per KAL-133).
+  const hasContent =
+    'linear_identifier' in body ||
+    'title' in body ||
+    'host' in body ||
+    'task_history' in body;
   try {
     if (hasContent) {
       await upsertClaudeSession({
@@ -35,6 +40,7 @@ export async function POST(req: NextRequest) {
         linear_identifier: body.linear_identifier ?? null,
         title: body.title ?? null,
         host: body.host ?? null,
+        task_history: Array.isArray(body.task_history) ? body.task_history : undefined,
       });
     } else {
       await touchClaudeSession(body.session_id);
