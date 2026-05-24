@@ -140,18 +140,42 @@ export async function updateIssueAssignee(issueId: string, assigneeId: string): 
 
 export async function updateIssue(
   issueId: string,
-  patch: { title?: string; priority?: number | null; dueDate?: string | null },
+  patch: { title?: string; priority?: number | null; dueDate?: string | null; description?: string },
 ): Promise<void> {
   const input: Record<string, unknown> = {};
   if (patch.title !== undefined) input.title = patch.title;
   if (patch.priority !== undefined) input.priority = patch.priority;
   if (patch.dueDate !== undefined) input.dueDate = patch.dueDate;
+  if (patch.description !== undefined) input.description = patch.description;
   await gql(
     `mutation UpdateIssue($id: String!, $input: IssueUpdateInput!) {
        issueUpdate(id: $id, input: $input) { success }
      }`,
     { id: issueId, input },
   );
+}
+
+export interface LinearIssueByIdentifier {
+  id: string;
+  identifier: string;
+  title: string;
+  description: string | null;
+}
+
+/** Resolve a Linear issue by its human identifier (`KAL-XX`). Used by the
+ *  auto-outcome appender (KAL-116) which receives identifiers from hooks
+ *  rather than UUIDs. Returns null when no issue matches. */
+export async function getIssueByIdentifier(identifier: string): Promise<LinearIssueByIdentifier | null> {
+  const data = await gql(
+    `query GetByIdentifier($id: String!) {
+       issue(id: $id) {
+         id identifier title description
+       }
+     }`,
+    { id: identifier },
+  );
+  const issue = (data as { issue: LinearIssueByIdentifier | null }).issue;
+  return issue ?? null;
 }
 
 export async function createIssue(

@@ -32,6 +32,59 @@ async function ghFetch<T>(path: string, opts?: { token?: string | null }): Promi
   return res.json() as Promise<T>;
 }
 
+export interface PullRequestDetail {
+  number: number;
+  title: string;
+  url: string;
+  body: string | null;
+  additions: number;
+  deletions: number;
+  changed_files: number;
+  merged_at: string | null;
+  commits: Array<{ oid: string; messageHeadline: string }>;
+}
+
+/** Fetch a single PR + up to 20 commits for the auto-outcome appender
+ *  (KAL-116). `repo` is `owner/name`. Uses the token resolved via the same
+ *  fallback as the rest of github.ts. Returns null on 404 / API error. */
+export async function getPullRequestDetail(
+  repo: string,
+  prNumber: number,
+  token?: string | null,
+): Promise<PullRequestDetail | null> {
+  const pr = await ghFetch<{
+    number: number;
+    title: string;
+    html_url: string;
+    body: string | null;
+    additions: number;
+    deletions: number;
+    changed_files: number;
+    merged_at: string | null;
+  }>(`/repos/${repo}/pulls/${prNumber}`, { token }).catch(() => null);
+  if (!pr) return null;
+
+  const commits = await ghFetch<Array<{ sha: string; commit: { message: string } }>>(
+    `/repos/${repo}/pulls/${prNumber}/commits?per_page=20`,
+    { token },
+  ).catch(() => []);
+
+  return {
+    number: pr.number,
+    title: pr.title,
+    url: pr.html_url,
+    body: pr.body,
+    additions: pr.additions,
+    deletions: pr.deletions,
+    changed_files: pr.changed_files,
+    merged_at: pr.merged_at,
+    commits: commits.map((c) => ({
+      oid: c.sha,
+      messageHeadline: (c.commit.message || '').split('\n', 1)[0],
+    })),
+  };
+}
+
 export type GithubHealthStatus = 'ok' | 'unauthorized' | 'rate-limited' | 'unreachable';
 
 /** Cheap probe: /rate_limit needs only a valid token, no scope. */
