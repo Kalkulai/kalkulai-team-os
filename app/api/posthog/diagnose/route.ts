@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireApiAuth } from '@/lib/api-auth';
-import { readFileSync } from 'fs';
-import { join } from 'path';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -77,8 +75,12 @@ async function searchPersons(host: string, projectId: string, key: string, term:
 }
 
 function loadRules(): Rule[] {
+  // Pull from env var (same source as lib/pilot-activity.ts) — the JSON file
+  // isn't bundled into Vercel serverless functions, so fs.readFileSync would
+  // fail at runtime.
+  const raw = process.env.PILOT_ACTIVITY_RULES_JSON?.trim();
+  if (!raw) return [];
   try {
-    const raw = readFileSync(join(process.cwd(), 'pilot-activity-rules.kalkulai.json'), 'utf-8');
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed
@@ -146,6 +148,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  try {
+    return await runDiagnose();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack?.split('\n').slice(0, 4) : undefined;
+    return NextResponse.json({ error: message, stack }, { status: 500 });
+  }
+}
+
+async function runDiagnose() {
   const host = (process.env.POSTHOG_HOST || 'https://eu.posthog.com').replace(/\/$/, '');
   const projectId = process.env.POSTHOG_PROJECT_ID;
   const apiKey = process.env.POSTHOG_PERSONAL_API_KEY || process.env.POSTHOG_API_KEY;
