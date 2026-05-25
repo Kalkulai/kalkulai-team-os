@@ -417,17 +417,29 @@ export async function getCommitsByAuthorSince(
   sinceIso: string,
   perPage = 50,
   token?: string | null,
+  untilIso?: string,
 ): Promise<AuthoredCommit[]> {
   if (!githubUsername) return [];
   const since = sinceIso.slice(0, 10);
-  const q = encodeURIComponent(`author:${githubUsername} author-date:>=${since}`);
+  // Search API supports `author-date:YYYY-MM-DD..YYYY-MM-DD` for a closed
+  // range. When untilIso is set, use that; otherwise stay open-ended.
+  const dateFilter = untilIso
+    ? `author-date:${since}..${untilIso.slice(0, 10)}`
+    : `author-date:>=${since}`;
+  const q = encodeURIComponent(`author:${githubUsername} ${dateFilter}`);
   const url = `/search/commits?q=${q}&per_page=${perPage}&sort=author-date&order=desc`;
   try {
     const data = await ghFetch<{ items?: SearchCommitItem[] }>(url, { token });
     const items = data.items ?? [];
     const cutoff = new Date(sinceIso).getTime();
+    const upper = untilIso ? new Date(untilIso).getTime() : null;
     return items
-      .filter((c) => new Date(c.commit.author.date).getTime() >= cutoff)
+      .filter((c) => {
+        const t = new Date(c.commit.author.date).getTime();
+        if (t < cutoff) return false;
+        if (upper !== null && t > upper) return false;
+        return true;
+      })
       .map((c) => ({
         sha: c.sha,
         url: c.html_url,
@@ -462,22 +474,33 @@ export async function getMergedPRsByAuthorSince(
   sinceIso: string,
   perPage = 30,
   token?: string | null,
+  untilIso?: string,
 ): Promise<AuthoredPR[]> {
   if (!githubUsername) return [];
   const since = sinceIso.slice(0, 10);
-  const q = encodeURIComponent(`is:pr is:merged author:${githubUsername} merged:>=${since}`);
+  const dateFilter = untilIso
+    ? `merged:${since}..${untilIso.slice(0, 10)}`
+    : `merged:>=${since}`;
+  const q = encodeURIComponent(`is:pr is:merged author:${githubUsername} ${dateFilter}`);
   const url = `/search/issues?q=${q}&per_page=${perPage}&sort=updated&order=desc`;
   try {
     const data = await ghFetch<{ items?: SearchIssueItem[] }>(url, { token });
     const items = data.items ?? [];
     const cutoff = new Date(sinceIso).getTime();
+    const upper = untilIso ? new Date(untilIso).getTime() : null;
     return items
       .map((it) => {
         const mergedAt = it.pull_request?.merged_at ?? it.closed_at ?? '';
         const repo = it.repository_url.replace('https://api.github.com/repos/', '');
         return { number: it.number, title: it.title, url: it.html_url, mergedAt, repo };
       })
-      .filter((p) => p.mergedAt && new Date(p.mergedAt).getTime() >= cutoff)
+      .filter((p) => {
+        if (!p.mergedAt) return false;
+        const t = new Date(p.mergedAt).getTime();
+        if (t < cutoff) return false;
+        if (upper !== null && t > upper) return false;
+        return true;
+      })
       .sort((a, b) => b.mergedAt.localeCompare(a.mergedAt));
   } catch {
     return [];

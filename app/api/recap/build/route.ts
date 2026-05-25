@@ -78,16 +78,16 @@ export async function GET(req: NextRequest) {
     vaultTouchesRes,
   ] = await Promise.all([
     member.linear_user_id
-      ? getCompletedIssuesSince(member.linear_user_id, sinceISO).catch(() => [])
+      ? getCompletedIssuesSince(member.linear_user_id, sinceISO, untilISO).catch(() => [])
       : Promise.resolve([]),
     member.linear_user_id
-      ? getCreatedIssuesSince(member.linear_user_id, sinceISO).catch(() => [])
+      ? getCreatedIssuesSince(member.linear_user_id, sinceISO, untilISO).catch(() => [])
       : Promise.resolve([]),
     member.github_username
-      ? getCommitsByAuthorSince(member.github_username, sinceISO, 50, member.github_token).catch(() => [])
+      ? getCommitsByAuthorSince(member.github_username, sinceISO, 50, member.github_token, untilISO).catch(() => [])
       : Promise.resolve([]),
     member.github_username
-      ? getMergedPRsByAuthorSince(member.github_username, sinceISO, 30, member.github_token).catch(() => [])
+      ? getMergedPRsByAuthorSince(member.github_username, sinceISO, 30, member.github_token, untilISO).catch(() => [])
       : Promise.resolve([]),
     supabaseAdmin
       .from('sales_logs')
