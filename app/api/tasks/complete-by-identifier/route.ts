@@ -3,6 +3,8 @@ import { getIssueByIdentifier, setIssueStatus } from '@/lib/linear';
 import { requireApiAuth } from '@/lib/api-auth';
 import { revalidateDashboard } from '@/lib/revalidate';
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(req: NextRequest) {
   if (!requireApiAuth(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
