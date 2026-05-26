@@ -257,6 +257,19 @@ Authorization: Bearer ${SECRET}
 
 Setzt Linear-State auf "Done" (via `LINEAR_DONE_STATE_ID`).
 
+#### Task abschließen via Identifier (für Git-Hooks aus Fremdrepos)
+
+```http
+POST /api/tasks/complete-by-identifier
+Authorization: Bearer ${SECRET}
+
+{ "identifier": "KAL-42" }
+```
+
+Löst den Identifier server-seitig zu einer UUID auf (`getIssueByIdentifier`) und setzt dann `setIssueStatus`. Idempotent — Linear toleriert mehrfaches Setzen des gleichen States. Verwendet vom `task-router-post-bash.js` Hook im Hauptrepo, der nur den menschenlesbaren Identifier kennt (keine UUID).
+
+Response: `{ ok: true, identifier: "KAL-42", issueId: "<uuid>" }`.
+
 #### Task-Status ändern (Kanban-DnD)
 
 ```http
