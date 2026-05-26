@@ -299,19 +299,33 @@ export interface CompletedIssue {
 export async function getCompletedIssuesSince(
   linearUserId: string,
   sinceISO: string,
+  untilISO?: string,
 ): Promise<CompletedIssue[]> {
-  const data = await gql(
-    `query CompletedIssuesSince($userId: ID!, $since: DateTimeOrDuration!) {
-      issues(filter: {
-        assignee: { id: { eq: $userId } }
-        state: { type: { eq: "completed" } }
-        completedAt: { gte: $since }
-      }, orderBy: updatedAt) {
-        nodes { id identifier title completedAt }
-      }
-    }`,
-    { userId: linearUserId, since: sinceISO },
-  );
+  // Optional upper bound: when set, restrict to completedAt < untilISO so
+  // past-date recap queries do not leak all subsequent work (KAL-recap-bound).
+  const hasUntil = !!untilISO;
+  const query = hasUntil
+    ? `query CompletedIssuesSince($userId: ID!, $since: DateTimeOrDuration!, $until: DateTimeOrDuration!) {
+        issues(filter: {
+          assignee: { id: { eq: $userId } }
+          state: { type: { eq: "completed" } }
+          completedAt: { gte: $since, lt: $until }
+        }, orderBy: updatedAt) {
+          nodes { id identifier title completedAt }
+        }
+      }`
+    : `query CompletedIssuesSince($userId: ID!, $since: DateTimeOrDuration!) {
+        issues(filter: {
+          assignee: { id: { eq: $userId } }
+          state: { type: { eq: "completed" } }
+          completedAt: { gte: $since }
+        }, orderBy: updatedAt) {
+          nodes { id identifier title completedAt }
+        }
+      }`;
+  const variables: Record<string, unknown> = { userId: linearUserId, since: sinceISO };
+  if (hasUntil) variables.until = untilISO;
+  const data = await gql(query, variables);
   const nodes = (data.issues as { nodes: Array<{ id: string; identifier: string; title: string; completedAt: string }> }).nodes;
   return nodes.filter((n) => !!n.completedAt);
 }
@@ -333,18 +347,30 @@ export interface CreatedIssue {
 export async function getCreatedIssuesSince(
   linearUserId: string,
   sinceISO: string,
+  untilISO?: string,
 ): Promise<CreatedIssue[]> {
-  const data = await gql(
-    `query CreatedIssuesSince($userId: ID!, $since: DateTimeOrDuration!) {
-      issues(filter: {
-        assignee: { id: { eq: $userId } }
-        createdAt: { gte: $since }
-      }, orderBy: createdAt) {
-        nodes { id identifier title createdAt labels { nodes { name } } }
-      }
-    }`,
-    { userId: linearUserId, since: sinceISO },
-  );
+  // Optional upper bound — see getCompletedIssuesSince above.
+  const hasUntil = !!untilISO;
+  const query = hasUntil
+    ? `query CreatedIssuesSince($userId: ID!, $since: DateTimeOrDuration!, $until: DateTimeOrDuration!) {
+        issues(filter: {
+          assignee: { id: { eq: $userId } }
+          createdAt: { gte: $since, lt: $until }
+        }, orderBy: createdAt) {
+          nodes { id identifier title createdAt labels { nodes { name } } }
+        }
+      }`
+    : `query CreatedIssuesSince($userId: ID!, $since: DateTimeOrDuration!) {
+        issues(filter: {
+          assignee: { id: { eq: $userId } }
+          createdAt: { gte: $since }
+        }, orderBy: createdAt) {
+          nodes { id identifier title createdAt labels { nodes { name } } }
+        }
+      }`;
+  const variables: Record<string, unknown> = { userId: linearUserId, since: sinceISO };
+  if (hasUntil) variables.until = untilISO;
+  const data = await gql(query, variables);
   const nodes = (data.issues as {
     nodes: Array<{
       id: string;
