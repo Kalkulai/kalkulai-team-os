@@ -251,24 +251,24 @@ Das Dashboard erkennt ihn beim Laden (`lib/team-tasks.ts: parseTeamTaskGroupId /
 ```http
 POST /api/tasks/complete
 Authorization: Bearer ${SECRET}
-
-{ "issueId": "<linear-issue-id>" }
 ```
 
-Setzt Linear-State auf "Done" (via `LINEAR_DONE_STATE_ID`).
+Akzeptiert entweder `issueId` (Linear-UUID) oder `identifier` (KAL-XX):
 
-#### Task abschließen via Identifier (für Git-Hooks aus Fremdrepos)
-
-```http
-POST /api/tasks/complete-by-identifier
-Authorization: Bearer ${SECRET}
-
+```json
+{ "issueId": "<linear-issue-id>" }
+```
+oder (fuer Git-Hooks/CLI die nur den Identifier kennen):
+```json
 { "identifier": "KAL-42" }
 ```
 
-Löst den Identifier server-seitig zu einer UUID auf (`getIssueByIdentifier`) und setzt dann `setIssueStatus`. Idempotent — Linear toleriert mehrfaches Setzen des gleichen States. Verwendet vom `task-router-post-bash.js` Hook im Hauptrepo, der nur den menschenlesbaren Identifier kennt (keine UUID).
+Setzt Linear-State auf "Done" (via `LINEAR_DONE_STATE_ID`). Idempotent.
 
-Response: `{ ok: true, identifier: "KAL-42", issueId: "<uuid>" }`.
+Response bei `issueId`: `{ ok: true }`.
+Response bei `identifier`: `{ ok: true, identifier: "KAL-42", issueId: "<uuid>" }`.
+
+> **Note:** `/api/tasks/complete-by-identifier` existiert noch, hat aber ein Next.js-Route-Matching-Problem auf Prod. Bitte `/api/tasks/complete` mit `identifier`-Param nutzen.
 
 #### Task-Status ändern (Kanban-DnD)
 
