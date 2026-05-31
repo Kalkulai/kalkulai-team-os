@@ -32,12 +32,19 @@ export function HorizonCard({
 
   useEffect(() => {
     if (!storageKey) return;
-    try {
-      const stored = localStorage.getItem(storageKey);
-      if (stored !== null) setCollapsed(stored === 'true');
-    } catch {
-      // localStorage unavailable
-    }
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (cancelled) return;
+      try {
+        const stored = localStorage.getItem(storageKey);
+        if (stored !== null) setCollapsed(stored === 'true');
+      } catch {
+        // localStorage unavailable
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [storageKey]);
 
   function toggle() {

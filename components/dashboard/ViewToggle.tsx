@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { LayoutList, Kanban, MessageCircle } from 'lucide-react';
+import { LayoutList, Kanban, Megaphone, MessageCircle } from 'lucide-react';
+import { campaignViewEnabledForMember } from '@/lib/campaign-access';
 
-type View = 'day' | 'board' | 'chat';
+type View = 'day' | 'board' | 'chat' | 'campaigns';
 
 export function ViewToggle({
   currentView,
@@ -18,6 +19,7 @@ export function ViewToggle({
   const inactive = `${base} text-[var(--ink-3)] hover:text-[var(--ink-2)]`;
 
   const cls = (v: View) => (currentView === v ? active : inactive);
+  const showCampaigns = campaignViewEnabledForMember(memberId);
 
   return (
     <div className="mb-5 flex items-center gap-1 self-start rounded-[10px] border border-[var(--line-1)] bg-white/[0.04] p-1">
@@ -29,6 +31,12 @@ export function ViewToggle({
         <Kanban size={13} aria-hidden />
         Board
       </Link>
+      {showCampaigns && (
+        <Link href={`/dashboard/campaigns${q}`} className={cls('campaigns')}>
+          <Megaphone size={13} aria-hidden />
+          Kampagnen
+        </Link>
+      )}
       <Link href={`/dashboard/chat${q}`} className={cls('chat')}>
         <MessageCircle size={13} aria-hidden />
         Chat

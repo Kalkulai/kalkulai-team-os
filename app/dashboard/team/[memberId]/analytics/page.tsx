@@ -74,8 +74,11 @@ export default function MemberAnalyticsPage() {
       }
     }
 
-    setLoading(true);
-    fetchOnce(true);
+    void Promise.resolve().then(() => {
+      if (cancelled) return;
+      setLoading(true);
+      fetchOnce(true);
+    });
 
     const onVisibility = () => {
       if (document.visibilityState === 'visible') fetchOnce(false);

@@ -154,7 +154,6 @@ function TaskRow({
   const due = dueMeta(task.dueDate);
   const statusLabel = STATUS_LABEL[task.status];
   const hasMeta = prio > 0 || due !== null || statusLabel !== null;
-  const hasRow1 = isStep && !!task.project;
 
   function handleRowClick() {
     if (!isPending) onCheck(task.id, task.kind);
@@ -397,12 +396,13 @@ export function TaskList({
   const [editError, setEditError] = useState<string | null>(null);
 
   useEffect(() => {
-    const stored = loadLocal(userId);
-    setLocalStore(stored);
-    if (stored.length === 0) return;
-
     let cancelled = false;
-    void (async () => {
+    void Promise.resolve().then(async () => {
+      const stored = loadLocal(userId);
+      if (cancelled) return;
+      setLocalStore(stored);
+      if (stored.length === 0) return;
+
       let anyMigrated = false;
       for (const t of stored) {
         if (cancelled) break;
@@ -433,7 +433,7 @@ export function TaskList({
         }
       }
       if (anyMigrated && !cancelled) router.refresh();
-    })();
+    });
 
     return () => {
       cancelled = true;
