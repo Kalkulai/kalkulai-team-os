@@ -110,6 +110,7 @@ export interface CampaignRouteAction {
 }
 
 export interface CampaignSyncPayload {
+  mode?: 'append' | 'replace';
   campaigns?: Partial<CampaignRow>[];
   leads?: Partial<CampaignLeadRow>[];
   events?: Partial<CampaignEventRow>[];
@@ -119,12 +120,20 @@ export interface CampaignSyncResult {
   campaigns: number;
   leads: number;
   events: number;
+  pruned: number;
 }
 
 interface TeamMemberLite {
   id: string;
   linear_user_id: string | null;
   hubspot_owner_id: string | null;
+}
+
+interface ExistingLeadIdentity {
+  id: string;
+  campaign_id: string;
+  external_system: string | null;
+  external_id: string | null;
 }
 
 function withoutUndefined<T extends Record<string, unknown>>(row: T): T {
@@ -148,6 +157,7 @@ export async function syncCampaignPayload(input: CampaignSyncPayload): Promise<C
   const campaigns = input.campaigns ?? [];
   const leads = input.leads ?? [];
   const events = input.events ?? [];
+  let pruned = 0;
 
   if (campaigns.length > 0) {
     requireExternalIdentity(campaigns, 'campaigns');
@@ -161,6 +171,9 @@ export async function syncCampaignPayload(input: CampaignSyncPayload): Promise<C
 
   if (leads.length > 0) {
     requireLeadExternalIdentity(leads);
+    if (input.mode === 'replace') {
+      pruned = await pruneMissingCampaignLeads(leads);
+    }
     const { error } = await supabaseAdmin
       .from('campaign_leads')
       .upsert(leads.map((row) => withoutUndefined(row as Record<string, unknown>)), {
@@ -179,7 +192,7 @@ export async function syncCampaignPayload(input: CampaignSyncPayload): Promise<C
     if (error) throw new Error(`sync campaign_events: ${error.message}`);
   }
 
-  return { campaigns: campaigns.length, leads: leads.length, events: events.length };
+  return { campaigns: campaigns.length, leads: leads.length, events: events.length, pruned };
 }
 
 export function calculateCampaignStats(
@@ -413,6 +426,45 @@ function notTrackedMetrics(sentEvents: number, replyEvents: number, openEvents: 
   if (sentEvents === 0 && replyEvents === 0 && openEvents === 0) return ['Sends', 'Replies', 'Opens'];
   if (sentEvents === 0) return ['Sends'];
   return openEvents === 0 ? ['Opens'] : [];
+}
+
+async function pruneMissingCampaignLeads(leads: Array<Partial<CampaignLeadRow>>): Promise<number> {
+  const incomingByScope = new Map<string, Set<string>>();
+  for (const lead of leads) {
+    if (!lead.campaign_id || !lead.external_system || !lead.external_id) continue;
+    const key = leadSyncScopeKey(lead.campaign_id, lead.external_system);
+    const externalIds = incomingByScope.get(key) ?? new Set<string>();
+    externalIds.add(lead.external_id);
+    incomingByScope.set(key, externalIds);
+  }
+
+  if (incomingByScope.size === 0) return 0;
+
+  const { data, error } = await supabaseAdmin
+    .from('campaign_leads')
+    .select('id, campaign_id, external_system, external_id');
+  if (error) throw new Error(`prune campaign_leads read: ${error.message}`);
+
+  const staleIds = ((data ?? []) as ExistingLeadIdentity[])
+    .filter((lead) => {
+      if (!lead.external_system || !lead.external_id) return false;
+      const scope = incomingByScope.get(leadSyncScopeKey(lead.campaign_id, lead.external_system));
+      return Boolean(scope && !scope.has(lead.external_id));
+    })
+    .map((lead) => lead.id);
+
+  if (staleIds.length === 0) return 0;
+
+  const { error: deleteError } = await supabaseAdmin
+    .from('campaign_leads')
+    .delete()
+    .in('id', staleIds);
+  if (deleteError) throw new Error(`prune campaign_leads delete: ${deleteError.message}`);
+  return staleIds.length;
+}
+
+function leadSyncScopeKey(campaignId: string, externalSystem: string): string {
+  return `${campaignId}:${externalSystem}`;
 }
 
 function buildIdempotencyKey(
