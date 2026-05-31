@@ -84,6 +84,21 @@ export interface CampaignDetail extends CampaignSummary {
   leads: Array<CampaignLeadRow & { events: CampaignEventRow[] }>;
 }
 
+export interface CampaignTrackingSnapshot {
+  sourceLabel: string;
+  campaignCount: number;
+  leadCount: number;
+  noteEvents: number;
+  providerEvents: number;
+  sentEvents: number;
+  replyEvents: number;
+  openEvents: number;
+  followupsDue: number;
+  needsPreflight: number;
+  tracked: string[];
+  notTracked: string[];
+}
+
 export interface CampaignRouteAction {
   campaignId: string;
   leadId: string;
@@ -185,6 +200,42 @@ export function calculateCampaignStats(
     openRate: sent > 0 && opens > 0 ? Math.round((opens / sent) * 100) : null,
     followupsDue,
     blocked,
+  };
+}
+
+export function buildCampaignTrackingSnapshot(
+  campaigns: CampaignSummary[],
+  details: CampaignDetail[],
+): CampaignTrackingSnapshot {
+  const leads = details.flatMap((detail) => detail.leads);
+  const events = leads.flatMap((lead) => lead.events);
+  const noteEvents = events.filter((event) => event.event_type === 'note').length;
+  const sentEvents = events.filter((event) => event.event_type === 'sent').length;
+  const replyEvents = events.filter((event) => event.event_type === 'replied').length;
+  const openEvents = events.filter((event) => event.event_type === 'opened').length;
+  const providerEvents = sentEvents + replyEvents + openEvents;
+  const followupsDue = campaigns.reduce((sum, campaign) => sum + campaign.stats.followupsDue, 0);
+  const leadCount = leads.length > 0 ? leads.length : campaigns.reduce((sum, campaign) => sum + campaign.leadCount, 0);
+  const needsPreflight = leads.filter(needsLeadPreflight).length;
+
+  return {
+    sourceLabel: sourceLabelFor(campaigns, providerEvents),
+    campaignCount: campaigns.length,
+    leadCount,
+    noteEvents,
+    providerEvents,
+    sentEvents,
+    replyEvents,
+    openEvents,
+    followupsDue,
+    needsPreflight,
+    tracked: [
+      `${leadCount} Leads`,
+      `${noteEvents} Notes`,
+      `${followupsDue} Follow-ups due`,
+      `${needsPreflight} Preflight`,
+    ],
+    notTracked: notTrackedMetrics(sentEvents, replyEvents, openEvents),
   };
 }
 
@@ -340,6 +391,28 @@ function shouldRouteLead(lead: CampaignLeadRow, now: Date): boolean {
   if (!lead.next_action_at) return true;
   const due = Date.parse(lead.next_action_at);
   return Number.isNaN(due) || due <= now.getTime();
+}
+
+function sourceLabelFor(campaigns: CampaignSummary[], providerEvents: number): string {
+  const sources = new Set(campaigns.map((campaign) => campaign.source).filter(Boolean));
+  if (sources.size === 0) return providerEvents > 0 ? 'Provider Events' : 'Team-OS';
+  if (sources.size === 1 && sources.has('operations')) {
+    return providerEvents > 0 ? 'Operations CSV + Provider Events' : 'Operations CSV';
+  }
+  return [...sources].join(' + ');
+}
+
+function needsLeadPreflight(lead: CampaignLeadRow): boolean {
+  const meta = lead.meta ?? {};
+  const priorContact = typeof meta.prior_contact === 'string' ? meta.prior_contact : '';
+  const nextAction = lead.next_action?.toLowerCase() ?? '';
+  return !lead.email || priorContact === 'unknown' || nextAction.includes('prior-contact');
+}
+
+function notTrackedMetrics(sentEvents: number, replyEvents: number, openEvents: number): string[] {
+  if (sentEvents === 0 && replyEvents === 0 && openEvents === 0) return ['Sends', 'Replies', 'Opens'];
+  if (sentEvents === 0) return ['Sends'];
+  return openEvents === 0 ? ['Opens'] : [];
 }
 
 function buildIdempotencyKey(

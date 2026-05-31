@@ -1,8 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { AlertCircle, Bell, CheckCircle2, Inbox, Mail, MousePointerClick, Reply, Users } from 'lucide-react';
-import type { CampaignDetail, CampaignSummary } from '@/lib/campaigns';
+import { AlertCircle, Bell, CheckCircle2, Database, Inbox, Mail, MousePointerClick, Reply, SearchCheck, Users } from 'lucide-react';
+import { buildCampaignTrackingSnapshot, type CampaignDetail, type CampaignSummary, type CampaignTrackingSnapshot } from '@/lib/campaigns';
 
 type Filter = 'all' | 'needs-leon' | 'needs-paul' | 'replies' | 'followups' | 'blocked';
 
@@ -24,6 +24,7 @@ export function CampaignDashboard({
 }) {
   const [filter, setFilter] = useState<Filter>('all');
   const detailById = useMemo(() => new Map(details.map((detail) => [detail.id, detail])), [details]);
+  const tracking = useMemo(() => buildCampaignTrackingSnapshot(campaigns, details), [campaigns, details]);
   const visible = campaigns.filter((campaign) => matchesFilter(campaign, filter));
 
   const totals = campaigns.reduce(
@@ -51,6 +52,8 @@ export function CampaignDashboard({
           <Metric icon={AlertCircle} label="Blocked" value={totals.blocked} tone={totals.blocked > 0 ? 'danger' : undefined} />
         </div>
       </header>
+
+      <CampaignDataStatus snapshot={tracking} />
 
       <div className="campaign-filterbar">
         {FILTERS.map((item) => (
@@ -93,6 +96,36 @@ export function CampaignDashboard({
         )}
       </div>
     </section>
+  );
+}
+
+function CampaignDataStatus({ snapshot }: { snapshot: CampaignTrackingSnapshot }) {
+  return (
+    <section className="campaign-data-status glass" aria-label="Kampagnen-Datenstand">
+      <div className="campaign-data-main">
+        <p className="ovr">Datenstand</p>
+        <h2>{snapshot.sourceLabel}</h2>
+        <span>{snapshot.campaignCount} Kampagnen · {snapshot.leadCount} Leads · {snapshot.noteEvents} Notes</span>
+      </div>
+      <div className="campaign-data-metrics">
+        <Metric icon={Database} label="Provider events" value={snapshot.providerEvents} />
+        <Metric icon={Bell} label="Due" value={snapshot.followupsDue} tone={snapshot.followupsDue > 0 ? 'warn' : undefined} />
+        <Metric icon={SearchCheck} label="Preflight" value={snapshot.needsPreflight} tone={snapshot.needsPreflight > 0 ? 'warn' : undefined} />
+      </div>
+      <div className="campaign-data-lists">
+        <StatusList title="Tracked" items={snapshot.tracked} />
+        <StatusList title="Not tracked" items={snapshot.notTracked.length > 0 ? snapshot.notTracked : ['complete']} muted={snapshot.notTracked.length === 0} />
+      </div>
+    </section>
+  );
+}
+
+function StatusList({ title, items, muted = false }: { title: string; items: string[]; muted?: boolean }) {
+  return (
+    <div className={muted ? 'is-muted' : undefined}>
+      <span>{title}</span>
+      <strong>{items.join(' · ')}</strong>
+    </div>
   );
 }
 

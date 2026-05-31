@@ -48,6 +48,7 @@ vi.mock('@/lib/campaign-task-routing', () => ({
 }));
 
 import {
+  buildCampaignTrackingSnapshot,
   calculateCampaignStats,
   listCampaignSummaries,
   routeCampaignActions,
@@ -120,6 +121,83 @@ describe('campaign aggregation', () => {
     expect(out[0].name).toBe('Partnerships Bayern');
     expect(out[0].stats.replyRate).toBe(100);
     expect(out[0].stats.followupsDue).toBe(1);
+  });
+
+  it('builds an honest tracking snapshot for the feedback panel', () => {
+    const snapshot = buildCampaignTrackingSnapshot(
+      [
+        {
+          id: 'camp-1',
+          name: 'Operations Campaign',
+          type: 'partnerships',
+          status: 'active',
+          owner_member_id: LEON,
+          source: 'operations',
+          leadCount: 2,
+          stats: {
+            sent: 0,
+            replies: 0,
+            replyRate: null,
+            opens: 0,
+            openRate: null,
+            followupsDue: 1,
+            blocked: 0,
+          },
+        },
+      ],
+      [
+        {
+          id: 'camp-1',
+          name: 'Operations Campaign',
+          type: 'partnerships',
+          status: 'active',
+          owner_member_id: LEON,
+          source: 'operations',
+          leadCount: 2,
+          stats: {
+            sent: 0,
+            replies: 0,
+            replyRate: null,
+            opens: 0,
+            openRate: null,
+            followupsDue: 1,
+            blocked: 0,
+          },
+          leads: [
+            {
+              id: 'lead-1',
+              campaign_id: 'camp-1',
+              display_name: 'Stefan Ehle',
+              company_name: 'Malerinnung Augsburg',
+              email: 'stefan@example.com',
+              stage: 'ready',
+              meta: { prior_contact: 'unknown' },
+              events: [{ campaign_id: 'camp-1', lead_id: 'lead-1', event_type: 'note', source: 'operations' }],
+            },
+            {
+              id: 'lead-2',
+              campaign_id: 'camp-1',
+              display_name: 'KHS Route',
+              company_name: 'Kreishandwerkerschaft',
+              email: null,
+              stage: 'followup_due',
+              events: [],
+            },
+          ],
+        },
+      ],
+    );
+
+    expect(snapshot).toMatchObject({
+      sourceLabel: 'Operations CSV',
+      campaignCount: 1,
+      leadCount: 2,
+      noteEvents: 1,
+      providerEvents: 0,
+      followupsDue: 1,
+      needsPreflight: 2,
+    });
+    expect(snapshot.notTracked).toEqual(['Sends', 'Replies', 'Opens']);
   });
 });
 
