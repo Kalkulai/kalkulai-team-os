@@ -17,6 +17,7 @@ function makeBuilder(table: string): unknown {
     insertPayloads.push(payload);
     return Promise.resolve({ data: [payload], error: null });
   });
+  builder.delete = vi.fn(chain);
   builder.upsert = vi.fn((payload: unknown, options: unknown) => {
     upsertPayloads.push({ table, payload, options });
     return Promise.resolve({ data: payload, error: null });
@@ -226,7 +227,7 @@ describe('campaign sync', () => {
       }],
     });
 
-    expect(result).toEqual({ campaigns: 1, leads: 1, events: 1 });
+    expect(result).toEqual({ campaigns: 1, leads: 1, events: 1, pruned: 0 });
     expect(upsertPayloads.map((call) => call.table)).toEqual([
       'campaigns',
       'campaign_leads',
@@ -235,6 +236,50 @@ describe('campaign sync', () => {
     expect(upsertPayloads[0].options).toEqual({ onConflict: 'source,external_id' });
     expect(upsertPayloads[1].options).toEqual({ onConflict: 'campaign_id,external_system,external_id' });
     expect(upsertPayloads[2].options).toEqual({ onConflict: 'source,external_id' });
+  });
+
+  it('prunes missing leads for campaigns included in a replace sync', async () => {
+    rows.campaign_leads = [
+      {
+        id: 'keep-lead',
+        campaign_id: '00000000-0000-0000-0000-000000000001',
+        external_system: 'operations',
+        external_id: 'ops-lead-keep',
+      },
+      {
+        id: 'stale-lead',
+        campaign_id: '00000000-0000-0000-0000-000000000001',
+        external_system: 'operations',
+        external_id: 'ops-lead-stale',
+      },
+      {
+        id: 'other-campaign-lead',
+        campaign_id: '00000000-0000-0000-0000-000000000002',
+        external_system: 'operations',
+        external_id: 'ops-lead-other',
+      },
+    ];
+
+    const result = await syncCampaignPayload({
+      mode: 'replace',
+      campaigns: [{
+        id: '00000000-0000-0000-0000-000000000001',
+        name: 'Partner Juni',
+        type: 'partnerships',
+        status: 'active',
+        source: 'operations',
+        external_id: 'ops-camp-1',
+      }],
+      leads: [{
+        campaign_id: '00000000-0000-0000-0000-000000000001',
+        display_name: 'Malerverband Bayern',
+        stage: 'ready',
+        external_system: 'operations',
+        external_id: 'ops-lead-keep',
+      }],
+    });
+
+    expect(result.pruned).toBe(1);
   });
 });
 
