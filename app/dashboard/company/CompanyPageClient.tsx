@@ -133,7 +133,7 @@ export default function CompanyPageClient() {
     let lastFetchAt = 0;
     const MIN_GAP_MS = 30_000;
 
-    async function fetchOnce(_reason: string) {
+    async function fetchOnce() {
       const now = Date.now();
       if (now - lastFetchAt < MIN_GAP_MS) return;
       lastFetchAt = now;
@@ -149,15 +149,15 @@ export default function CompanyPageClient() {
       }
     }
 
-    fetchOnce('mount');
+    fetchOnce();
 
     const onVisibility = () => {
-      if (document.visibilityState === 'visible') fetchOnce('visibility-wake');
+      if (document.visibilityState === 'visible') fetchOnce();
     };
     document.addEventListener('visibilitychange', onVisibility);
 
     const intervalId = setInterval(() => {
-      if (document.visibilityState === 'visible') fetchOnce('poll-60s');
+      if (document.visibilityState === 'visible') fetchOnce();
     }, 60_000);
 
     return () => {

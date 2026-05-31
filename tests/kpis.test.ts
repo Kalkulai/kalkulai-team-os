@@ -63,7 +63,7 @@ vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: { from: (...args: unknown[]) => fromMock(...(args as [string])) },
 }));
 
-const getCallsThisWeekMock = vi.fn(async (_ownerId: string) => [] as unknown[]);
+const getCallsThisWeekMock = vi.fn(async () => [] as unknown[]);
 vi.mock('@/lib/hubspot', () => ({
   getCallsThisWeek: (ownerId: string) => getCallsThisWeekMock(ownerId),
 }));

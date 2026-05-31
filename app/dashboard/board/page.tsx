@@ -38,7 +38,8 @@ export default async function BoardPage({
     members.find((m) => m.id === fromCookie) ??
     members[0];
 
-  const since14 = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+  const now = new Date();
+  const since14 = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString();
 
   const [issues, allKpis, completedLinear] = await Promise.all([
     me.linear_user_id ? getIssuesForUser(me.linear_user_id) : Promise.resolve([]),

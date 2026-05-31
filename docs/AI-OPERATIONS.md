@@ -349,6 +349,7 @@ Triggert `buildDailyBriefing` + Telegram-Send. Body ohne `userId` = alle Member.
 | Projekte + Steps | Supabase `kpis` (`type='project'/'step'`, via `parent_id`) | `POST /api/kpis` mit `type:'project'` → dann `type:'step', parent_id:<id>` |
 | Step-Erledigung | s.o. | `PATCH /api/kpis/{stepId}` mit `{completed:true}` — auch via Kanban-DnD |
 | Sales-Calls | Supabase `sales_logs` + HubSpot | `POST /api/sales/log-call` |
+| GTM Campaigns | Supabase `campaigns`, `campaign_leads`, `campaign_events` | `POST /api/campaigns/sync`, `POST /api/campaigns/route-actions` |
 | Wochenziele | Supabase `kpi_targets` | `POST /api/kpi/set-target` |
 | Aktivität | aggregiert in `lib/activity.ts` | **kein direkter Schreibpfad** — Events entstehen aus Quellen oben automatisch |
 
@@ -461,6 +462,57 @@ curl -X POST "$BASE/api/tasks/create" -H "Authorization: Bearer $SECRET" -H "Con
 ```
 
 Resultat: 2 Linear-Issues (je einer für Leon + Felix), beide mit Label `Team-Task`. Das Dashboard zeigt auf beiden Task-Karten den Avatar-Stack `[L][F]`.
+
+### 4.5 GTM Campaigns lesen und Aufgaben routen
+
+Die Kampagnenansicht ist nur im Leon-Profil sichtbar (`/dashboard/campaigns?member=<LEON>`). Sie sendet keine Mails.
+
+Source-of-truth v1:
+- Planung kommt aus `C:\Kalkulai\kalkulai-operations`, nicht aus Team-OS selbst.
+- Aktueller Sync-Input: `data/association-map/2026-05-31-send-queue.csv` und `data/pipeline-immediate.csv`.
+- Script: `C:\Kalkulai\kalkulai-operations\scripts\build-team-os-campaign-sync.py`.
+- Team-OS trackt Campaign, Lead, Event und Action-Log. `sent/replied/opened` werden nur angezeigt, wenn echte Events importiert wurden.
+
+```http
+GET /api/campaigns
+Authorization: Bearer ${SECRET}
+```
+
+Response:
+```json
+{ "campaigns": [{ "id": "...", "name": "Partner Juni", "type": "partnerships", "stats": { "sent": 0, "replies": 0, "replyRate": null, "openRate": null, "followupsDue": 0, "blocked": 0 } }] }
+```
+
+```http
+GET /api/campaigns/{id}
+Authorization: Bearer ${SECRET}
+```
+
+Liefert Kampagne plus Leads und Lead-Timeline.
+
+```http
+POST /api/campaigns/route-actions
+Authorization: Bearer ${SECRET}
+```
+
+Routet fällige `replied`/`followup_due` Leads idempotent:
+- `type='handwerker'` → HubSpot-Task für Pauls `hubspot_owner_id`.
+- `type='partnerships'` → Linear/Team-OS Task für Leon.
+- Keine Mail-Sends, keine Attio-Writes in v1.
+
+Sync:
+
+```http
+POST /api/campaigns/sync
+Authorization: Bearer ${SECRET}
+```
+
+Payload-Felder:
+- `campaigns[]`: `id`, `name`, `type`, `status`, `owner_member_id`, `source`, `external_id`.
+- `leads[]`: `id`, `campaign_id`, Zielperson/Firma, `stage`, `next_action`, `next_action_at`, `external_system`, `external_id`, `meta`.
+- `events[]`: `campaign_id`, `lead_id`, `event_type`, `occurred_at`, `source`, `external_id`, `summary`, `meta`.
+
+Open-Rate bleibt `not tracked`, solange kein Provider echte `opened` Events liefert.
 
 ---
 

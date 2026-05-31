@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import type { TeamMember, CalendarEvent, GitHubBranch } from '@/types';
+import type { TeamMember, CalendarEvent } from '@/types';
 
 vi.mock('@/lib/linear', () => ({
   getIssuesForUser: vi.fn(),

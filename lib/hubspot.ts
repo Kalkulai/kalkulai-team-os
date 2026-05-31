@@ -20,6 +20,30 @@ async function hsPost<T>(path: string, body: unknown): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export interface HubSpotTaskResult {
+  id: string;
+}
+
+export async function createHubSpotTask(args: {
+  ownerId: string;
+  subject: string;
+  body: string;
+  dueAt: string;
+}): Promise<HubSpotTaskResult> {
+  type TaskResp = { id: string };
+  const data = await hsPost<TaskResp>('/crm/v3/objects/tasks', {
+    properties: {
+      hs_task_subject: args.subject,
+      hs_task_body: args.body,
+      hs_timestamp: args.dueAt,
+      hs_task_status: 'NOT_STARTED',
+      hs_task_priority: 'HIGH',
+      hubspot_owner_id: args.ownerId,
+    },
+  });
+  return { id: data.id };
+}
+
 /**
  * All HubSpot Calls created by `hubspotOwnerId` since `since` (or Monday this
  * week if `since` is omitted or earlier than Monday).
