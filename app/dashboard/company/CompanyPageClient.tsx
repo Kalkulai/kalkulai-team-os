@@ -174,7 +174,13 @@ export default function CompanyPageClient() {
 
   useEffect(() => {
     let cancelled = false;
+    let lastFetchAt = 0;
+    const MIN_GAP_MS = 30_000;
+
     async function fetchFinance() {
+      const now = Date.now();
+      if (now - lastFetchAt < MIN_GAP_MS) return;
+      lastFetchAt = now;
       try {
         const res = await fetch('/api/finance', {
           headers: { Authorization: `Bearer ${SECRET}` },
@@ -192,9 +198,22 @@ export default function CompanyPageClient() {
         if (!cancelled) setFinanceLoading(false);
       }
     }
+
     fetchFinance();
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') fetchFinance();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    const intervalId = setInterval(() => {
+      if (document.visibilityState === 'visible') fetchFinance();
+    }, 60_000);
+
     return () => {
       cancelled = true;
+      document.removeEventListener('visibilitychange', onVisibility);
+      clearInterval(intervalId);
     };
   }, []);
 
@@ -216,15 +235,17 @@ export default function CompanyPageClient() {
     const financeBlock = finance
       ? [
           `Finanzen (CFO-Kai · ${finance.as_of}):`,
-          `- Förderlaufzeit: ${finance.runway_months} Monate · EXIST-Zuwendung Jahr 1 ${formatEur(finance.cash_on_hand_eur)}`,
-          `- Betriebskosten M1 (Aug): ${formatEur(finance.monthly_burn.actual_eur)}/Monat`,
+          `- Cash on hand: ${formatEur(finance.cash_on_hand_eur)} · Runway ${finance.runway_months} Monate`,
+          `- Monatlicher Burn: ${formatEur(finance.monthly_burn.actual_eur)}/Monat (Plan ${formatEur(
+            finance.monthly_burn.plan_eur,
+          )})`,
           `- Top-Kosten: ${finance.cost_lines
             .map((line) => `${line.label} ${formatEur(line.amount_eur)}${line.fixed ? ' (fix)' : ''}`)
             .join(', ')}`,
-          `- Kapital kumuliert (M6/Jan, Forecast): ${formatEur(
+          `- Kapital kumuliert (Forecast-Ende): ${formatEur(
             finance.forecast_6m[finance.forecast_6m.length - 1]?.cash_eur ?? 0,
           )}`,
-          `- Break-Even (nur Business): ${finance.break_even_label}`,
+          `- Break-Even: ${finance.break_even_label}`,
           `- Pilot-Funnel: ${finance.pilot_health
             .map((row) => `${row.name} [${row.status}] ${row.note}`)
             .join('; ')}`,
