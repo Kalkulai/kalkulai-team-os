@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/github-health",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/finance/sync",
+      "schedule": "0 6 * * *"
     }
   ]
 }

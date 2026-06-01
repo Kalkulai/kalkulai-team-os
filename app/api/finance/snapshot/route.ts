@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireApiAuth } from '@/lib/api-auth';
+import { checkFinanceConsistency } from '@/lib/finance-gate';
 import { insertFinanceSnapshot, isFinanceScenario } from '@/lib/finance-store';
 import type { CostLine, FinanceData, ForecastPoint, PaidBySlice, PilotHealthRow } from '@/types/finance';
 
@@ -84,6 +85,12 @@ export async function POST(req: NextRequest) {
   const validated = validateFinanceData(body.data);
   if (!validated.ok) {
     return NextResponse.json({ error: validated.error }, { status: 400 });
+  }
+
+  // Sanity-Gate: interne Widersprüche (z.B. runway != cash/burn) ablehnen.
+  const consistency = checkFinanceConsistency(validated.value);
+  if (!consistency.ok) {
+    return NextResponse.json({ error: consistency.reason }, { status: 422 });
   }
 
   const source = isStr(body.source) ? body.source : undefined;
