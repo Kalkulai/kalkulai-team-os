@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { google } from 'googleapis';
 import { JWT, ExternalAccountClient, type BaseExternalAccountClient } from 'google-auth-library';
+import { getVercelOidcToken } from '@vercel/oidc';
 
 export type FieldKind = 'input' | 'output';
 
@@ -142,26 +143,22 @@ const WIF_SUBJECT_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:jwt';
  * Wirft einen klaren Error, wenn keiner der beiden Wege konfiguriert ist.
  */
 function buildAuth(scope: string): JWT | BaseExternalAccountClient {
-  // 1) Keyless WIF — bevorzugt, sobald die WIF-Env-Vars stehen.
-  const audience = process.env.GCP_WORKLOAD_IDENTITY_AUDIENCE;
+  // 1) Keyless WIF — bevorzugt, sobald die WIF-Env-Vars stehen. Env-Namen +
+  //    Audience-Aufbau folgen exakt dem offiziellen Vercel-GCP-OIDC-Muster.
+  const projectNumber = process.env.GCP_PROJECT_NUMBER;
+  const poolId = process.env.GCP_WORKLOAD_IDENTITY_POOL_ID;
+  const providerId = process.env.GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID;
   const saEmail = process.env.GCP_SERVICE_ACCOUNT_EMAIL;
-  if (audience && saEmail) {
+  if (projectNumber && poolId && providerId && saEmail) {
     const client = ExternalAccountClient.fromJSON({
       type: 'external_account',
-      audience,
+      audience: `//iam.googleapis.com/projects/${projectNumber}/locations/global/workloadIdentityPools/${poolId}/providers/${providerId}`,
       subject_token_type: WIF_SUBJECT_TOKEN_TYPE,
       token_url: STS_TOKEN_URL,
       service_account_impersonation_url: `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${saEmail}:generateAccessToken`,
-      subject_token_supplier: {
-        // Frisch aus der Env lesen — Vercel rotiert das Token; nie cachen.
-        getSubjectToken: async (): Promise<string> => {
-          const token = process.env.VERCEL_OIDC_TOKEN;
-          if (!token) {
-            throw new Error('VERCEL_OIDC_TOKEN ist nicht gesetzt (Vercel-OIDC fürs Projekt aktiviert?)');
-          }
-          return token;
-        },
-      },
+      // Vercel-Helper: liefert das kurzlebige OIDC-Token (Env in Prod, API in Dev).
+      // Wrappen, weil der Supplier einen context-Param erwartet, getVercelOidcToken aber options.
+      subject_token_supplier: { getSubjectToken: (): Promise<string> => getVercelOidcToken() },
     });
     if (!client) {
       throw new Error('WIF-Konfiguration ungültig: ExternalAccountClient konnte nicht erstellt werden');
@@ -198,8 +195,9 @@ function buildAuth(scope: string): JWT | BaseExternalAccountClient {
   }
 
   throw new Error(
-    'Keine Google-Credentials konfiguriert: setze entweder GCP_WORKLOAD_IDENTITY_AUDIENCE + ' +
-      'GCP_SERVICE_ACCOUNT_EMAIL (keyless WIF, Prod) oder GOOGLE_SERVICE_ACCOUNT_JSON (Key, lokal).',
+    'Keine Google-Credentials konfiguriert: setze entweder die WIF-Vars (GCP_PROJECT_NUMBER, ' +
+      'GCP_WORKLOAD_IDENTITY_POOL_ID, GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID, GCP_SERVICE_ACCOUNT_EMAIL ' +
+      '— keyless, Prod) oder GOOGLE_SERVICE_ACCOUNT_JSON (Key, lokal).',
   );
 }
 
