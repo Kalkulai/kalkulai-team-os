@@ -38,6 +38,9 @@ const PUBLIC_PREFIXES = [
 
 function isPublic(path: string): boolean {
   if (PUBLIC_EXACT.has(path)) return true;
+  // Dev-only auth-free finance preview (see app/finance-preview/page.tsx).
+  // Never public in production — there it falls through to the auth gate.
+  if (process.env.NODE_ENV !== 'production' && path === '/finance-preview') return true;
   return PUBLIC_PREFIXES.some((p) => path === p || path.startsWith(p));
 }
 

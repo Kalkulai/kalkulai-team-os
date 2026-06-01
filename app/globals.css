@@ -1173,6 +1173,133 @@ html.light .tl-row code { background: rgba(11, 11, 15, 0.05); }
 }
 .company-heatmap-cell:hover { transform: scale(1.06); }
 
+/* ─── Finanzen — CFO-Kai ─── */
+.fin-grid { display: flex; flex-direction: column; gap: 12px; }
+.fin-asof { color: var(--ink-3); font-style: italic; }
+
+.fin-kpi-row {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+}
+@media (max-width: 900px) { .fin-kpi-row { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 540px) { .fin-kpi-row { grid-template-columns: 1fr; } }
+
+.fin-kpi {
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 16px 18px; border-radius: 24px; min-height: 96px;
+  border: 1px solid rgba(168, 85, 247, 0.30);
+  box-shadow: 0 0 15px -3px rgb(168 85 247);
+}
+.fin-kpi.tone-ok { border-color: rgba(60, 224, 140, 0.35); box-shadow: 0 0 15px -4px var(--ok); }
+.fin-kpi.tone-warn { border-color: rgba(242, 184, 75, 0.40); box-shadow: 0 0 15px -4px var(--warn); }
+.fin-kpi.tone-bad { border-color: rgba(255, 107, 92, 0.45); box-shadow: 0 0 15px -4px var(--danger); }
+.fin-kpi-label {
+  font: 500 11px/1 var(--mono); color: var(--ink-3);
+  text-transform: uppercase; letter-spacing: 0.14em;
+}
+.fin-kpi-value {
+  font: 600 44px/1 var(--font); color: var(--ink-1);
+  display: inline-flex; align-items: baseline; gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.fin-kpi-unit { font: 500 14px/1 var(--mono); color: var(--ink-3); }
+.fin-kpi-sub { font: 400 12px/1.4 var(--font); color: var(--ink-3); }
+.fin-delta { font-family: var(--mono); font-weight: 600; }
+.fin-delta.is-ok { color: var(--ok); }
+.fin-delta.is-bad { color: var(--danger); }
+
+.fin-chart-row {
+  display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px;
+}
+@media (max-width: 900px) { .fin-chart-row { grid-template-columns: 1fr; } }
+
+.fin-card {
+  display: flex; flex-direction: column; gap: 12px;
+  padding: 18px; border-radius: 24px;
+  border: 1px solid rgba(168, 85, 247, 0.30);
+  box-shadow: 0 0 15px -3px rgb(168 85 247);
+}
+.fin-card-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.fin-card-title {
+  margin: 0; font: 600 13px/1 var(--mono); color: var(--ink-2);
+  text-transform: uppercase; letter-spacing: 0.10em;
+}
+.fin-card-legend {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: 500 11px/1 var(--mono); color: var(--ink-3);
+}
+.fin-legend-dot {
+  display: inline-block; width: 9px; height: 9px; border-radius: 999px; margin-left: 8px;
+}
+.fin-legend-dot.is-fixed { background: var(--brand-2); }
+.fin-legend-dot.is-var { background: var(--brand); }
+.fin-legend-dot.is-cash { background: var(--brand-2); }
+.fin-legend-dot.is-burn { background: var(--warn); }
+
+.fin-cost-notes,
+.fin-paidby-legend {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px;
+}
+.fin-cost-note {
+  display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center;
+  padding: 8px 12px; border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line-1);
+}
+.fin-cost-note-label {
+  font: 500 12.5px/1.3 var(--font); color: var(--ink-1);
+  display: inline-flex; align-items: center; gap: 8px;
+}
+.fin-cost-fixed-tag {
+  font: 600 9px/1 var(--mono); color: var(--brand-2);
+  text-transform: uppercase; letter-spacing: 0.08em;
+  padding: 3px 6px; border-radius: 999px; background: rgba(139, 107, 255, 0.14);
+}
+.fin-cost-note-amount {
+  font: 600 13px/1 var(--mono); color: var(--ink-1); text-align: right;
+}
+.fin-cost-note-text {
+  grid-column: 1 / -1; font: 400 11px/1.4 var(--font); color: var(--ink-3);
+}
+.fin-paidby-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 12px; border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line-1);
+}
+.fin-paidby-name { font: 500 12.5px/1.3 var(--font); color: var(--ink-1); }
+.fin-paidby-amount { font: 600 13px/1 var(--mono); color: var(--ink-1); }
+
+.fin-pilot-health {
+  list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px;
+}
+.fin-pilot-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line-1);
+}
+.fin-pilot-row.is-green { border-color: rgba(60, 224, 140, 0.30); }
+.fin-pilot-row.is-yellow { border-color: rgba(242, 184, 75, 0.35); }
+.fin-pilot-row.is-red { border-color: rgba(255, 107, 92, 0.40); }
+.fin-pilot-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.fin-pilot-name { font: 600 13px/1.2 var(--font); color: var(--ink-1); }
+.fin-pilot-note { font: 400 11.5px/1.4 var(--font); color: var(--ink-3); }
+
+.fin-ampel { display: inline-flex; align-items: center; gap: 7px; }
+.fin-ampel-dot {
+  display: inline-block; width: 10px; height: 10px; border-radius: 999px;
+  background: var(--ink-3);
+}
+.fin-ampel.is-green .fin-ampel-dot { background: var(--ok); box-shadow: 0 0 8px -1px var(--ok); }
+.fin-ampel.is-yellow .fin-ampel-dot { background: var(--warn); box-shadow: 0 0 8px -1px var(--warn); }
+.fin-ampel.is-red .fin-ampel-dot { background: var(--danger); box-shadow: 0 0 8px -1px var(--danger); }
+.fin-ampel-label {
+  font: 600 10.5px/1 var(--mono); text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--ink-2);
+}
+.fin-ampel.is-green .fin-ampel-label { color: var(--ok); }
+.fin-ampel.is-yellow .fin-ampel-label { color: var(--warn); }
+.fin-ampel.is-red .fin-ampel-label { color: var(--danger); }
+
 /* ─── Custom DatePicker (react-day-picker, token-themed) ─── */
 .datepicker { position: relative; display: inline-block; }
 .datepicker-trigger {
