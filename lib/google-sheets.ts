@@ -153,8 +153,11 @@ const WIF_SUBJECT_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:jwt';
  */
 function buildAuth(scope: string): JWT | OAuth2Client | BaseExternalAccountClient {
   // 1) OAuth2-Refresh-Token — bevorzugt, weil am einfachsten einzurichten.
-  const oauthClientId = process.env.GOOGLE_CLIENT_ID;
-  const oauthClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  //    Eigene Finance-Client-Vars bevorzugt (entkoppelt vom Calendar-Client),
+  //    Fallback auf die generischen GOOGLE_CLIENT_*.
+  const oauthClientId = process.env.GOOGLE_FINANCE_CLIENT_ID ?? process.env.GOOGLE_CLIENT_ID;
+  const oauthClientSecret =
+    process.env.GOOGLE_FINANCE_CLIENT_SECRET ?? process.env.GOOGLE_CLIENT_SECRET;
   const refreshToken = process.env.GOOGLE_FINANCE_REFRESH_TOKEN;
   if (oauthClientId && oauthClientSecret && refreshToken) {
     const client = new OAuth2Client({
