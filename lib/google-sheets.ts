@@ -7,7 +7,12 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { google } from 'googleapis';
-import { JWT, ExternalAccountClient, type BaseExternalAccountClient } from 'google-auth-library';
+import {
+  JWT,
+  OAuth2Client,
+  ExternalAccountClient,
+  type BaseExternalAccountClient,
+} from 'google-auth-library';
 import { getVercelOidcToken } from '@vercel/oidc';
 
 export type FieldKind = 'input' | 'output';
@@ -130,20 +135,38 @@ const STS_TOKEN_URL = 'https://sts.googleapis.com/v1/token';
 const WIF_SUBJECT_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:jwt';
 
 /**
- * Baut einen Google-Auth-Client für den gewünschten Scope. Zwei Modi, in dieser
- * Reihenfolge geprüft:
+ * Baut einen Google-Auth-Client für den gewünschten Scope. Drei Modi, in dieser
+ * Reihenfolge geprüft (erster konfigurierter gewinnt):
  *
- *  1. Keyless via Workload Identity Federation (Default in Prod) — Vercel gibt ein
- *     kurzlebiges OIDC-Token (VERCEL_OIDC_TOKEN) aus, das via STS gegen einen
- *     impersonierten `finance-bot`-Token getauscht wird. Kein Key, der leaken kann;
- *     org-policy-konform (keine Service-Account-Keys nötig).
- *  2. Service-Account-JSON-Key (lokal/Fallback) — nur falls GOOGLE_SERVICE_ACCOUNT_JSON
- *     gesetzt ist (z. B. lokal oder wenn die Org-Policy je gelockert wird).
+ *  1. OAuth2-Refresh-Token (einfachster Weg) — greift als Google-User zu, dessen
+ *     Refresh-Token in GOOGLE_FINANCE_REFRESH_TOKEN steht (Scope: spreadsheets).
+ *     Reuse des bestehenden Google-OAuth-Clients (GOOGLE_CLIENT_ID/SECRET). Kein
+ *     Service-Account, kein Sheet-Sharing mit Roboter (User hat eh Zugriff).
+ *  2. Keyless via Workload Identity Federation — Vercel-OIDC-Token wird via STS
+ *     gegen einen impersonierten `finance-bot`-Token getauscht. Kein Key.
+ *  3. Service-Account-JSON-Key (lokal/Fallback) — falls GOOGLE_SERVICE_ACCOUNT_JSON gesetzt.
  *
- * Wirft einen klaren Error, wenn keiner der beiden Wege konfiguriert ist.
+ * Wirft einen klaren Error, wenn keiner der Wege konfiguriert ist.
+ *
+ * Hinweis: Bei OAuth2 bestimmen die beim Consent gewährten Scopes den Zugriff —
+ * der `scope`-Parameter steuert nur JWT/WIF (Service-Account-Impersonation).
  */
-function buildAuth(scope: string): JWT | BaseExternalAccountClient {
-  // 1) Keyless WIF — bevorzugt, sobald die WIF-Env-Vars stehen. Env-Namen +
+function buildAuth(scope: string): JWT | OAuth2Client | BaseExternalAccountClient {
+  // 1) OAuth2-Refresh-Token — bevorzugt, weil am einfachsten einzurichten.
+  const oauthClientId = process.env.GOOGLE_CLIENT_ID;
+  const oauthClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const refreshToken = process.env.GOOGLE_FINANCE_REFRESH_TOKEN;
+  if (oauthClientId && oauthClientSecret && refreshToken) {
+    const client = new OAuth2Client({
+      clientId: oauthClientId,
+      clientSecret: oauthClientSecret,
+    });
+    // Access-Token wird vom Client bei Bedarf automatisch via Refresh-Token erneuert.
+    client.setCredentials({ refresh_token: refreshToken });
+    return client;
+  }
+
+  // 2) Keyless WIF — sobald die WIF-Env-Vars stehen. Env-Namen +
   //    Audience-Aufbau folgen exakt dem offiziellen Vercel-GCP-OIDC-Muster.
   const projectNumber = process.env.GCP_PROJECT_NUMBER;
   const poolId = process.env.GCP_WORKLOAD_IDENTITY_POOL_ID;
@@ -167,7 +190,7 @@ function buildAuth(scope: string): JWT | BaseExternalAccountClient {
     return client;
   }
 
-  // 2) Service-Account-JSON-Key (lokal/Fallback).
+  // 3) Service-Account-JSON-Key (lokal/Fallback).
   const rawJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
   if (rawJson) {
     let credentials: unknown;
@@ -195,9 +218,10 @@ function buildAuth(scope: string): JWT | BaseExternalAccountClient {
   }
 
   throw new Error(
-    'Keine Google-Credentials konfiguriert: setze entweder die WIF-Vars (GCP_PROJECT_NUMBER, ' +
-      'GCP_WORKLOAD_IDENTITY_POOL_ID, GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID, GCP_SERVICE_ACCOUNT_EMAIL ' +
-      '— keyless, Prod) oder GOOGLE_SERVICE_ACCOUNT_JSON (Key, lokal).',
+    'Keine Google-Credentials konfiguriert: setze einen der drei Wege — ' +
+      'GOOGLE_CLIENT_ID + GOOGLE_CLIENT_SECRET + GOOGLE_FINANCE_REFRESH_TOKEN (OAuth, einfachster), ' +
+      'die WIF-Vars (GCP_PROJECT_NUMBER, GCP_WORKLOAD_IDENTITY_POOL_ID, GCP_WORKLOAD_IDENTITY_POOL_PROVIDER_ID, ' +
+      'GCP_SERVICE_ACCOUNT_EMAIL — keyless), oder GOOGLE_SERVICE_ACCOUNT_JSON (Key, lokal).',
   );
 }
 
