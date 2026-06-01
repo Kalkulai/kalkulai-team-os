@@ -42,11 +42,11 @@ export function FinanceSection({
           {/* KPI row */}
           <div className="fin-kpi-row">
             <KPICard
-              label="Förderlaufzeit"
+              label="Runway"
               value={data.runway_months.toFixed(0)}
               unit="Monate"
               tone={runwayTone(data.runway_months)}
-              sub="EXIST-gefördert bis Jul 2027"
+              sub={`bis Break-Even ${data.break_even_label}`}
             />
             <KPICard
               label="Monthly Burn"
@@ -66,16 +66,16 @@ export function FinanceSection({
               }
             />
             <KPICard
-              label="EXIST-Förderung"
+              label="Cash"
               value={formatEur(data.cash_on_hand_eur)}
               tone="default"
-              sub="Zuwendung Jahr 1 · 133k € gesamt"
+              sub="verfügbar"
             />
             <KPICard
               label="Break-Even"
               value={data.break_even_label}
               tone="ok"
-              sub="nur Business · ohne Förderung"
+              sub="lt. Plan"
             />
           </div>
 
