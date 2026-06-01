@@ -5,6 +5,8 @@ import { Sparkles } from 'lucide-react';
 import { TeamVelocityChart } from '@/components/analytics/TeamVelocityChart';
 import { WeekHeatmap } from '@/components/analytics/WeekHeatmap';
 import { useHermes } from '@/components/hermes/HermesContext';
+import { FinanceSection } from '@/components/finance/FinanceSection';
+import type { FinanceData } from '@/types/finance';
 
 const SECRET = process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? '';
 
@@ -127,6 +129,9 @@ export default function CompanyPageClient() {
   const { sendMessage } = useHermes();
   const [data, setData] = useState<CompanyData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [finance, setFinance] = useState<FinanceData | null>(null);
+  const [financeLoading, setFinanceLoading] = useState(true);
+  const [financeError, setFinanceError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -167,6 +172,32 @@ export default function CompanyPageClient() {
     };
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchFinance() {
+      try {
+        const res = await fetch('/api/finance', {
+          headers: { Authorization: `Bearer ${SECRET}` },
+          cache: 'no-store',
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const payload = (await res.json()) as FinanceData;
+        if (!cancelled) {
+          setFinance(payload);
+          setFinanceError(null);
+        }
+      } catch (err) {
+        if (!cancelled) setFinanceError(err instanceof Error ? err.message : 'Unbekannter Fehler');
+      } finally {
+        if (!cancelled) setFinanceLoading(false);
+      }
+    }
+    fetchFinance();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function askHermes() {
     if (!data) return;
     const top = [...data.series]
@@ -182,6 +213,23 @@ export default function CompanyPageClient() {
           `- ${pilot.name}: letzter Login ${pilot.last_seen_label}, aktiv 24h=${pilot.active_24h}, aktiv 7d=${pilot.active_7d}`,
       )
       .join('\n');
+    const financeBlock = finance
+      ? [
+          `Finanzen (CFO-Kai · ${finance.as_of}):`,
+          `- Förderlaufzeit: ${finance.runway_months} Monate · EXIST-Zuwendung Jahr 1 ${formatEur(finance.cash_on_hand_eur)}`,
+          `- Betriebskosten M1 (Aug): ${formatEur(finance.monthly_burn.actual_eur)}/Monat`,
+          `- Top-Kosten: ${finance.cost_lines
+            .map((line) => `${line.label} ${formatEur(line.amount_eur)}${line.fixed ? ' (fix)' : ''}`)
+            .join(', ')}`,
+          `- Kapital kumuliert (M6/Jan, Forecast): ${formatEur(
+            finance.forecast_6m[finance.forecast_6m.length - 1]?.cash_eur ?? 0,
+          )}`,
+          `- Break-Even (nur Business): ${finance.break_even_label}`,
+          `- Pilot-Funnel: ${finance.pilot_health
+            .map((row) => `${row.name} [${row.status}] ${row.note}`)
+            .join('; ')}`,
+        ].join('\n')
+      : 'Finanzen: noch nicht geladen.';
     const prompt = [
       'Schau dir die Firmen-Zahlen an:',
       `- Aktive Piloten: ${data.hero.pilots_active}`,
@@ -189,13 +237,15 @@ export default function CompanyPageClient() {
       `- Demo→Pilot: ${data.hero.demo_to_pilot_pct.toFixed(0)}%`,
       `- Demos (Woche): ${data.hero.demos_completed_week}`,
       '',
+      financeBlock,
+      '',
       'Team-Velocity 30d:',
       top,
       '',
       'Pilot-Risiken laut PostHog:',
       pilotRisks || '- keine akuten Stale-Piloten',
       '',
-      'Was sind die 2-3 wichtigsten Hebel diese Woche?',
+      'Was sind die 2-3 wichtigsten Hebel diese Woche — finanziell und operativ?',
     ].join('\n');
     sendMessage(prompt);
   }
@@ -350,6 +400,8 @@ export default function CompanyPageClient() {
               </div>
             )}
           </section>
+
+          <FinanceSection data={finance} loading={financeLoading} error={financeError} />
 
           <section className="company-section">
             <h2 className="company-section-title">Team-Velocity (30 Tage)</h2>

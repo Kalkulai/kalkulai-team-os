@@ -336,6 +336,28 @@ Triggert `buildDailyBriefing` + Telegram-Send. Body ohne `userId` = alle Member.
 | `GET /api/oauth/google/start?userId={uuid}` | Google-Calendar-Auth-Flow | Browser-Flow (kein Bearer) |
 | `GET /api/oauth/google/callback?code=…` | OAuth-Callback | Google → schreibt `google_refresh_token` |
 
+### 2.7 Finance / CFO-Kai
+
+Quelle: Google Sheets → `forecasting.py` (Hermes) → `POST /api/finance/snapshot` → Supabase `finance_snapshots` → `GET /api/finance` → Dashboard. Siehe `scripts/cfo-kai/README.md` für Poster + Cron.
+
+```http
+GET /api/finance[?scenario=current|exist]
+Authorization: Bearer ${SECRET}
+```
+Liefert das **neueste** Snapshot (ohne Param: szenario-übergreifend; mit Param: gepinnt). Fallback auf Code-Defaults (`lib/finance-data.ts`), solange kein Snapshot existiert. Response: `FinanceData` (`types/finance.ts`).
+
+```http
+POST /api/finance/snapshot
+Authorization: Bearer ${SECRET}
+Content-Type: application/json
+
+{ "scenario": "current", "source": "cfo-kai:forecasting.py", "data": <FinanceData ohne generated_at> }
+```
+- `scenario`: `"exist"` (EXIST-Förderplan) | `"current"` (laufender Plan).
+- `data`: volle `FinanceData` — Boundary-validiert, ungültig → 400 mit Grund. `generated_at` wird serverseitig gesetzt.
+- Append-only; Reads nehmen das neueste pro Szenario.
+- DB: team-os Supabase `jtakzjvaxctmnpzsszrf`, Migration `021_finance_snapshots.sql`.
+
 ---
 
 ## 3. Datenfluss-Übersicht (wo speichern, was lesen)
