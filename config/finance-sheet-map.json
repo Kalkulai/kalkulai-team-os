@@ -1,0 +1,10 @@
+{
+  "sheets": { "finanzplan": "<SHEET_ID>", "guv": "<SHEET_ID>", "coaching": "<SHEET_ID>" },
+  "fields": {
+    "cash_on_hand_eur":       { "sheet": "guv",        "namedRange": "cash_on_hand",  "kind": "output" },
+    "monthly_burn.actual_eur":{ "sheet": "guv",        "namedRange": "burn_actual",   "kind": "output" },
+    "monthly_burn.plan_eur":  { "sheet": "finanzplan", "namedRange": "burn_plan",     "kind": "input"  },
+    "break_even_label":       { "sheet": "guv",        "namedRange": "break_even",    "kind": "output" },
+    "price_per_pilot":        { "sheet": "finanzplan", "namedRange": "price_per_pilot","kind": "input"  }
+  }
+}
