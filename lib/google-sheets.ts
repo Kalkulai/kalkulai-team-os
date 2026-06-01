@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { google } from 'googleapis';
-import { JWT } from 'google-auth-library';
+import { JWT, ExternalAccountClient, type BaseExternalAccountClient } from 'google-auth-library';
 
 export type FieldKind = 'input' | 'output';
 
@@ -124,38 +124,83 @@ export function validateSheetMap(parsed: unknown): SheetMap {
   return { sheets: validatedSheets, fields: validatedFields };
 }
 
+const STS_TOKEN_URL = 'https://sts.googleapis.com/v1/token';
+// Vercel-OIDC liefert ein signiertes JWT — der von GCP-WIF-OIDC-Providern erwartete Subject-Token-Typ.
+const WIF_SUBJECT_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:jwt';
+
 /**
- * Baut einen JWT-Service-Account-Client aus GOOGLE_SERVICE_ACCOUNT_JSON.
- * Wirft klaren Error, wenn die Env-Var fehlt oder kaputt ist.
+ * Baut einen Google-Auth-Client für den gewünschten Scope. Zwei Modi, in dieser
+ * Reihenfolge geprüft:
+ *
+ *  1. Keyless via Workload Identity Federation (Default in Prod) — Vercel gibt ein
+ *     kurzlebiges OIDC-Token (VERCEL_OIDC_TOKEN) aus, das via STS gegen einen
+ *     impersonierten `finance-bot`-Token getauscht wird. Kein Key, der leaken kann;
+ *     org-policy-konform (keine Service-Account-Keys nötig).
+ *  2. Service-Account-JSON-Key (lokal/Fallback) — nur falls GOOGLE_SERVICE_ACCOUNT_JSON
+ *     gesetzt ist (z. B. lokal oder wenn die Org-Policy je gelockert wird).
+ *
+ * Wirft einen klaren Error, wenn keiner der beiden Wege konfiguriert ist.
  */
-function buildAuth(scope: string): JWT {
+function buildAuth(scope: string): JWT | BaseExternalAccountClient {
+  // 1) Keyless WIF — bevorzugt, sobald die WIF-Env-Vars stehen.
+  const audience = process.env.GCP_WORKLOAD_IDENTITY_AUDIENCE;
+  const saEmail = process.env.GCP_SERVICE_ACCOUNT_EMAIL;
+  if (audience && saEmail) {
+    const client = ExternalAccountClient.fromJSON({
+      type: 'external_account',
+      audience,
+      subject_token_type: WIF_SUBJECT_TOKEN_TYPE,
+      token_url: STS_TOKEN_URL,
+      service_account_impersonation_url: `https://iamcredentials.googleapis.com/v1/projects/-/serviceAccounts/${saEmail}:generateAccessToken`,
+      subject_token_supplier: {
+        // Frisch aus der Env lesen — Vercel rotiert das Token; nie cachen.
+        getSubjectToken: async (): Promise<string> => {
+          const token = process.env.VERCEL_OIDC_TOKEN;
+          if (!token) {
+            throw new Error('VERCEL_OIDC_TOKEN ist nicht gesetzt (Vercel-OIDC fürs Projekt aktiviert?)');
+          }
+          return token;
+        },
+      },
+    });
+    if (!client) {
+      throw new Error('WIF-Konfiguration ungültig: ExternalAccountClient konnte nicht erstellt werden');
+    }
+    client.scopes = [scope];
+    return client;
+  }
+
+  // 2) Service-Account-JSON-Key (lokal/Fallback).
   const rawJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
-  if (!rawJson) {
-    throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON ist nicht gesetzt');
+  if (rawJson) {
+    let credentials: unknown;
+    try {
+      credentials = JSON.parse(rawJson);
+    } catch (cause) {
+      throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON ist kein gültiges JSON', { cause });
+    }
+
+    if (!isRecord(credentials)) {
+      throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON muss ein JSON-Objekt sein');
+    }
+    const { client_email, private_key } = credentials;
+    if (typeof client_email !== 'string' || typeof private_key !== 'string') {
+      throw new Error(
+        'GOOGLE_SERVICE_ACCOUNT_JSON braucht "client_email" und "private_key" als Strings',
+      );
+    }
+
+    return new google.auth.JWT({
+      email: client_email,
+      key: private_key,
+      scopes: [scope],
+    });
   }
 
-  let credentials: unknown;
-  try {
-    credentials = JSON.parse(rawJson);
-  } catch (cause) {
-    throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON ist kein gültiges JSON', { cause });
-  }
-
-  if (!isRecord(credentials)) {
-    throw new Error('GOOGLE_SERVICE_ACCOUNT_JSON muss ein JSON-Objekt sein');
-  }
-  const { client_email, private_key } = credentials;
-  if (typeof client_email !== 'string' || typeof private_key !== 'string') {
-    throw new Error(
-      'GOOGLE_SERVICE_ACCOUNT_JSON braucht "client_email" und "private_key" als Strings',
-    );
-  }
-
-  return new google.auth.JWT({
-    email: client_email,
-    key: private_key,
-    scopes: [scope],
-  });
+  throw new Error(
+    'Keine Google-Credentials konfiguriert: setze entweder GCP_WORKLOAD_IDENTITY_AUDIENCE + ' +
+      'GCP_SERVICE_ACCOUNT_EMAIL (keyless WIF, Prod) oder GOOGLE_SERVICE_ACCOUNT_JSON (Key, lokal).',
+  );
 }
 
 /**
