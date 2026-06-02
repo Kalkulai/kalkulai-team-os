@@ -147,7 +147,7 @@ export interface Kpi {
   completed: boolean;
   completed_at?: string | null;
   /** Persistent Kanban-workflow status for type='step' rows. NULL = derive from completed+due_date. */
-  status?: 'todo' | 'in-progress' | 'on-hold' | null;
+  status?: 'todo' | 'in-progress' | 'on-hold' | 'backlog' | null;
   created_at: string;
   source: KpiSource;
 }

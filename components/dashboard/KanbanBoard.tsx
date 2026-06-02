@@ -201,11 +201,15 @@ function DroppableColumn({
 export function KanbanBoard({
   tasks: initialTasks,
   doneTasks: initialDone = [],
+  backlogTasks: initialBacklog = [],
+  backlogEnabled = false,
   members = [],
   activeClaudeByIdentifier,
 }: {
   tasks: UnifiedTask[];
   doneTasks?: UnifiedTask[];
+  backlogTasks?: UnifiedTask[];
+  backlogEnabled?: boolean;
   members?: Array<{ id: string; name: string }>;
   /** Map of Linear-identifier → live Claude-Code sessions touching that card.
    * Powers the 🤖 live badge. Server-fetched in page.tsx. */
@@ -215,6 +219,9 @@ export function KanbanBoard({
   const { activeId: memberId } = useActiveMember();
   const [tasks, setTasks] = useState(initialTasks);
   const [doneTasks, setDoneTasks] = useState(initialDone);
+  const [backlog, setBacklog] = useState(initialBacklog);
+  const [backlogOpen, setBacklogOpen] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
   const [activeTask, setActiveTask] = useState<UnifiedTask | null>(null);
   const [addOpen, setAddOpen] = useState<UnifiedStatus | null>(null);
 
@@ -317,6 +324,45 @@ export function KanbanBoard({
     }
   }
 
+  async function promoteToTodo(taskId: string) {
+    const task = backlog.find((t) => t.id === taskId);
+    if (!task) return;
+    const prevBacklog = backlog;
+    const prevTasks = tasks;
+
+    setBacklog((prev) => prev.filter((t) => t.id !== taskId));
+    setTasks((prev) => [{ ...task, status: 'todo' as UnifiedStatus }, ...prev]);
+    try {
+      const res = await fetch(`/api/kpis/${encodeURIComponent(taskId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
+        body: JSON.stringify({ completed: false, status: 'todo' }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status}: ${text.slice(0, 300)}`);
+      }
+      router.refresh();
+    } catch (err) {
+      console.error('[Kanban] promote failed, rolling back', err);
+      setBacklog(prevBacklog);
+      setTasks(prevTasks);
+    }
+  }
+
+  const backlogProjects = Array.from(
+    new Map(
+      backlog
+        .filter((t) => t.project)
+        .map((t) => [t.project!.id, t.project!.name] as const),
+    ).entries(),
+  ).map(([id, name]) => ({ id, name }));
+
+  const visibleBacklog =
+    selectedProjectId === 'all'
+      ? backlog
+      : backlog.filter((t) => t.project?.id === selectedProjectId);
+
   return (
     <DndContext
       sensors={sensors}
@@ -324,6 +370,65 @@ export function KanbanBoard({
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
     >
+      {backlogEnabled && (
+        <div className="kanban-backlog">
+          <button
+            type="button"
+            className="kanban-backlog-toggle"
+            onClick={() => setBacklogOpen((v) => !v)}
+            aria-expanded={backlogOpen}
+          >
+            <span className="kanban-col-title">Build 1 · Backlog</span>
+            {backlog.length > 0 && (
+              <span className="kanban-col-count mono">{backlog.length}</span>
+            )}
+            <span className="kanban-backlog-chevron">{backlogOpen ? '▾' : '▸'}</span>
+          </button>
+          {backlogOpen && (
+            <div className="kanban-backlog-body">
+              {backlog.length === 0 ? (
+                <p className="kanban-empty">Backlog leer</p>
+              ) : (
+                <>
+                  <select
+                    className="kanban-backlog-select"
+                    value={selectedProjectId}
+                    onChange={(e) => setSelectedProjectId(e.target.value)}
+                  >
+                    <option value="all">Alle Projekte</option>
+                    {backlogProjects.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                  <div className="kanban-backlog-list">
+                    {visibleBacklog.map((task) => (
+                      <div key={task.id} className="kanban-backlog-item">
+                        <div className="kanban-backlog-item-text">
+                          {task.project && (
+                            <span className="kanban-card-project">{task.project.name}</span>
+                          )}
+                          <span className="kanban-card-title">{task.title}</span>
+                        </div>
+                        <button
+                          type="button"
+                          className="kanban-backlog-promote"
+                          onClick={() => promoteToTodo(task.id)}
+                          title="In To Do verschieben"
+                        >
+                          → To Do
+                        </button>
+                      </div>
+                    ))}
+                    {visibleBacklog.length === 0 && (
+                      <p className="kanban-empty">Keine Tasks in diesem Projekt</p>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       <div className="kanban-grid">
         {ACTIVE_COLUMNS.map((col) => (
           <DroppableColumn

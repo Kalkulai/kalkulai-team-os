@@ -16,7 +16,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     parent_id?: string | null;
     due_date?: string | null;
     completed?: boolean;
-    status?: 'todo' | 'in-progress' | 'on-hold' | null;
+    status?: 'todo' | 'in-progress' | 'on-hold' | 'backlog' | null;
   } = {};
   if (typeof body.name === 'string' && body.name.trim()) defPatch.name = body.name.trim();
   if (typeof body.unit === 'string') defPatch.unit = body.unit.trim();
@@ -24,10 +24,19 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if ('due_date' in body) defPatch.due_date = body.due_date ? String(body.due_date) : null;
   if (typeof body.completed === 'boolean') defPatch.completed = body.completed;
   if ('status' in body) {
-    if (body.status === null || body.status === 'todo' || body.status === 'in-progress' || body.status === 'on-hold') {
+    if (
+      body.status === null ||
+      body.status === 'todo' ||
+      body.status === 'in-progress' ||
+      body.status === 'on-hold' ||
+      body.status === 'backlog'
+    ) {
       defPatch.status = body.status;
     } else {
-      return NextResponse.json({ error: 'status must be todo|in-progress|on-hold|null' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'status must be todo|in-progress|on-hold|backlog|null' },
+        { status: 400 },
+      );
     }
   }
 

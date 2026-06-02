@@ -117,12 +117,14 @@ const STATUS_LABEL: Record<UnifiedStatus, string | null> = {
   'todo': null,
   'in-progress': 'in progress',
   'on-hold': 'on hold',
+  'backlog': null,
   'done': null,
 };
 const STATUS_PILL: Record<UnifiedStatus, string> = {
   'todo': '',
   'in-progress': 'pill-amber',
   'on-hold': 'pill-mute',
+  'backlog': '',
   'done': '',
 };
 

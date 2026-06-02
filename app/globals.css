@@ -1538,6 +1538,16 @@ html.light .tl-row code { background: rgba(11, 11, 15, 0.05); }
 .kanban-col[data-col="in-progress"] { background: rgba(91,140,255,0.07); border-color: rgba(91,140,255,0.2); }
 .kanban-col[data-col="on-hold"] { background: rgba(245,158,11,0.07); border-color: rgba(245,158,11,0.2); }
 .kanban-col[data-col="done"] { background: rgba(52,211,153,0.06); border-color: rgba(52,211,153,0.18); }
+.kanban-backlog { margin-bottom: 16px; border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; background: rgba(255,255,255,0.02); }
+.kanban-backlog-toggle { display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 12px; background: none; border: none; cursor: pointer; color: var(--ink-2); }
+.kanban-backlog-chevron { margin-left: auto; font-size: 11px; color: var(--ink-3); }
+.kanban-backlog-body { padding: 0 12px 12px; }
+.kanban-backlog-select { margin-bottom: 10px; padding: 5px 8px; font-size: 12px; color: var(--ink-1); background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 7px; }
+.kanban-backlog-list { display: flex; flex-direction: column; gap: 7px; }
+.kanban-backlog-item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; }
+.kanban-backlog-item-text { flex: 1; min-width: 0; }
+.kanban-backlog-promote { flex-shrink: 0; font-size: 11px; font-weight: 600; padding: 4px 9px; color: var(--brand); background: rgba(91,140,255,0.1); border: 1px solid rgba(91,140,255,0.25); border-radius: 7px; cursor: pointer; white-space: nowrap; }
+.kanban-backlog-promote:hover { background: rgba(91,140,255,0.18); }
 .kanban-col-over { border-color: var(--brand) !important; background: rgba(91,140,255,0.1) !important; }
 .kanban-draggable { cursor: grab; touch-action: none; }
 .kanban-draggable.is-dragging { opacity: 0.4; cursor: grabbing; }
