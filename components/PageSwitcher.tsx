@@ -2,9 +2,11 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Calendar, Users, MessageCircle, Settings, ChevronDown, Check, Building2 } from 'lucide-react';
+import { Calendar, Users, MessageCircle, Settings, ChevronDown, Check, Building2, Bot } from 'lucide-react';
+import { useActiveMember } from '@/lib/active-member';
+import { isLeonMemberId } from '@/lib/agent-access';
 
-type Route = '/dashboard' | '/dashboard/team' | '/dashboard/chat' | '/dashboard/company' | '/settings';
+type Route = '/dashboard' | '/dashboard/team' | '/dashboard/chat' | '/dashboard/company' | '/dashboard/agents' | '/settings';
 
 interface PageDef {
   href: Route;
@@ -17,26 +19,33 @@ const PAGES: PageDef[] = [
   { href: '/dashboard/chat',    title: 'Chat',         Icon: MessageCircle },
   { href: '/dashboard/team',    title: 'Team',         Icon: Users },
   { href: '/dashboard/company', title: 'Firma',        Icon: Building2 },
+  { href: '/dashboard/agents',  title: 'Agents',       Icon: Bot },
   { href: '/settings',          title: 'Einstellungen', Icon: Settings },
 ];
 
-function activePageFor(pathname: string | null): PageDef {
-  if (!pathname) return PAGES[0];
+function activePageFor(pathname: string | null, pages: PageDef[]): PageDef {
+  if (!pathname) return pages[0];
   // sub-routes must win over /dashboard
-  const team = PAGES.find((p) => p.href === '/dashboard/team');
+  const team = pages.find((p) => p.href === '/dashboard/team');
   if (team && pathname.startsWith('/dashboard/team')) return team;
-  const chat = PAGES.find((p) => p.href === '/dashboard/chat');
+  const chat = pages.find((p) => p.href === '/dashboard/chat');
   if (chat && pathname.startsWith('/dashboard/chat')) return chat;
-  const company = PAGES.find((p) => p.href === '/dashboard/company');
+  const company = pages.find((p) => p.href === '/dashboard/company');
   if (company && pathname.startsWith('/dashboard/company')) return company;
-  const settings = PAGES.find((p) => p.href === '/settings');
+  const agents = pages.find((p) => p.href === '/dashboard/agents');
+  if (agents && pathname.startsWith('/dashboard/agents')) return agents;
+  const settings = pages.find((p) => p.href === '/settings');
   if (settings && pathname.startsWith('/settings')) return settings;
-  return PAGES[0];
+  return pages[0];
 }
 
 export function PageSwitcher() {
   const pathname = usePathname();
-  const active = activePageFor(pathname);
+  const { activeId } = useActiveMember();
+  const pages = isLeonMemberId(activeId)
+    ? PAGES
+    : PAGES.filter((p) => p.href !== '/dashboard/agents');
+  const active = activePageFor(pathname, pages);
 
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -80,7 +89,7 @@ export function PageSwitcher() {
           role="menu"
         >
           <div className="ovr px-2 pb-1 pt-2">Seite wechseln</div>
-          {PAGES.map((p) => {
+          {pages.map((p) => {
             const isActive = p.href === active.href;
             const Ic = p.Icon;
             return (

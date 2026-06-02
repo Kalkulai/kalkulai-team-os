@@ -1,9 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { Phone, X } from 'lucide-react';
-
-const SECRET = process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? '';
-
 const TYPES = [
   { key: 'cold-call' as const, label: 'Cold Call', cls: 'b1' },
   { key: 'demo'      as const, label: 'Demo',      cls: 'b2' },
@@ -48,7 +45,7 @@ export function SalesFab({
     try {
       const res = await fetch('/api/sales/log-call', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, type }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);

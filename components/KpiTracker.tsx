@@ -2,33 +2,25 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Plus, Minus } from 'lucide-react';
 import type { KpiWithWeek } from '@/types';
-
-const SECRET = process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? '';
-
 function barClass(pct: number): string {
   if (pct >= 100) return 'bar ok';
   return 'bar';
 }
-
 export function KpiTracker({ userId }: { userId: string }) {
   const [kpis, setKpis] = useState<KpiWithWeek[] | null>(null);
   const [busy, setBusy] = useState<Set<string>>(new Set());
-
   const load = useCallback(async () => {
     const res = await fetch(`/api/kpis?userId=${encodeURIComponent(userId)}`, {
-      headers: { Authorization: `Bearer ${SECRET}` },
       cache: 'no-store',
     });
     if (!res.ok) return;
     const data = (await res.json()) as KpiWithWeek[];
     setKpis(data.filter((k) => k.type === 'counter'));
   }, [userId]);
-
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch on mount
     void load();
   }, [load]);
-
   async function adjust(id: string, delta: number) {
     setBusy((prev) => new Set(prev).add(id));
     setKpis((prev) =>
@@ -37,7 +29,7 @@ export function KpiTracker({ userId }: { userId: string }) {
     try {
       await fetch(`/api/kpis/${id}/adjust`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ delta }),
       });
     } finally {
@@ -48,9 +40,7 @@ export function KpiTracker({ userId }: { userId: string }) {
       });
     }
   }
-
   if (kpis === null) return <p className="text-[13px] text-[var(--ink-3)]">Lade KPIs…</p>;
-
   if (kpis.length === 0) {
     return (
       <p className="text-[13px] text-[var(--ink-3)]">
@@ -62,7 +52,6 @@ export function KpiTracker({ userId }: { userId: string }) {
       </p>
     );
   }
-
   return (
     <ul>
       {kpis.map((k) => {
@@ -128,7 +117,6 @@ export function KpiTracker({ userId }: { userId: string }) {
     </ul>
   );
 }
-
 function sourceBadgeLabel(source: KpiWithWeek['source']): string {
   switch (source) {
     case 'hubspot:calls-week':

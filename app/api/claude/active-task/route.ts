@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireApiAuth } from '@/lib/api-auth';
-import { upsertClaudeSession, touchClaudeSession, clearClaudeSession } from '@/lib/claude-sessions';
+import {
+  cleanupStaleClaudeSessions,
+  listLiveClaudeSessions,
+  upsertClaudeSession,
+  touchClaudeSession,
+  clearClaudeSession,
+} from '@/lib/claude-sessions';
 import { revalidateDashboard } from '@/lib/revalidate';
 
 /**
@@ -13,6 +19,21 @@ import { revalidateDashboard } from '@/lib/revalidate';
  *   DELETE ?session_id=<uuid>
  *     → remove row (clear on /task-done, /task-hold, session exit).
  */
+
+export async function GET(req: NextRequest) {
+  if (!requireApiAuth(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (req.nextUrl.searchParams.get('live') !== 'true') {
+    return NextResponse.json({ error: 'live=true required' }, { status: 400 });
+  }
+  try {
+    await cleanupStaleClaudeSessions(24);
+    const sessions = await listLiveClaudeSessions(60);
+    return NextResponse.json({ sessions });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
 
 export async function POST(req: NextRequest) {
   if (!requireApiAuth(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -31,6 +52,16 @@ export async function POST(req: NextRequest) {
     'linear_identifier' in body ||
     'title' in body ||
     'host' in body ||
+    'cwd' in body ||
+    'runtime' in body ||
+    'status' in body ||
+    'workstream' in body ||
+    'branch' in body ||
+    'worktree_path' in body ||
+    'terminal_session_id' in body ||
+    'last_decision' in body ||
+    'current_state' in body ||
+    'next_decision' in body ||
     'task_history' in body;
   try {
     if (hasContent) {
@@ -40,6 +71,16 @@ export async function POST(req: NextRequest) {
         linear_identifier: body.linear_identifier ?? null,
         title: body.title ?? null,
         host: body.host ?? null,
+        cwd: body.cwd ?? null,
+        runtime: body.runtime ?? 'claude',
+        status: body.status ?? 'running',
+        workstream: body.workstream ?? null,
+        branch: body.branch ?? null,
+        worktree_path: body.worktree_path ?? null,
+        terminal_session_id: body.terminal_session_id ?? null,
+        last_decision: body.last_decision ?? null,
+        current_state: body.current_state ?? null,
+        next_decision: body.next_decision ?? null,
         task_history: Array.isArray(body.task_history) ? body.task_history : undefined,
       });
     } else {

@@ -8,6 +8,8 @@ import { SyncPill } from '@/components/SyncPill';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { HermesWidget } from '@/components/hermes/HermesWidget';
 import { HermesProvider } from '@/components/hermes/HermesContext';
+import '@xterm/xterm/css/xterm.css';
+import '@xyflow/react/dist/style.css';
 import './globals.css';
 
 const geist = Geist({ subsets: ['latin'], variable: '--font-geist' });

@@ -92,6 +92,36 @@ export interface HubSpotCall {
   ownerId: string;
 }
 
+export type CampaignType = 'partnerships' | 'handwerker';
+export type CampaignStatus = 'draft' | 'active' | 'paused' | 'done' | 'archived';
+export type CampaignLeadStage =
+  | 'sourced'
+  | 'ready'
+  | 'sent'
+  | 'replied'
+  | 'followup_due'
+  | 'meeting_booked'
+  | 'blocked'
+  | 'disqualified';
+export type CampaignEventType =
+  | 'sent'
+  | 'replied'
+  | 'opened'
+  | 'followup_due'
+  | 'meeting_booked'
+  | 'blocked'
+  | 'note';
+
+export interface CampaignStats {
+  sent: number;
+  replies: number;
+  replyRate: number | null;
+  opens: number;
+  openRate: number | null;
+  followupsDue: number;
+  blocked: number;
+}
+
 export interface NotionInsight {
   id: string;
   title: string;
@@ -168,11 +198,127 @@ export interface ClaudeSession {
   linear_identifier: string | null;
   title: string | null;
   host: string | null;
+  cwd?: string | null;
+  runtime?: AgentRuntime | null;
+  status?: AgentSessionStatus | null;
+  workstream?: string | null;
+  branch?: string | null;
+  worktree_path?: string | null;
+  terminal_session_id?: string | null;
+  last_decision?: string | null;
+  current_state?: string | null;
+  next_decision?: string | null;
   started_at: string;
   last_seen_at: string;
   /** Append-only log of tickets this session touched today.
    *  Mirrors the local ~/.claude/task-sessions/<sid>.json shape. See KAL-133. */
   task_history?: TaskHistoryEntry[];
+}
+
+export interface ClaudeActiveSessionSnapshot extends ClaudeSession {
+  idle_minutes: number;
+  linear_url: string | null;
+}
+
+export type AgentRuntime = 'claude' | 'codex' | 'shell' | 'hermes';
+export type AgentExternalRuntime = AgentRuntime | 'gemini';
+export type AgentSessionStatus = 'idle' | 'running' | 'blocked' | 'review' | 'done' | 'failed';
+export type AgentRunAdapterStatus = AgentSessionStatus | 'needs_leon' | 'done_pending';
+export type AgentSessionVisibility = 'active' | 'archived';
+
+export interface AgentSessionLayout {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export type AgentRunStepStatus = 'todo' | 'active' | 'done' | 'blocked';
+export type AgentSubagentStatus = 'active' | 'idle' | 'blocked' | 'done';
+
+export interface AgentRunPlanStep {
+  id: string;
+  title: string;
+  status: AgentRunStepStatus;
+}
+
+export interface AgentRunChangeSummary {
+  additions?: number | null;
+  deletions?: number | null;
+  files?: number | null;
+}
+
+export interface AgentSubagentSummary {
+  id: string;
+  name: string;
+  status: AgentSubagentStatus;
+  runtime?: AgentRuntime | null;
+}
+
+export interface AgentRunQueueItem {
+  id: string;
+  title: string;
+  repo_key?: string | null;
+  kind?: 'code' | 'ops' | 'research' | 'sales' | 'general';
+  status?: 'queued' | 'active' | 'running' | 'review' | 'done_pending' | 'done' | 'blocked';
+}
+
+export interface AgentRunContext {
+  run_id: string;
+  task_id: string | null;
+  repo_key: string;
+  cwd: string;
+  branch: string | null;
+  runtime: AgentExternalRuntime;
+  goal: string;
+  queue: AgentRunQueueItem[];
+  status: AgentRunAdapterStatus;
+  summary: string | null;
+  last_decision: string | null;
+  next_decision: string | null;
+}
+
+export interface AgentSession extends ClaudeSession {
+  runtime: AgentRuntime;
+  status: AgentSessionStatus;
+}
+
+export interface AgentActiveSessionSnapshot extends AgentSession {
+  idle_minutes: number;
+  linear_url: string | null;
+}
+
+export interface AgentRunnerSession {
+  id: string;
+  session_id: string;
+  terminal_session_id: string;
+  runtime: AgentRuntime;
+  status: AgentSessionStatus;
+  title: string;
+  cwd: string;
+  linear_identifier?: string | null;
+  workstream?: string | null;
+  branch?: string | null;
+  worktree_path?: string | null;
+  last_decision?: string | null;
+  current_state?: string | null;
+  next_decision?: string | null;
+  work_goal?: string | null;
+  run_label?: string | null;
+  pinned?: boolean | null;
+  queue?: AgentRunQueueItem[] | null;
+  plan_steps?: AgentRunPlanStep[] | null;
+  change_summary?: AgentRunChangeSummary | null;
+  subagents?: AgentSubagentSummary[] | null;
+  done_pending?: boolean | null;
+  started_at?: string;
+  updated_at?: string;
+  exit_code?: number | null;
+  visibility?: AgentSessionVisibility;
+  layout?: AgentSessionLayout | null;
+  repo_key?: string | null;
+  task_id?: string | null;
+  parent_session_id?: string | null;
 }
 
 export interface TaskHistoryEntry {

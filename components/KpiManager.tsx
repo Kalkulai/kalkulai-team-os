@@ -6,9 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { DatePicker } from '@/components/ui/DatePicker';
-
-const SECRET = process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? '';
-
 interface CreateDraft {
   type: KpiType;
   name: string;
@@ -46,7 +43,6 @@ export function KpiManager({ userId, member }: { userId: string; member?: TeamMe
     if (!userId) return;
     try {
       const res = await fetch(`/api/kpis?userId=${encodeURIComponent(userId)}`, {
-        headers: { Authorization: `Bearer ${SECRET}` },
         cache: 'no-store',
       });
       if (!res.ok) throw new Error('Laden fehlgeschlagen');
@@ -99,7 +95,7 @@ export function KpiManager({ userId, member }: { userId: string; member?: TeamMe
       }
       const res = await fetch('/api/kpis', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error('Anlegen fehlgeschlagen');
@@ -112,7 +108,7 @@ export function KpiManager({ userId, member }: { userId: string; member?: TeamMe
         for (const s of stepsToCreate) {
           await fetch('/api/kpis', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               user_id: userId,
               type: 'step',
@@ -142,7 +138,7 @@ export function KpiManager({ userId, member }: { userId: string; member?: TeamMe
     try {
       const res = await fetch('/api/kpis', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           user_id: userId,
           type: 'step',
@@ -174,7 +170,7 @@ export function KpiManager({ userId, member }: { userId: string; member?: TeamMe
       }
       const res = await fetch(`/api/kpis/${id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(patch),
       });
       if (!res.ok) throw new Error('Speichern fehlgeschlagen');
@@ -191,7 +187,6 @@ export function KpiManager({ userId, member }: { userId: string; member?: TeamMe
     try {
       const res = await fetch(`/api/kpis/${id}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${SECRET}` },
       });
       if (!res.ok) throw new Error('Löschen fehlgeschlagen');
       await load();

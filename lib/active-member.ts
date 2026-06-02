@@ -18,7 +18,7 @@ function writeCookie(name: string, value: string): void {
   document.cookie = `${name}=${encodeURIComponent(value)}; Path=/; Max-Age=${COOKIE_MAX_AGE}; SameSite=Lax`;
 }
 
-export function useActiveMember() {
+export function useActiveMember(options?: { details?: boolean }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -27,7 +27,7 @@ export function useActiveMember() {
 
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/members')
+    fetch(options?.details ? '/api/team-members' : '/api/members')
       .then((r) => r.json())
       .then((data: TeamMember[]) => {
         if (cancelled || data.length === 0) return;
@@ -56,7 +56,7 @@ export function useActiveMember() {
     return () => {
       cancelled = true;
     };
-  }, [pathname, params, router]);
+  }, [options?.details, pathname, params, router]);
 
   const setActive = (id: string) => {
     setActiveId(id);

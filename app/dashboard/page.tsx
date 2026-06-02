@@ -6,13 +6,14 @@ import { ProjectsTracker } from '@/components/ProjectsTracker';
 import { SalesFab } from '@/components/SalesFab';
 import { HorizonCard, HorizonSection } from '@/components/dashboard/HorizonCard';
 import { ActivityTimeline } from '@/components/dashboard/ActivityTimeline';
+import { ActiveSessionsList } from '@/components/dashboard/ActiveSessionsList';
 import { buildDailyBriefing } from '@/lib/aggregator';
 import { buildActivityFeed } from '@/lib/activity';
 import { getRecentlyMergedPRs } from '@/lib/github';
 import { getAllMembers, getSalesLogsTodayByType, currentWeekStart } from '@/lib/supabase';
 import { listUserKpis } from '@/lib/kpis';
-import { getActiveSessionsByIdentifier, getActiveSessionsForUser } from '@/lib/claude-sessions';
-import type { ClaudeSession } from '@/types';
+import { getActiveSessionsByIdentifier, getActiveSessionsForUser, listLiveClaudeSessions } from '@/lib/claude-sessions';
+import type { ClaudeActiveSessionSnapshot, ClaudeSession } from '@/types';
 import { ViewToggle } from '@/components/dashboard/ViewToggle';
 import { KanbanRealtimeListener } from '@/components/dashboard/KanbanRealtimeListener';
 import { differenceInCalendarDays, format, getISOWeek, parseISO } from 'date-fns';
@@ -99,13 +100,16 @@ export default async function DashboardPage({
     .filter((x): x is string => !!x);
   let activeClaudeByIdentifier: Record<string, ClaudeSession[]> = {};
   let allLiveSessions: ClaudeSession[] = [];
+  let sessionSnapshots: ClaudeActiveSessionSnapshot[] = [];
   try {
-    const [map, all] = await Promise.all([
+    const [map, all, snapshots] = await Promise.all([
       getActiveSessionsByIdentifier(taskIdentifiers),
       getActiveSessionsForUser(me.id),
+      listLiveClaudeSessions(60),
     ]);
     activeClaudeByIdentifier = Object.fromEntries(map);
     allLiveSessions = all;
+    sessionSnapshots = snapshots.filter((s) => s.user_id === me.id);
   } catch (err) {
     console.warn('[dashboard] claude_sessions lookup failed:', err);
   }
@@ -186,6 +190,14 @@ export default async function DashboardPage({
           <HorizonSection label="Termine" end={<span className="mono">{briefing.meetings.length} heute</span>}>
             <MeetingList meetings={briefing.meetings} />
           </HorizonSection>
+          {sessionSnapshots.length > 0 && (
+            <HorizonSection
+              label="Claude Sessions"
+              end={<span className="mono">{sessionSnapshots.length} letzte 60m</span>}
+            >
+              <ActiveSessionsList sessions={sessionSnapshots} />
+            </HorizonSection>
+          )}
           <TaskList
             tasks={tasksSorted}
             userId={me.id}

@@ -1,5 +1,5 @@
-# team-os.ps1 — Claude Code CLI fuer das Team-OS Dashboard
-# Laedt Credentials aus .env.local im Repo-Root (TEAM_OS_BASE_URL + TEAM_OS_API_SECRET)
+# team-os.ps1 — Team-OS CLI fuer AI-Agenten (Claude Code, Codex, Hermes)
+# Laedt Credentials aus .env.local im Repo-Root (TEAM_OS_BASE_URL + DASHBOARD_API_SECRET)
 # Verwendung: .\scripts\team-os.ps1 <command> [args]
 #
 # Commands:
@@ -7,6 +7,8 @@
 #   kpis <name|uuid>                  KPIs eines Members (Name: leon|felix|paul)
 #   briefing <name|uuid>              Markdown-Briefing fuer Member
 #   create-task <name|uuid> <title>   Linear-Task anlegen (source: hermes)
+#   status-task <linear-id> <status>  Task-Status setzen: todo|in-progress|on-hold|done
+#   complete-task <linear-id>         Linear-Task abschliessen
 #   create-counter <name|uuid> <name> <unit> [target]  Counter anlegen
 #   health <name|uuid>                Smoke-Test der Pipeline
 #   crons                             Cron-Status auf Server abfragen (via SSH)
@@ -107,7 +109,28 @@ switch ($Command.ToLower()) {
         $m = Resolve-Member $Arg1
         $task = Invoke-API -Method POST -Path '/api/tasks/create' -Body @{ title = $Arg2; userId = $m.id; source = 'hermes' }
         Write-Host "Task angelegt: $($task.identifier) — $($task.title)"
+        Write-Host "Linear-ID: $($task.id)"
         if ($task.url) { Write-Host "URL: $($task.url)" }
+    }
+
+    'status-task' {
+        if (-not $Arg1 -or -not $Arg2) {
+            Write-Error "Usage: team-os.ps1 status-task <linear-issue-id> <todo|in-progress|on-hold|done>"
+            exit 1
+        }
+        $allowed = @('todo', 'in-progress', 'on-hold', 'done')
+        if ($allowed -notcontains $Arg2) {
+            Write-Error "Status '$Arg2' ungueltig. Erlaubt: $($allowed -join ', ')"
+            exit 1
+        }
+        Invoke-API -Method PATCH -Path '/api/tasks/status' -Body @{ issueId = $Arg1; status = $Arg2 } | Out-Null
+        Write-Host "Task-Status gesetzt: $Arg1 -> $Arg2"
+    }
+
+    'complete-task' {
+        if (-not $Arg1) { Write-Error "Usage: team-os.ps1 complete-task <linear-issue-id>"; exit 1 }
+        Invoke-API -Method POST -Path '/api/tasks/complete' -Body @{ issueId = $Arg1 } | Out-Null
+        Write-Host "Task abgeschlossen: $Arg1"
     }
 
     'create-counter' {
@@ -142,18 +165,20 @@ switch ($Command.ToLower()) {
 
     default {
         Write-Host @"
-team-os.ps1 — Team-OS Dashboard CLI fuer Claude Code
+team-os.ps1 — Team-OS Dashboard CLI fuer AI-Agenten
 
 Commands:
   members                                      Alle Teammitglieder
   kpis <name|uuid>                             KPIs eines Members (leon|felix|paul)
   briefing <name|uuid>                         Markdown-Briefing
   create-task <name|uuid> <title>              Linear-Task anlegen
+  status-task <linear-id> <status>             Status setzen: todo|in-progress|on-hold|done
+  complete-task <linear-id>                    Linear-Task abschliessen
   create-counter <name|uuid> <name> <unit> [target]  Counter anlegen
   health <name|uuid>                           Smoke-Test
   crons                                        Cron-Status (via SSH)
 
-Credentials: .env.local (TEAM_OS_BASE_URL + TEAM_OS_API_SECRET)
+Credentials: .env.local (TEAM_OS_BASE_URL + DASHBOARD_API_SECRET)
 Auth: DASHBOARD_API_SECRET (nicht NEXT_PUBLIC_*!)
 "@
     }

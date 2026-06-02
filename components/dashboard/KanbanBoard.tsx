@@ -21,7 +21,6 @@ import type { UnifiedTask, UnifiedStatus } from '@/lib/unified-tasks';
 import type { ClaudeSession } from '@/types';
 import { KanbanCard } from './KanbanCard';
 
-const SECRET = process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? '';
 
 const ACTIVE_COLUMNS: Array<{ id: UnifiedStatus; label: string }> = [
   { id: 'todo', label: 'To Do' },
@@ -229,7 +228,7 @@ export function KanbanBoard({
     if (args.priority > 0) body.priority = args.priority;
     const res = await fetch('/api/tasks/create', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
     if (!res.ok) {
@@ -242,7 +241,7 @@ export function KanbanBoard({
         if (created.id) {
           await fetch('/api/tasks/status', {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ issueId: created.id, status: col }),
           });
         }
@@ -293,7 +292,7 @@ export function KanbanBoard({
       const res = task.kind === 'step'
         ? await fetch(`/api/kpis/${encodeURIComponent(taskId)}`, {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(
               targetCol === 'done'
                 ? { completed: true }
@@ -302,7 +301,7 @@ export function KanbanBoard({
           })
         : await fetch('/api/tasks/status', {
             method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ issueId: taskId, status: targetCol }),
           });
       if (!res.ok) {

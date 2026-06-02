@@ -1,5 +1,18 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import type { ClaudeSession, TaskHistoryEntry } from '@/types';
+import {
+  cleanupStaleAgentSessions,
+  clearAgentSession,
+  listLiveAgentSessions,
+  touchAgentSession,
+  upsertAgentSession,
+} from '@/lib/agent-sessions';
+import type {
+  AgentRuntime,
+  AgentSessionStatus,
+  ClaudeActiveSessionSnapshot,
+  ClaudeSession,
+  TaskHistoryEntry,
+} from '@/types';
 
 /**
  * Claude Code session tracker — the data layer behind the Kanban "active task"
@@ -11,6 +24,10 @@ import type { ClaudeSession, TaskHistoryEntry } from '@/types';
  */
 
 const STALE_THRESHOLD_MIN = 10;
+const SNAPSHOT_WINDOW_MIN = 60;
+const CLEANUP_THRESHOLD_HOURS = 24;
+const BASE_SELECT_COLUMNS = 'session_id, user_id, linear_identifier, title, host, started_at, last_seen_at, task_history';
+const SELECT_COLUMNS = 'session_id, user_id, linear_identifier, title, host, cwd, started_at, last_seen_at, task_history';
 
 export interface UpsertSessionInput {
   session_id: string;
@@ -18,6 +35,16 @@ export interface UpsertSessionInput {
   linear_identifier?: string | null;
   title?: string | null;
   host?: string | null;
+  cwd?: string | null;
+  runtime?: AgentRuntime | null;
+  status?: AgentSessionStatus | null;
+  workstream?: string | null;
+  branch?: string | null;
+  worktree_path?: string | null;
+  terminal_session_id?: string | null;
+  last_decision?: string | null;
+  current_state?: string | null;
+  next_decision?: string | null;
   /** Optional snapshot of the local task_history array. When provided, the
    *  server overwrites the persisted history wholesale — safe because the
    *  local state file is the authoritative source per session (one writer,
@@ -26,35 +53,15 @@ export interface UpsertSessionInput {
 }
 
 export async function upsertClaudeSession(input: UpsertSessionInput): Promise<void> {
-  const row: Record<string, unknown> = {
-    session_id: input.session_id,
-    user_id: input.user_id,
-    linear_identifier: input.linear_identifier ?? null,
-    title: input.title ?? null,
-    host: input.host ?? null,
-    last_seen_at: new Date().toISOString(),
-  };
-  if (input.task_history !== undefined) row.task_history = input.task_history;
-  const { error } = await supabaseAdmin
-    .from('claude_sessions')
-    .upsert(row, { onConflict: 'session_id' });
-  if (error) throw new Error(`upsertClaudeSession: ${error.message}`);
+  await upsertAgentSession({ ...input, runtime: input.runtime ?? 'claude' });
 }
 
 export async function touchClaudeSession(session_id: string): Promise<void> {
-  const { error } = await supabaseAdmin
-    .from('claude_sessions')
-    .update({ last_seen_at: new Date().toISOString() })
-    .eq('session_id', session_id);
-  if (error) throw new Error(`touchClaudeSession: ${error.message}`);
+  await touchAgentSession(session_id);
 }
 
 export async function clearClaudeSession(session_id: string): Promise<void> {
-  const { error } = await supabaseAdmin
-    .from('claude_sessions')
-    .delete()
-    .eq('session_id', session_id);
-  if (error) throw new Error(`clearClaudeSession: ${error.message}`);
+  await clearAgentSession(session_id);
 }
 
 /** Lookup which active sessions touch which Linear identifiers. Used by the
@@ -68,11 +75,9 @@ export async function getActiveSessionsByIdentifier(
 ): Promise<Map<string, ClaudeSession[]>> {
   if (identifiers.length === 0) return new Map();
   const sinceIso = new Date(Date.now() - STALE_THRESHOLD_MIN * 60_000).toISOString();
-  const { data, error } = await supabaseAdmin
-    .from('claude_sessions')
-    .select('session_id, user_id, linear_identifier, title, host, started_at, last_seen_at, task_history')
-    .in('linear_identifier', identifiers)
-    .gt('last_seen_at', sinceIso);
+  const { data, error } = await readClaudeSessions((q) =>
+    q.in('linear_identifier', identifiers).gt('last_seen_at', sinceIso),
+  );
   if (error) throw new Error(`getActiveSessionsByIdentifier: ${error.message}`);
 
   const out = new Map<string, ClaudeSession[]>();
@@ -93,12 +98,47 @@ export async function getActiveSessionsByIdentifier(
  * Filters to last STALE_THRESHOLD_MIN minutes; sorted newest-first. */
 export async function getActiveSessionsForUser(userId: string): Promise<ClaudeSession[]> {
   const sinceIso = new Date(Date.now() - STALE_THRESHOLD_MIN * 60_000).toISOString();
-  const { data, error } = await supabaseAdmin
-    .from('claude_sessions')
-    .select('session_id, user_id, linear_identifier, title, host, started_at, last_seen_at, task_history')
-    .eq('user_id', userId)
-    .gt('last_seen_at', sinceIso)
-    .order('last_seen_at', { ascending: false });
+  const { data, error } = await readClaudeSessions((q) =>
+    q.eq('user_id', userId).gt('last_seen_at', sinceIso).order('last_seen_at', { ascending: false }),
+  );
   if (error) throw new Error(`getActiveSessionsForUser: ${error.message}`);
   return (data ?? []) as ClaudeSession[];
+}
+
+export async function listLiveClaudeSessions(
+  windowMinutes = SNAPSHOT_WINDOW_MIN,
+  now = new Date(),
+): Promise<ClaudeActiveSessionSnapshot[]> {
+  return listLiveAgentSessions(windowMinutes, now);
+}
+
+export async function cleanupStaleClaudeSessions(
+  olderThanHours = CLEANUP_THRESHOLD_HOURS,
+  now = new Date(),
+): Promise<void> {
+  await cleanupStaleAgentSessions(olderThanHours, now);
+}
+
+type SessionQuery = {
+  in: (column: string, values: unknown[]) => SessionQuery;
+  eq: (column: string, value: unknown) => SessionQuery;
+  gt: (column: string, value: unknown) => SessionQuery;
+  order: (column: string, options: unknown) => SessionQuery;
+  then: Promise<{ data?: unknown; error?: { message?: string } | null }>['then'];
+};
+
+async function readClaudeSessions(
+  configure: (query: SessionQuery) => SessionQuery,
+): Promise<{ data?: unknown; error?: { message?: string } | null }> {
+  const first = await configure(
+    supabaseAdmin.from('claude_sessions').select(SELECT_COLUMNS) as unknown as SessionQuery,
+  );
+  if (!isMissingCwdColumn(first.error)) return first;
+  return configure(
+    supabaseAdmin.from('claude_sessions').select(BASE_SELECT_COLUMNS) as unknown as SessionQuery,
+  );
+}
+
+function isMissingCwdColumn(error: { message?: string } | null | undefined): boolean {
+  return /cwd/i.test(error?.message ?? '') && /column|schema|does not exist/i.test(error?.message ?? '');
 }

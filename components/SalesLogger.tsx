@@ -38,7 +38,6 @@ export function SalesLogger({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? ''}`,
         },
         body: JSON.stringify({ userId, type, note: note.trim() || undefined }),
       });
