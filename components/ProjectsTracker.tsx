@@ -5,14 +5,10 @@ import { DatePicker } from '@/components/ui/DatePicker';
 import type { KpiWithWeek } from '@/types';
 import { differenceInCalendarDays, format, parseISO, startOfWeek } from 'date-fns';
 import { de } from 'date-fns/locale';
-
-const SECRET = process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? '';
-
 interface ProjectGroup {
   project: KpiWithWeek;
   steps: KpiWithWeek[];
 }
-
 export function ProjectsTracker({ userId }: { userId: string }) {
   const [groups, setGroups] = useState<ProjectGroup[] | null>(null);
   const [busy, setBusy] = useState<Set<string>>(new Set());
@@ -21,10 +17,8 @@ export function ProjectsTracker({ userId }: { userId: string }) {
   const [editStepName, setEditStepName] = useState('');
   const [editStepDue, setEditStepDue] = useState('');
   const editInputRef = useRef<HTMLInputElement>(null);
-
   const load = useCallback(async () => {
     const res = await fetch(`/api/kpis?userId=${encodeURIComponent(userId)}`, {
-      headers: { Authorization: `Bearer ${SECRET}` },
       cache: 'no-store',
     });
     if (!res.ok) return;
@@ -52,12 +46,10 @@ export function ProjectsTracker({ userId }: { userId: string }) {
     }
     setOpen(lateOpen);
   }, [userId]);
-
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial fetch on mount; no external subscription model available
     void load();
   }, [load]);
-
   function toggleOpen(id: string) {
     setOpen((prev) => {
       const next = new Set(prev);
@@ -66,20 +58,17 @@ export function ProjectsTracker({ userId }: { userId: string }) {
       return next;
     });
   }
-
   function startEditStep(s: KpiWithWeek) {
     setEditingStepId(s.id);
     setEditStepName(s.name);
     setEditStepDue(s.due_date ?? '');
     requestAnimationFrame(() => editInputRef.current?.focus());
   }
-
   function cancelEditStep() {
     setEditingStepId(null);
     setEditStepName('');
     setEditStepDue('');
   }
-
   async function saveEditStep(stepId: string) {
     const name = editStepName.trim();
     if (!name) return;
@@ -87,7 +76,7 @@ export function ProjectsTracker({ userId }: { userId: string }) {
     try {
       const res = await fetch(`/api/kpis/${encodeURIComponent(stepId)}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, due_date: editStepDue || null }),
       });
       if (!res.ok) return;
@@ -110,7 +99,6 @@ export function ProjectsTracker({ userId }: { userId: string }) {
       });
     }
   }
-
   async function toggleStep(stepId: string, next: boolean) {
     setBusy((prev) => new Set(prev).add(stepId));
     setGroups((prev) =>
@@ -124,7 +112,7 @@ export function ProjectsTracker({ userId }: { userId: string }) {
     try {
       await fetch(`/api/kpis/${stepId}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${SECRET}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ completed: next }),
       });
     } finally {
@@ -135,9 +123,7 @@ export function ProjectsTracker({ userId }: { userId: string }) {
       });
     }
   }
-
   if (groups === null) return <p className="text-[13px] text-[var(--ink-3)]">Lade Projekte…</p>;
-
   if (groups.length === 0) {
     return (
       <p className="text-[13px] text-[var(--ink-3)]">
@@ -149,7 +135,6 @@ export function ProjectsTracker({ userId }: { userId: string }) {
       </p>
     );
   }
-
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
   const visibleGroups = groups
     .filter(({ steps }) => {
@@ -166,7 +151,6 @@ export function ProjectsTracker({ userId }: { userId: string }) {
       if (aComplete !== bComplete) return aComplete ? 1 : -1;
       return 0;
     });
-
   return (
     <div>
       {visibleGroups.map(({ project, steps }) => {
@@ -177,7 +161,6 @@ export function ProjectsTracker({ userId }: { userId: string }) {
         const isOpen = open.has(project.id);
         const late = isLate(steps, isComplete);
         const dueLabel = projectDueLabel(project.due_date, isComplete, late);
-
         return (
           <div key={project.id} className={`proj ${late ? 'late' : ''} ${isComplete ? 'complete' : ''} ${isOpen ? 'open' : ''}`}>
             <button type="button" onClick={() => toggleOpen(project.id)} className="proj-head">
@@ -293,14 +276,12 @@ export function ProjectsTracker({ userId }: { userId: string }) {
     </div>
   );
 }
-
 function sortSteps(a: KpiWithWeek, b: KpiWithWeek): number {
   if (a.due_date && b.due_date) return a.due_date.localeCompare(b.due_date);
   if (a.due_date) return -1;
   if (b.due_date) return 1;
   return a.position - b.position;
 }
-
 function projectCompletedAt(steps: KpiWithWeek[]): Date | null {
   let max: Date | null = null;
   for (const s of steps) {
@@ -312,7 +293,6 @@ function projectCompletedAt(steps: KpiWithWeek[]): Date | null {
   }
   return max;
 }
-
 function hasOverdueOpenStep(steps: KpiWithWeek[]): boolean {
   const today = new Date();
   return steps.some((s) => {
@@ -324,12 +304,10 @@ function hasOverdueOpenStep(steps: KpiWithWeek[]): boolean {
     }
   });
 }
-
 function isLate(steps: KpiWithWeek[], isComplete: boolean): boolean {
   if (isComplete) return false;
   return hasOverdueOpenStep(steps);
 }
-
 function projectDueLabel(due: string | null, isComplete: boolean, late: boolean): string | null {
   if (!due) return null;
   try {
@@ -344,7 +322,6 @@ function projectDueLabel(due: string | null, isComplete: boolean, late: boolean)
     return due;
   }
 }
-
 function stepDueMeta(due: string | null, completed: boolean): { label: string; pillClass: string } | null {
   if (!due || completed) return null;
   try {

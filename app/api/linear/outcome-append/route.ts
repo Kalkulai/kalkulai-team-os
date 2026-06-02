@@ -2,7 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireApiAuth } from '@/lib/api-auth';
 import { getIssueByIdentifier, updateIssue } from '@/lib/linear';
 import { getPullRequestDetail } from '@/lib/github';
-import { buildOutcomeBlock, appendOutcomeToDescription, OUTCOME_MARKER, type OutcomeInput } from '@/lib/outcome-builder';
+import {
+  buildOutcomeBlock,
+  appendOutcomeToDescription,
+  OUTCOME_MARKER,
+  type OutcomeClientContext,
+  type OutcomeInput,
+} from '@/lib/outcome-builder';
 
 export const runtime = 'nodejs';
 export const maxDuration = 20;
@@ -27,6 +33,10 @@ interface Body {
   source?: OutcomeInput['source'];
   prNumber?: number;
   repo?: string;
+  /** Optional client-side session context from task-synthesis.js — populates
+   *  the outcome block with files, branch, commands, and Haiku summary when
+   *  there's no PR (typically `/task-done` without a PR-merge follow-up). */
+  clientContext?: OutcomeClientContext;
 }
 
 export async function POST(req: NextRequest) {
@@ -69,6 +79,7 @@ export async function POST(req: NextRequest) {
           commits: pr.commits,
         }
       : null,
+    clientContext: body.clientContext ?? null,
   });
 
   const next = appendOutcomeToDescription(issue.description, block);

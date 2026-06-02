@@ -33,7 +33,7 @@ export default function SettingsPage() {
 }
 
 function SettingsContent() {
-  const { members, activeId, activeMember } = useActiveMember();
+  const { members, activeId, activeMember } = useActiveMember({ details: true });
 
   return (
     <div className="space-y-5">
