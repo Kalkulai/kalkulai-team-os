@@ -2,9 +2,6 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useActiveMember } from '@/lib/active-member';
-
-const SECRET = process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? '';
-
 export type HermesUiState = 'closed' | 'bubble' | 'modal';
 
 export interface HermesConversationSummary {
@@ -60,39 +57,38 @@ export function HermesProvider({ children }: { children: ReactNode }) {
   const [progress, setProgress] = useState<HermesProgress>({ currentTool: null, toolCount: 0 });
   const lastLoadedMemberRef = useRef<string | null>(null);
 
-  // Auth header helper (DASHBOARD_API_SECRET is public-non-sensitive).
-  const authHeaders = useMemo(() => ({ 'Authorization': `Bearer ${SECRET}`, 'Content-Type': 'application/json' }), []);
+  const jsonHeaders = useMemo(() => ({ 'Content-Type': 'application/json' }), []);
 
   const reloadConversations = useCallback(async () => {
     if (!memberId) return;
     try {
       const res = await fetch(`/api/hermes/conversations?memberId=${encodeURIComponent(memberId)}`, {
-        headers: authHeaders, cache: 'no-store',
+        headers: jsonHeaders, cache: 'no-store',
       });
       if (!res.ok) return;
       const data = (await res.json()) as HermesConversationSummary[];
       setConversations(data);
     } catch {/* ignore */}
-  }, [memberId, authHeaders]);
+  }, [memberId, jsonHeaders]);
 
   const loadMessages = useCallback(async (conversationId: string) => {
     if (!memberId) return;
     try {
       const res = await fetch(`/api/hermes/conversations/${conversationId}/messages?memberId=${encodeURIComponent(memberId)}`, {
-        headers: authHeaders, cache: 'no-store',
+        headers: jsonHeaders, cache: 'no-store',
       });
       if (!res.ok) return;
       const data = (await res.json()) as HermesMessage[];
       setMessages(data);
     } catch {/* ignore */}
-  }, [memberId, authHeaders]);
+  }, [memberId, jsonHeaders]);
 
   const ensureConversation = useCallback(async (): Promise<string | null> => {
     if (!memberId) return null;
     if (activeId) return activeId;
     try {
       const res = await fetch('/api/hermes/conversations', {
-        method: 'POST', headers: authHeaders,
+        method: 'POST', headers: jsonHeaders,
         body: JSON.stringify({ memberId }),
       });
       if (!res.ok) return null;
@@ -102,7 +98,7 @@ export function HermesProvider({ children }: { children: ReactNode }) {
       setConversations((prev) => [conv, ...prev]);
       return conv.id;
     } catch { return null; }
-  }, [memberId, activeId, authHeaders]);
+  }, [memberId, activeId, jsonHeaders]);
 
   const sendMessage = useCallback(async (text: string) => {
     const trimmed = text.trim();
@@ -125,7 +121,7 @@ export function HermesProvider({ children }: { children: ReactNode }) {
     try {
       const res = await fetch(`/api/hermes/conversations/${convId}/messages`, {
         method: 'POST',
-        headers: { ...authHeaders, Accept: 'text/event-stream' },
+        headers: { ...jsonHeaders, Accept: 'text/event-stream' },
         body: JSON.stringify({ memberId, content: trimmed }),
       });
       if (!res.ok || !res.body) {
@@ -193,7 +189,7 @@ export function HermesProvider({ children }: { children: ReactNode }) {
       setSending(false);
       setProgress({ currentTool: null, toolCount: 0 });
     }
-  }, [sending, memberId, ensureConversation, authHeaders, reloadConversations]);
+  }, [sending, memberId, ensureConversation, jsonHeaders, reloadConversations]);
 
   const startNewConversation = useCallback(async () => {
     setActiveId(null);
@@ -204,7 +200,7 @@ export function HermesProvider({ children }: { children: ReactNode }) {
     if (!memberId) return;
     try {
       await fetch(`/api/hermes/conversations/${id}?memberId=${encodeURIComponent(memberId)}`, {
-        method: 'DELETE', headers: authHeaders,
+        method: 'DELETE', headers: jsonHeaders,
       });
       setConversations((prev) => prev.filter((c) => c.id !== id));
       if (activeId === id) {
@@ -212,7 +208,7 @@ export function HermesProvider({ children }: { children: ReactNode }) {
         setMessages([]);
       }
     } catch {/* ignore */}
-  }, [memberId, activeId, authHeaders]);
+  }, [memberId, activeId, jsonHeaders]);
 
   // When member changes, reload conversations + reset.
   useEffect(() => {

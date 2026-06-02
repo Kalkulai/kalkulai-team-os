@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AUTH_COOKIE_NAME, verifyAuthCookie } from '@/lib/auth-cookie';
+import { checkRateLimit, getClientIp, positiveEnvInt } from '@/lib/rate-limit';
 
 /**
  * Root-Middleware: Team-Access-Guard.
@@ -46,17 +47,30 @@ function isPublic(path: string): boolean {
 
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
+  const isApi = path.startsWith('/api/');
+
+  if (isApi) {
+    const rate = checkRateLimit(`api:${getClientIp(req)}:${path}`, {
+      limit: positiveEnvInt('TEAM_OS_API_RATE_LIMIT_PER_MINUTE', 240),
+      windowMs: 60_000,
+    });
+    if (!rate.ok) {
+      return NextResponse.json(
+        { error: 'Too many requests' },
+        { status: 429, headers: { 'Retry-After': String(rate.retryAfterSeconds) } },
+      );
+    }
+  }
 
   if (isPublic(path)) return NextResponse.next();
 
-  const isApi = path.startsWith('/api/');
   const hasBearer = req.headers.get('authorization')?.startsWith('Bearer ');
 
   // API: Bearer (Hermes) ODER Cookie reicht
   if (isApi && hasBearer) return NextResponse.next();
 
   const cookieValue = req.cookies.get(AUTH_COOKIE_NAME)?.value;
-  const cookieOk = await verifyAuthCookie(cookieValue);
+  const cookieOk = await verifyAuthCookie(cookieValue, undefined, { requireMember: true });
   if (cookieOk) return NextResponse.next();
 
   // Unauthenticated

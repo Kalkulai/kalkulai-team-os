@@ -3,12 +3,12 @@ import { getAllMembers } from '@/lib/supabase';
 import { buildDailyBriefing } from '@/lib/aggregator';
 import { sendTelegramMessage } from '@/lib/telegram';
 import { formatBriefingMarkdown } from '@/lib/briefing-format';
+import { requireApiAuth } from '@/lib/api-auth';
 
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
-  const auth = req.headers.get('authorization');
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
+  if (!requireApiAuth(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
