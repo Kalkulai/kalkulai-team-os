@@ -1,10 +1,14 @@
 {
-  "sheets": { "finanzplan": "<SHEET_ID>", "guv": "<SHEET_ID>", "coaching": "<SHEET_ID>" },
+  "sheets": {
+    "guv": "1IymAzVVM9_EDsX96I3n_nhGQ06mRcPndMzMfQtAW-QM",
+    "finanzplan": "1L2Tp3R5RodrsgAiRoRL3-n0V-6mZbig_0VgSPErOVsE",
+    "coaching": "18arghJXb80KEihdyIqz8hFZFnvBvuB645U5yh76MYTw",
+    "preexist": "12N_ZQ8luK99GNYP11ODJWS-AOD03XbZ0BEIIWAFUbow"
+  },
   "fields": {
-    "cash_on_hand_eur":       { "sheet": "guv",        "namedRange": "cash_on_hand",  "kind": "output" },
-    "monthly_burn.actual_eur":{ "sheet": "guv",        "namedRange": "burn_actual",   "kind": "output" },
-    "monthly_burn.plan_eur":  { "sheet": "finanzplan", "namedRange": "burn_plan",     "kind": "input"  },
-    "break_even_label":       { "sheet": "guv",        "namedRange": "break_even",    "kind": "output" },
-    "price_per_pilot":        { "sheet": "finanzplan", "namedRange": "price_per_pilot","kind": "input"  }
+    "cash_on_hand_eur":        { "sheet": "guv",        "namedRange": "cash_on_hand", "kind": "output" },
+    "monthly_burn.actual_eur": { "sheet": "guv",        "namedRange": "burn_actual",  "kind": "output" },
+    "monthly_burn.plan_eur":   { "sheet": "finanzplan", "namedRange": "burn_plan",    "kind": "input"  },
+    "break_even_label":        { "sheet": "guv",        "namedRange": "break_even",   "kind": "output" }
   }
 }
