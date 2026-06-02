@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
+import { verifyGoogleOAuthState } from '@/lib/oauth-state';
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get('code');
@@ -20,6 +21,12 @@ export async function GET(req: NextRequest) {
   if (!code || !state) {
     console.log('[oauth-cb] missing-params', { hasCode: !!code, hasState: !!state });
     return NextResponse.json({ error: 'code and state required' }, { status: 400 });
+  }
+
+  const userId = await verifyGoogleOAuthState(state);
+  if (!userId) {
+    console.log('[oauth-cb] invalid-state');
+    return NextResponse.json({ error: 'invalid state' }, { status: 400 });
   }
 
   const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -65,7 +72,7 @@ export async function GET(req: NextRequest) {
   console.log('[oauth-cb] tokens', { hasRefresh: !!tokens.refresh_token, hasAccess: !!tokens.access_token });
 
   if (!tokens.refresh_token) {
-    console.log('[oauth-cb] no-refresh-token-redirect', { state });
+    console.log('[oauth-cb] no-refresh-token-redirect', { userId });
     return NextResponse.redirect(
       new URL('/settings?calendar=error&reason=no-refresh-token', req.nextUrl.origin)
     );
@@ -82,7 +89,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  console.log('[oauth-cb] db-update', { state, hasEmail: !!email });
+  console.log('[oauth-cb] db-update', { userId, hasEmail: !!email });
 
   const { error: dbError } = await supabaseAdmin
     .from('team_members')
@@ -90,7 +97,7 @@ export async function GET(req: NextRequest) {
       google_refresh_token: tokens.refresh_token,
       google_calendar_email: email,
     })
-    .eq('id', state);
+    .eq('id', userId);
 
   if (dbError) {
     console.log('[oauth-cb] db-error', { msg: dbError.message, code: dbError.code, details: dbError.details });
@@ -99,8 +106,8 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  console.log('[oauth-cb] success', { state, email });
+  console.log('[oauth-cb] success', { userId, email });
   return NextResponse.redirect(
-    new URL(`/settings?calendar=connected&member=${state}`, req.nextUrl.origin)
+    new URL(`/settings?calendar=connected&member=${userId}`, req.nextUrl.origin)
   );
 }

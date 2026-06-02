@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   signAuthCookie,
   verifyAuthCookie,
+  parseAuthCookie,
   checkPassword,
   AUTH_COOKIE_MAX_AGE_SECONDS,
 } from '@/lib/auth-cookie';
@@ -24,6 +25,21 @@ describe('signAuthCookie + verifyAuthCookie', () => {
     const c = await signAuthCookie();
     expect(c).toMatch(/^\d+\.[A-Za-z0-9_-]+$/);
     expect(await verifyAuthCookie(c)).toBe(true);
+  });
+
+  it('signs and verifies a member session cookie', async () => {
+    const c = await signAuthCookie(undefined, 1_000_000_000, 'member-1');
+    expect(await verifyAuthCookie(c, 1_000_000_001, { requireMember: true })).toBe(true);
+    expect(await parseAuthCookie(c, 1_000_000_001)).toEqual({
+      exp: 1_000_000_000 + AUTH_COOKIE_MAX_AGE_SECONDS,
+      memberId: 'member-1',
+    });
+  });
+
+  it('can require a member identity in the cookie payload', async () => {
+    const legacy = await signAuthCookie(undefined, 1_000_000_000);
+    expect(await verifyAuthCookie(legacy, 1_000_000_001)).toBe(true);
+    expect(await verifyAuthCookie(legacy, 1_000_000_001, { requireMember: true })).toBe(false);
   });
 
   it('rejects an empty / undefined cookie', async () => {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiAuth } from '@/lib/api-auth';
+import { requireActor, type AuthActor } from '@/lib/auth-context';
+import { recordAuditEvent } from '@/lib/audit';
 import {
   getConversation,
   getMessages,
@@ -29,9 +30,14 @@ async function getMember(memberId: string): Promise<MemberRow | null> {
   return (data as MemberRow | null) ?? null;
 }
 
+function subjectMemberId(actor: AuthActor, requested: string | null | undefined): string | null {
+  return requested || actor.memberId || null;
+}
+
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!requireApiAuth(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  const memberId = req.nextUrl.searchParams.get('memberId');
+  const actor = await requireActor(req, { scopes: ['hermes:chat'] });
+  if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const memberId = subjectMemberId(actor, req.nextUrl.searchParams.get('memberId'));
   if (!memberId) return NextResponse.json({ error: 'memberId required' }, { status: 400 });
   const { id } = await params;
   const conv = await getConversation(id, memberId);
@@ -45,13 +51,14 @@ function sseLine(event: string, data: unknown): string {
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!requireApiAuth(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const actor = await requireActor(req, { scopes: ['hermes:chat'] });
+  if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const body = await req.json().catch(() => null) as { memberId?: string; content?: string } | null;
-  if (!body?.memberId || !body.content?.trim()) {
+  const memberId = subjectMemberId(actor, body?.memberId);
+  if (!memberId || !body?.content?.trim()) {
     return NextResponse.json({ error: 'memberId + content required' }, { status: 400 });
   }
   const { id: conversationId } = await params;
-  const memberId = body.memberId;
   const userContent = body.content.trim();
 
   const conv = await getConversation(conversationId, memberId);
@@ -59,9 +66,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const member = await getMember(memberId);
   if (!member) return NextResponse.json({ error: 'member not found' }, { status: 404 });
+  const actorMember = actor.memberId ? await getMember(actor.memberId) : null;
 
   const userMsg = await addMessage(conversationId, 'user', userContent);
   await ensureFirstTitle(conversationId, memberId, userContent);
+  await recordAuditEvent({
+    actor,
+    scope: 'hermes:chat',
+    action: 'hermes.message.user',
+    resourceType: 'hermes_conversation',
+    resourceId: conversationId,
+    onBehalfOfMemberId: memberId,
+    metadata: { messageId: userMsg.id },
+  });
 
   const prior = (await getMessages(conversationId)).filter((m) => m.id !== userMsg.id);
   const history = buildHistoryFromMessages(prior);
@@ -78,8 +95,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       try {
         bridgeRes = await streamHermes({
           message: userContent,
-          userLabel: member.name,
-          userTelegramId: member.telegram_chat_id,
+          userLabel: actorMember?.name ?? member.name,
+          userTelegramId: actorMember?.telegram_chat_id ?? member.telegram_chat_id,
           history,
         });
       } catch (err) {
@@ -127,6 +144,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       if (replyText) {
         try {
           const assistantMsg = await addMessage(conversationId, 'assistant', replyText);
+          await recordAuditEvent({
+            actor: { type: 'hermes', id: 'hermes', scopes: ['*'] },
+            scope: 'hermes:chat',
+            action: 'hermes.message.assistant',
+            resourceType: 'hermes_conversation',
+            resourceId: conversationId,
+            onBehalfOfMemberId: memberId,
+            metadata: { messageId: assistantMsg.id, requestedByActor: actor.id },
+          });
           emit('persisted', { assistantMessage: assistantMsg });
         } catch (err) {
           emit('error', { message: `persist failed: ${err instanceof Error ? err.message : String(err)}` });

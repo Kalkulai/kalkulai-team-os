@@ -11,10 +11,13 @@ import { getAllMembers } from '@/lib/supabase';
  */
 export async function GET() {
   const members = await getAllMembers();
-  const safe = members.map(({ google_refresh_token, github_token, ...rest }) => ({
-    ...rest,
-    calendar_connected: !!google_refresh_token,
-    github_connected: !!github_token,
+  const safe = members.map((member) => ({
+    id: member.id,
+    name: member.name,
+    role: member.role,
+    github_username: member.github_username,
+    calendar_connected: !!member.google_refresh_token,
+    github_connected: !!member.github_token,
   }));
   return NextResponse.json(safe);
 }

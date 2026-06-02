@@ -1,9 +1,11 @@
 /**
  * HMAC-signiertes Auth-Cookie für das Team-OS Dashboard.
  *
- * Format: `<exp_unix>.<hmac_base64url>`
- *   - `exp_unix`: Unix-Timestamp (Sekunden) wann das Cookie ungültig wird
- *   - `hmac`: HMAC-SHA-256 von `exp_unix` mit `TEAM_OS_AUTH_SECRET`, Base64URL-encoded
+ * Format:
+ *   - Legacy: `<exp_unix>.<hmac_base64url>`
+ *   - Member-Session: `<payload_base64url>.<hmac_base64url>`
+ *
+ * `payload_base64url` ist JSON mit `exp` und optional `memberId`.
  *
  * Edge-Runtime-kompatibel (verwendet `crypto.subtle`, kein Node-`crypto`).
  *
@@ -14,6 +16,11 @@
 
 export const AUTH_COOKIE_NAME = 'team-os-auth';
 export const AUTH_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 Tage
+
+export interface AuthCookiePayload {
+  exp: number;
+  memberId?: string;
+}
 
 function getSecret(): string {
   const s = process.env.TEAM_OS_AUTH_SECRET;
@@ -27,6 +34,30 @@ function base64UrlEncode(bytes: Uint8Array): string {
   let bin = '';
   for (const b of bytes) bin += String.fromCharCode(b);
   return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function base64UrlDecode(value: string): string {
+  const padded = value.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(value.length / 4) * 4, '=');
+  return atob(padded);
+}
+
+function encodePayload(payload: AuthCookiePayload): string {
+  return base64UrlEncode(new TextEncoder().encode(JSON.stringify(payload)));
+}
+
+function decodePayload(raw: string): AuthCookiePayload | null {
+  if (/^\d+$/.test(raw)) return { exp: Number.parseInt(raw, 10) };
+  try {
+    const decoded = base64UrlDecode(raw);
+    const parsed = JSON.parse(decoded) as Partial<AuthCookiePayload>;
+    if (!Number.isFinite(parsed.exp)) return null;
+    return {
+      exp: Number(parsed.exp),
+      memberId: typeof parsed.memberId === 'string' && parsed.memberId ? parsed.memberId : undefined,
+    };
+  } catch {
+    return null;
+  }
 }
 
 async function hmacSign(payload: string, secret: string): Promise<string> {
@@ -54,10 +85,12 @@ function timingSafeEqual(a: string, b: string): boolean {
 export async function signAuthCookie(
   ttlSeconds: number = AUTH_COOKIE_MAX_AGE_SECONDS,
   nowSeconds: number = Math.floor(Date.now() / 1000),
+  memberId?: string,
 ): Promise<string> {
   const exp = nowSeconds + ttlSeconds;
-  const sig = await hmacSign(String(exp), getSecret());
-  return `${exp}.${sig}`;
+  const payload = memberId ? encodePayload({ exp, memberId }) : String(exp);
+  const sig = await hmacSign(payload, getSecret());
+  return `${payload}.${sig}`;
 }
 
 /**
@@ -66,22 +99,33 @@ export async function signAuthCookie(
 export async function verifyAuthCookie(
   cookie: string | undefined | null,
   nowSeconds: number = Math.floor(Date.now() / 1000),
+  options?: { requireMember?: boolean },
 ): Promise<boolean> {
-  if (!cookie) return false;
+  const payload = await parseAuthCookie(cookie, nowSeconds);
+  if (!payload) return false;
+  if (options?.requireMember && !payload.memberId) return false;
+  return true;
+}
+
+export async function parseAuthCookie(
+  cookie: string | undefined | null,
+  nowSeconds: number = Math.floor(Date.now() / 1000),
+): Promise<AuthCookiePayload | null> {
+  if (!cookie) return null;
   const dot = cookie.indexOf('.');
-  if (dot <= 0 || dot === cookie.length - 1) return false;
-  const exp = cookie.slice(0, dot);
+  if (dot <= 0 || dot === cookie.length - 1) return null;
+  const rawPayload = cookie.slice(0, dot);
   const sig = cookie.slice(dot + 1);
-  const expNum = Number.parseInt(exp, 10);
-  if (!Number.isFinite(expNum) || expNum <= nowSeconds) return false;
+  const payload = decodePayload(rawPayload);
+  if (!payload || payload.exp <= nowSeconds) return null;
   let secret: string;
   try {
     secret = getSecret();
   } catch {
-    return false;
+    return null;
   }
-  const expected = await hmacSign(exp, secret);
-  return timingSafeEqual(sig, expected);
+  const expected = await hmacSign(rawPayload, secret);
+  return timingSafeEqual(sig, expected) ? payload : null;
 }
 
 /**
