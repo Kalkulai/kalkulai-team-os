@@ -84,9 +84,9 @@ describe('campaign aggregation', () => {
   it('computes sent/reply/follow-up metrics without inventing open-rate', () => {
     const stats = calculateCampaignStats(
       [
-        { id: 'lead-1', stage: 'followup_due' },
-        { id: 'lead-2', stage: 'blocked' },
-        { id: 'lead-3', stage: 'sent' },
+        { stage: 'followup_due' },
+        { stage: 'blocked' },
+        { stage: 'sent' },
       ],
       [
         { event_type: 'sent' },

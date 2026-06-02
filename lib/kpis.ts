@@ -184,6 +184,7 @@ export async function createKpi(input: {
   type?: KpiType;
   due_date?: string | null;
   source?: KpiSource;
+  status?: 'todo' | 'in-progress' | 'on-hold' | 'backlog' | null;
 }): Promise<KpiWithWeek> {
   const type: KpiType = input.type ?? 'counter';
   // Source only meaningful for counters; force 'manual' on project/step rows.
@@ -209,6 +210,7 @@ export async function createKpi(input: {
       type,
       due_date: input.due_date ?? null,
       source,
+      status: type === 'step' ? (input.status ?? null) : null,
     })
     .select()
     .single();
@@ -249,7 +251,7 @@ export async function updateKpiDefinition(
     position?: number;
     due_date?: string | null;
     completed?: boolean;
-    status?: 'todo' | 'in-progress' | 'on-hold' | null;
+    status?: 'todo' | 'in-progress' | 'on-hold' | 'backlog' | null;
   }
 ): Promise<void> {
   // Mirror `completed` into `completed_at` so the Activity-Stream can filter

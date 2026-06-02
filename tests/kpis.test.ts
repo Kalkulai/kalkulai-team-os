@@ -63,7 +63,7 @@ vi.mock('@/lib/supabase', () => ({
   supabaseAdmin: { from: (...args: unknown[]) => fromMock(...(args as [string])) },
 }));
 
-const getCallsThisWeekMock = vi.fn(async () => [] as unknown[]);
+const getCallsThisWeekMock = vi.fn(async (_ownerId: string) => [] as unknown[]);
 vi.mock('@/lib/hubspot', () => ({
   getCallsThisWeek: (ownerId: string) => getCallsThisWeekMock(ownerId),
 }));
@@ -92,7 +92,7 @@ beforeEach(() => {
   eqCalls.length = 0;
   fromMock.mockClear();
   getCallsThisWeekMock.mockClear();
-  getCallsThisWeekMock.mockImplementation(async () => []);
+  getCallsThisWeekMock.mockImplementation(async (_ownerId: string) => []);
 });
 
 describe('createKpi', () => {
@@ -132,6 +132,23 @@ describe('createKpi', () => {
     await createKpi({ user_id: USER, name: 'P', week_start: WEEK, type: 'project', due_date: '2026-06-01' });
 
     expect(fromCalls).not.toContain('kpi_weeks');
+  });
+
+  it('persists status when provided (backlog step)', async () => {
+    responses.push({ data: { position: 0 } });
+    responses.push({ data: { id: 'k1', type: 'step', status: 'backlog' } });
+
+    await createKpi({
+      user_id: USER,
+      name: 'Step',
+      week_start: WEEK,
+      type: 'step',
+      parent_id: 'p1',
+      status: 'backlog',
+    });
+
+    const stepInsert = insertPayloads.find((p) => p.type === 'step');
+    expect(stepInsert?.status).toBe('backlog');
   });
 });
 

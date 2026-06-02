@@ -2,7 +2,7 @@ import { differenceInCalendarDays, parseISO } from 'date-fns';
 import type { KpiWithWeek, LinearIssue, TaskSource } from '@/types';
 import { parseTeamTaskGroupId, parseTeamTaskAssignees } from '@/lib/team-tasks';
 
-export type UnifiedStatus = 'todo' | 'in-progress' | 'on-hold' | 'done';
+export type UnifiedStatus = 'todo' | 'in-progress' | 'on-hold' | 'done' | 'backlog';
 export type UnifiedTaskKind = 'linear' | 'step';
 
 export interface UnifiedTask {
@@ -30,6 +30,7 @@ export function deriveLinearStatus(issue: LinearIssue): UnifiedStatus {
 
 export function deriveStepStatus(step: KpiWithWeek): UnifiedStatus {
   if (step.completed) return 'done';
+  if (step.status === 'backlog') return 'backlog';
   // Persisted Kanban status wins over the auto-derived one.
   if (step.status === 'todo' || step.status === 'in-progress' || step.status === 'on-hold') {
     return step.status;
@@ -87,7 +88,7 @@ export function mergeTasks(
     }));
 
   return [...linearTasks, ...stepTasks]
-    .filter((t) => t.status !== 'done')
+    .filter((t) => t.status !== 'done' && t.status !== 'backlog')
     .sort((a, b) => {
       if (a.dueDate && b.dueDate) {
         const cmp = a.dueDate.localeCompare(b.dueDate);
@@ -98,6 +99,31 @@ export function mergeTasks(
         return 1;
       }
       return prioRank(a.priority) - prioRank(b.priority);
+    });
+}
+
+export function mergeBacklogTasks(
+  steps: KpiWithWeek[],
+  projects: KpiWithWeek[],
+): UnifiedTask[] {
+  const projectMap = new Map(projects.map((p) => [p.id, p.name]));
+  return steps
+    .filter((s) => s.type === 'step' && !s.completed && s.status === 'backlog')
+    .map((step) => ({
+      id: step.id,
+      kind: 'step' as const,
+      title: step.name,
+      status: 'backlog' as UnifiedStatus,
+      dueDate: step.due_date,
+      project: step.parent_id
+        ? { id: step.parent_id, name: projectMap.get(step.parent_id) ?? 'Projekt' }
+        : null,
+    }))
+    .sort((a, b) => {
+      if (a.dueDate && b.dueDate) return a.dueDate.localeCompare(b.dueDate);
+      if (a.dueDate) return -1;
+      if (b.dueDate) return 1;
+      return a.title.localeCompare(b.title);
     });
 }
 

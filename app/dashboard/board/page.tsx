@@ -2,7 +2,8 @@ import { cookies } from 'next/headers';
 import { getAllMembers, currentWeekStart } from '@/lib/supabase';
 import { getIssuesForUser, getCompletedIssuesSince } from '@/lib/linear';
 import { listUserKpis } from '@/lib/kpis';
-import { mergeTasks, mergeDoneTasks } from '@/lib/unified-tasks';
+import { backlogEnabledForMember } from '@/lib/backlog-access';
+import { mergeTasks, mergeDoneTasks, mergeBacklogTasks } from '@/lib/unified-tasks';
 import { getActiveSessionsByIdentifier } from '@/lib/claude-sessions';
 import type { ClaudeSession } from '@/types';
 import { KanbanBoard } from '@/components/dashboard/KanbanBoard';
@@ -52,6 +53,8 @@ export default async function BoardPage({
   const projects = allKpis.filter((k) => k.type === 'project');
   const tasks = mergeTasks(issues, steps, projects);
   const doneTasks = mergeDoneTasks(completedLinear, completedSteps, projects, 3);
+  const backlogEnabled = backlogEnabledForMember(me.id);
+  const backlogTasks = backlogEnabled ? mergeBacklogTasks(steps, projects) : [];
 
   // Live Claude-Code session tracking (KAL-89). Best-effort — if the table
   // hasn't been migrated yet on this environment, the board still renders.
@@ -71,6 +74,8 @@ export default async function BoardPage({
       <KanbanBoard
         tasks={tasks}
         doneTasks={doneTasks}
+        backlogTasks={backlogTasks}
+        backlogEnabled={backlogEnabled}
         members={members}
         activeClaudeByIdentifier={activeClaudeByIdentifier}
       />

@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { deriveLinearStatus, deriveStepStatus, mergeTasks } from '../lib/unified-tasks';
+import {
+  deriveLinearStatus,
+  deriveStepStatus,
+  mergeBacklogTasks,
+  mergeTasks,
+} from '../lib/unified-tasks';
 import type { LinearIssue, KpiWithWeek } from '@/types';
 
 function makeIssue(overrides: Partial<LinearIssue> = {}): LinearIssue {
@@ -205,5 +210,33 @@ describe('mergeTasks — sort by exact dueDate', () => {
     const overdue = makeIssue({ id: 'a', dueDate: YESTERDAY });
     const result = mergeTasks([noDate, future, today, overdue], [], []);
     expect(result.map((t) => t.id)).toEqual(['a', 'b', 'c', 'd']);
+  });
+});
+
+describe('backlog steps', () => {
+  it('deriveStepStatus returns "backlog" when status=backlog', () => {
+    expect(deriveStepStatus(makeStep({ status: 'backlog' }))).toBe('backlog');
+  });
+
+  it('mergeTasks excludes backlog steps', () => {
+    const steps = [
+      makeStep({ id: 's-todo', status: null }),
+      makeStep({ id: 's-backlog', status: 'backlog' }),
+    ];
+    const result = mergeTasks([], steps, [makeProject()]);
+    expect(result.map((t) => t.id)).toContain('s-todo');
+    expect(result.map((t) => t.id)).not.toContain('s-backlog');
+  });
+
+  it('mergeBacklogTasks returns only backlog steps with project info', () => {
+    const steps = [
+      makeStep({ id: 's-todo', status: null }),
+      makeStep({ id: 's-backlog', name: 'Parked', status: 'backlog', parent_id: 'proj-1' }),
+    ];
+    const result = mergeBacklogTasks(steps, [makeProject('proj-1', 'Testprojekt')]);
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('s-backlog');
+    expect(result[0].status).toBe('backlog');
+    expect(result[0].project).toEqual({ id: 'proj-1', name: 'Testprojekt' });
   });
 });

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireApiAuth } from '@/lib/api-auth';
+import { defaultStepStatus } from '@/lib/backlog-access';
 import { listUserKpis, createKpi } from '@/lib/kpis';
 import { currentWeekStart } from '@/lib/supabase';
 
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest) {
     type,
     due_date,
     source,
+    status: type === 'step' ? defaultStepStatus(body.user_id) : null,
   });
   return NextResponse.json(kpi, { status: 201 });
 }
