@@ -199,21 +199,41 @@ export async function createKpi(input: {
     .maybeSingle();
   const nextPosition = (maxRow?.position ?? -1) + 1;
 
-  const { data: kpi, error: kpiErr } = await supabaseAdmin
+  const stepStatus = type === 'step' ? (input.status ?? null) : null;
+  const insertRow = {
+    user_id: input.user_id,
+    parent_id: input.parent_id ?? null,
+    name: input.name,
+    unit: input.unit ?? '',
+    position: nextPosition,
+    type,
+    due_date: input.due_date ?? null,
+    source,
+    status: stepStatus,
+  };
+
+  let { data: kpi, error: kpiErr } = await supabaseAdmin
     .from('kpis')
-    .insert({
-      user_id: input.user_id,
-      parent_id: input.parent_id ?? null,
-      name: input.name,
-      unit: input.unit ?? '',
-      position: nextPosition,
-      type,
-      due_date: input.due_date ?? null,
-      source,
-      status: type === 'step' ? (input.status ?? null) : null,
-    })
+    .insert(insertRow)
     .select()
     .single();
+
+  // Transition guard: migration 022 widens the kpis_status_check constraint to
+  // allow 'backlog'. Until it is applied to a given environment, inserting a
+  // 'backlog' step trips a CHECK violation (Postgres 23514). Retry once with
+  // status=null so step creation never 500s — the step lands on the board
+  // instead of the backlog. Harmless once 022 is applied (first insert succeeds);
+  // remove this guard after the migration is confirmed everywhere.
+  if (kpiErr && stepStatus === 'backlog' && (kpiErr as { code?: string }).code === '23514') {
+    console.warn(
+      '[kpis] backlog status rejected by kpis_status_check — migration 022 not applied yet; falling back to status=null',
+    );
+    ({ data: kpi, error: kpiErr } = await supabaseAdmin
+      .from('kpis')
+      .insert({ ...insertRow, status: null })
+      .select()
+      .single());
+  }
   if (kpiErr) throw kpiErr;
 
   const target = input.target ?? 0;

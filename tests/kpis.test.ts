@@ -150,6 +150,29 @@ describe('createKpi', () => {
     const stepInsert = insertPayloads.find((p) => p.type === 'step');
     expect(stepInsert?.status).toBe('backlog');
   });
+
+  it('retries with status=null when backlog trips the status CHECK constraint (migration 022 pending)', async () => {
+    responses.push({ data: { position: 0 } }); // max-position lookup
+    responses.push({ error: { code: '23514' } }); // 1. insert rejected by kpis_status_check
+    responses.push({ data: { id: 'k1', type: 'step', status: null }, error: null }); // 2. retry succeeds
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = await createKpi({
+      user_id: USER,
+      name: 'Step',
+      week_start: WEEK,
+      type: 'step',
+      parent_id: 'p1',
+      status: 'backlog',
+    });
+    const stepInserts = insertPayloads.filter((p) => p.type === 'step');
+    expect(stepInserts).toHaveLength(2);
+    expect(stepInserts[0].status).toBe('backlog');
+    expect(stepInserts[1].status).toBeNull();
+    expect(result.id).toBe('k1');
+    expect(warn).toHaveBeenCalledOnce();
+    warn.mockRestore();
+  });
 });
 
 describe('adjustKpiActual', () => {
