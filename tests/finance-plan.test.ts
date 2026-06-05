@@ -31,7 +31,7 @@ function planMap(): SheetMap {
     sheets: { finanzplan: 'fp-id', guv: 'guv-id' },
     fields: {
       price_per_pilot: { sheet: 'finanzplan', namedRange: 'price_per_pilot', kind: 'input' },
-      monthly_burn_plan: { sheet: 'finanzplan', namedRange: 'burn_plan', kind: 'input' },
+      'monthly_burn.plan_eur': { sheet: 'finanzplan', namedRange: 'burn_plan', kind: 'input' },
       cash_on_hand_eur: { sheet: 'guv', namedRange: 'cash_on_hand', kind: 'output' },
     },
   };
@@ -104,12 +104,23 @@ describe('POST /api/finance/plan — dry-run', () => {
   it('dryRun auch via Query-Param ?dryRun=1', async () => {
     const res = await plan(
       request(
-        { intent: 'x', edits: [{ field: 'price_per_pilot', value: 1 }] },
+        { intent: 'Burn planen', edits: [{ field: 'monthly_burn.plan_eur', value: 1500 }] },
         'http://localhost/api/finance/plan?dryRun=1',
       ),
     );
+    const json = await res.json();
+
     expect(res.status).toBe(200);
-    expect((await res.json()).dryRun).toBe(true);
+    expect(json.dryRun).toBe(true);
+    expect(json.diff).toEqual([
+      {
+        field: 'monthly_burn.plan_eur',
+        namedRange: 'burn_plan',
+        sheet: 'finanzplan',
+        old: '900',
+        new: 1500,
+      },
+    ]);
     expect(writeNamedRangeMock).not.toHaveBeenCalled();
   });
 });
@@ -142,7 +153,7 @@ describe('POST /api/finance/plan — apply', () => {
         intent: 'Pilotpreis + Burn anpassen',
         edits: [
           { field: 'price_per_pilot', value: 1200 },
-          { field: 'monthly_burn_plan', value: 2800 },
+          { field: 'monthly_burn.plan_eur', value: 2800 },
         ],
       }),
     );
