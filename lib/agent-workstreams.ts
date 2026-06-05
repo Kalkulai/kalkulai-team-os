@@ -275,6 +275,7 @@ function statusLabel(status: UnifiedTask['status']): string {
     'in-progress': 'In Progress',
     'on-hold': 'On Hold',
     done: 'Done',
+    backlog: 'Backlog',
   }[status];
 }
 

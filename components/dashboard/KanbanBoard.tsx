@@ -22,6 +22,8 @@ import type { ClaudeSession } from '@/types';
 import { KanbanCard } from './KanbanCard';
 
 
+const SECRET = process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? '';
+
 const ACTIVE_COLUMNS: Array<{ id: UnifiedStatus; label: string }> = [
   { id: 'todo', label: 'To Do' },
   { id: 'in-progress', label: 'In Progress' },
