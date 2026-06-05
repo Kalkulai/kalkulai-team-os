@@ -58,6 +58,65 @@ DASHBOARD_API_SECRET=… TEAM_OS_BASE_URL=https://kalkulai-team-os.vercel.app \
 
 Bad payloads are rejected by the endpoint with HTTP 400 + reason.
 
+## Deliverables on demand
+
+Kai/Hermes should call the repo-versioned scripts below on agents-01. The LLM
+only supplies or selects the FinanceData JSON; the scripts build the files.
+
+Default output directory is `Drive Finanzen/exports/`. Override on the Bridge
+with `CFO_KAI_EXPORT_DIR=/path/to/Drive Finanzen/exports`. If
+`CFO_KAI_DRIVE_BASE_URL` is set, both scripts print a returned `link=...` using
+that base URL; otherwise they print a local file URL.
+
+### XLSX finance export
+
+```bash
+DASHBOARD_API_SECRET=... TEAM_OS_BASE_URL=https://kalkulai-team-os.vercel.app \
+  python3 scripts/cfo-kai/export_finance_xlsx.py \
+    --base "$TEAM_OS_BASE_URL" \
+    --scenario current
+```
+
+The workbook uses `openpyxl`, separates source inputs from formula sheets, and
+applies the financial-model color convention:
+
+- blue font: hardcoded FinanceData inputs from `GET /api/finance`
+- black font: workbook formulas/calculations
+- yellow fill: assumptions/source context that must be reviewed on snapshot changes
+
+By default the script runs the bundled `document-skills:xlsx` `recalc.py`
+after saving and fails if formula errors such as `#REF!`, `#DIV/0!`, `#VALUE!`,
+`#N/A`, or `#NAME?` are found. Use `--skip-recalc` only for local debugging.
+
+### Monthly/board report
+
+```bash
+DASHBOARD_API_SECRET=... TEAM_OS_BASE_URL=https://kalkulai-team-os.vercel.app \
+  python3 scripts/cfo-kai/report_monthly.py \
+    --base "$TEAM_OS_BASE_URL" \
+    --scenario current \
+    --format auto
+```
+
+`--format auto` emits PDF when `reportlab` is installed on the Bridge and DOCX
+otherwise. Force `--format pdf` for the board-report PDF path; force
+`--format docx` for a Word fallback. The report includes executive summary,
+cash/burn/runway/break-even KPI table, cost lines, forecast, assumptions, and
+sources. All numbers are read from the same FinanceData snapshot as the
+dashboard, so the report matches `GET /api/finance`.
+
+### Hermes reply contract
+
+Both scripts print one success line:
+
+```text
+OK: xlsx=Drive Finanzen/exports/cfo-kai-finance-YYYY-MM.xlsx link=<drive-or-file-url>
+OK: report=Drive Finanzen/exports/cfo-kai-board-report-YYYY-MM.pdf link=<drive-or-file-url>
+```
+
+Kai should return that `link=` value in chat after the command exits with code
+0. Non-zero exit codes include a single `ERROR:` line on stderr.
+
 ## Cron (automatic refresh)
 
 Register a Hermes cron that runs forecasting + push on a schedule (e.g. hourly):
