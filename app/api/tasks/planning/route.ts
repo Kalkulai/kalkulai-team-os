@@ -72,7 +72,9 @@ export async function GET(req: NextRequest) {
       project: m?.projectId
         ? { id: m.projectId, name: projectName.get(m.projectId) ?? null }
         : null,
-      assist: t.assist ?? null,
+      assist: t.assist
+        ? { nextStep: t.assist.suggestedNextStep, followups: t.assist.suggestedFollowups }
+        : null,
     };
   });
 
