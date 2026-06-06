@@ -65,3 +65,14 @@ export async function upsertTaskMeta(
   );
   if (error) throw error;
 }
+
+/** Returns the existing owner (user_id) of a task_meta row, or null if none. */
+export async function getTaskMetaOwner(linearIssueId: string): Promise<string | null> {
+  const { data, error } = await supabaseAdmin
+    .from('task_meta')
+    .select('user_id')
+    .eq('linear_issue_id', linearIssueId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data?.user_id as string | undefined) ?? null;
+}
