@@ -3,7 +3,8 @@ import { updateIssue, archiveIssue } from '@/lib/linear';
 import { requireActor } from '@/lib/auth-context';
 import { revalidateDashboard } from '@/lib/revalidate';
 import { parseTaskMeta, quadrantToPriority } from '@/lib/task-meta';
-import { upsertTaskMeta, getTaskMetaOwner, deleteTaskMeta } from '@/lib/task-meta-db';
+import { upsertTaskMeta, deleteTaskMeta } from '@/lib/task-meta-db';
+import { memberCanMutateIssue } from '@/lib/task-auth';
 
 export async function PATCH(
   req: NextRequest,
@@ -15,6 +16,10 @@ export async function PATCH(
   }
   const { id } = await params;
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+
+  if (!(await memberCanMutateIssue(actor, id))) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
 
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: 'body required' }, { status: 400 });
@@ -69,11 +74,6 @@ export async function PATCH(
       if (!ownerId) {
         return NextResponse.json({ error: 'no owner for meta' }, { status: 403 });
       }
-      // Don't let one user overwrite another user's task_meta ownership.
-      const existingOwner = await getTaskMetaOwner(id);
-      if (existingOwner && existingOwner !== ownerId) {
-        return NextResponse.json({ error: 'forbidden' }, { status: 403 });
-      }
       await upsertTaskMeta(id, ownerId, meta);
     }
     revalidateDashboard();
@@ -95,12 +95,9 @@ export async function DELETE(
   const { id } = await params;
   if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
 
-  // Members may only delete a task whose metadata they own (if any exists).
-  if (actor.type === 'member') {
-    const existingOwner = await getTaskMetaOwner(id).catch(() => null);
-    if (existingOwner && existingOwner !== actor.memberId) {
-      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
-    }
+  // Members may only delete a Linear issue assigned to them.
+  if (!(await memberCanMutateIssue(actor, id))) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
   }
 
   try {
