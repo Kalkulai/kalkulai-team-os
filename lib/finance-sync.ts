@@ -43,9 +43,20 @@ const NUMERIC_FIELDS = new Set<string>([
 
 const GUV_COST_LINES_RANGE = "'GuV Finanzplan'!B23:D37";
 const GUV_BREAK_EVEN_RANGE = "'GuV Finanzplan'!D52";
-const AS_OF = 'GuV Finanzplan · M1 Aug';
-const FORECAST_MONTHS = ['Aug', 'Sep', 'Okt', 'Nov', 'Dez', 'Jan'] as const;
-const PILOT_HEALTH = [{ name: '13 Piloten', status: 'green' as const, note: '' }];
+const EXIST_AS_OF = 'GuV Finanzplan · M1 Aug';
+const EXIST_FORECAST_MONTHS = ['Aug', 'Sep', 'Okt', 'Nov', 'Dez', 'Jan'] as const;
+const EXIST_PILOT_HEALTH = [{ name: '13 Piloten', status: 'green' as const, note: '' }];
+
+const CURRENT_OVERVIEW_RANGE = "'Übersicht'!C8:D10";
+const CURRENT_COST_LINES_RANGE = "'Übersicht'!G8:I11";
+const CURRENT_PAID_BY_RANGE = "'Übersicht'!B16:C18";
+const CURRENT_FORECAST_MONTHS = ['Jun', 'Jul', 'Aug'] as const;
+const CURRENT_MONTH_ROWS = [8, 9, 10] as const;
+const CURRENT_BREAK_EVEN_LABEL = 'M6 · Jan';
+const CURRENT_PILOT_HEALTH = [
+  { name: 'Pre-EXIST (Bootstrap)', status: 'green' as const, note: 'EXIST-Förderung ab Aug' },
+];
+const SCENARIO_SWITCH_AT_MS = Date.parse('2026-08-01T00:00:00.000Z');
 
 /** Backoff-Stufen für transiente Fehler (Netzwerk/5xx). */
 const RETRY_BACKOFF_MS: readonly number[] = [300, 900, 2700];
@@ -70,6 +81,15 @@ export function parseEur(raw: string): number {
     throw new Error(`EUR-Wert nicht parsebar: "${raw}"`);
   }
   return value;
+}
+
+export function activeScenario(now: Date = new Date()): FinanceScenario {
+  const envScenario = process.env.ACTIVE_FINANCE_SCENARIO;
+  if (isFinanceScenario(envScenario)) {
+    return envScenario;
+  }
+
+  return now.getTime() < SCENARIO_SWITCH_AT_MS ? 'current' : 'exist';
 }
 
 /** Erkennt transiente Fehler (Netzwerk/5xx), die einen Retry rechtfertigen. */
@@ -131,7 +151,7 @@ function requireNumber(overrides: Map<string, number | string>, key: string): nu
 }
 
 function buildForecast(overrides: Map<string, number | string>): ForecastPoint[] {
-  return FORECAST_MONTHS.map((month, index) => ({
+  return EXIST_FORECAST_MONTHS.map((month, index) => ({
     month,
     cash_eur: requireNumber(overrides, `forecast_6m.${index}.cash_eur`),
     burn_eur: requireNumber(overrides, `forecast_6m.${index}.burn_eur`),
@@ -223,7 +243,7 @@ function assembleFinanceData(
 
   return {
     generated_at: new Date().toISOString(),
-    as_of: AS_OF,
+    as_of: EXIST_AS_OF,
     currency: 'EUR',
     cash_on_hand_eur: cashOnHand,
     runway_months: runwayMonths,
@@ -236,8 +256,148 @@ function assembleFinanceData(
     cost_lines: costLines,
     paid_by: buildPaidBy(costLines),
     forecast_6m: buildForecast(overrides),
-    pilot_health: PILOT_HEALTH,
+    pilot_health: EXIST_PILOT_HEALTH,
   };
+}
+
+function parseOptionalEur(raw: string | undefined): number {
+  if (raw === undefined || raw.trim() === '') return 0;
+  return parseEur(raw);
+}
+
+function currentMonthIndex(now: Date): number {
+  const month = now.getUTCMonth();
+  if (month < 5 || month > 7) {
+    throw new Error(`Pre-EXIST unterstützt nur Jun-Jul-Aug (Monat: ${month + 1})`);
+  }
+  return month - 5;
+}
+
+function currentBurnFromRow(row: string[], rowNumber: number): { actual_eur: number; plan_eur: number } {
+  const planEur = parseOptionalEur(row[0]);
+  const rawActual = parseOptionalEur(row[1]);
+  const actualEur = rawActual === 0 ? planEur : rawActual;
+  if (actualEur < 0 || planEur < 0) {
+    throw new Error(`Monatsübersicht Zeile ${rowNumber} enthält negative Burn-Werte`);
+  }
+  return { actual_eur: actualEur, plan_eur: planEur };
+}
+
+function requireCurrentOverviewRow(values: string[][], index: number): string[] {
+  const row = values[index];
+  if (!row) {
+    throw new Error(`Pre-EXIST Monatsübersicht: Zeile ${CURRENT_MONTH_ROWS[index]} fehlt`);
+  }
+  return row;
+}
+
+function buildCurrentCostLines(values: string[][]): CostLine[] {
+  const lines: CostLine[] = [];
+
+  values.forEach((row, index) => {
+    const amount = parseOptionalEur(row[2]);
+    if (amount <= 0) return;
+    const label = row[0]?.trim();
+    lines.push({
+      label: label && label !== '' ? label : `Kosten Zeile ${8 + index}`,
+      amount_eur: amount,
+      fixed: false,
+      paid_by: 'Company',
+    });
+  });
+
+  if (lines.length === 0) {
+    throw new Error(`Kosten-Range ${CURRENT_COST_LINES_RANGE} enthält keine Kostenwerte`);
+  }
+
+  return lines;
+}
+
+function buildCurrentPaidBy(values: string[][]): PaidBySlice[] {
+  const slices: PaidBySlice[] = [];
+
+  values.forEach((row, index) => {
+    const value_eur = parseOptionalEur(row[1]);
+    if (value_eur <= 0) return;
+    const name = row[0]?.trim();
+    slices.push({
+      name: name && name !== '' ? name : `Auslage Zeile ${16 + index}`,
+      value_eur,
+    });
+  });
+
+  if (slices.length === 0) {
+    throw new Error(`Auslagen-Range ${CURRENT_PAID_BY_RANGE} enthält keine Werte`);
+  }
+
+  return slices;
+}
+
+function buildCurrentForecast(values: string[][]): ForecastPoint[] {
+  return CURRENT_FORECAST_MONTHS.map((month, index) => {
+    const row = requireCurrentOverviewRow(values, index);
+    const burn = currentBurnFromRow(row, CURRENT_MONTH_ROWS[index]);
+    return { month, cash_eur: 0, burn_eur: burn.actual_eur };
+  });
+}
+
+function assembleCurrentFinanceData(
+  overviewValues: string[][],
+  costLineValues: string[][],
+  paidByValues: string[][],
+  now: Date,
+): FinanceData {
+  const monthIndex = currentMonthIndex(now);
+  const monthlyBurn = currentBurnFromRow(
+    requireCurrentOverviewRow(overviewValues, monthIndex),
+    CURRENT_MONTH_ROWS[monthIndex],
+  );
+
+  return {
+    generated_at: new Date().toISOString(),
+    as_of: `Pre-EXIST · Übersicht · ${CURRENT_FORECAST_MONTHS[monthIndex]}`,
+    currency: 'EUR',
+    cash_on_hand_eur: 0,
+    runway_months: 0,
+    break_even_label: CURRENT_BREAK_EVEN_LABEL,
+    monthly_burn: {
+      actual_eur: monthlyBurn.actual_eur,
+      plan_eur: monthlyBurn.plan_eur,
+      delta_eur: monthlyBurn.actual_eur - monthlyBurn.plan_eur,
+    },
+    cost_lines: buildCurrentCostLines(costLineValues),
+    paid_by: buildCurrentPaidBy(paidByValues),
+    forecast_6m: buildCurrentForecast(overviewValues),
+    pilot_health: CURRENT_PILOT_HEALTH,
+  };
+}
+
+async function buildCurrentFromSheets(map: SheetMap, now: Date): Promise<FinanceData> {
+  const preexistSheetId = map.sheets.preexist;
+  if (!preexistSheetId) {
+    throw new Error('Sheet-Map: "preexist" Sheet fehlt');
+  }
+
+  const [overviewValues, costLineValues, paidByValues] = await Promise.all([
+    readNamedRange(preexistSheetId, CURRENT_OVERVIEW_RANGE),
+    readNamedRange(preexistSheetId, CURRENT_COST_LINES_RANGE),
+    readNamedRange(preexistSheetId, CURRENT_PAID_BY_RANGE),
+  ]);
+
+  return assembleCurrentFinanceData(overviewValues, costLineValues, paidByValues, now);
+}
+
+async function buildExistFromSheets(map: SheetMap): Promise<FinanceData> {
+  const overrides = await readSheetOverrides(map);
+  const guvSheetId = map.sheets.guv;
+  if (!guvSheetId) {
+    throw new Error('Sheet-Map: "guv" Sheet fehlt');
+  }
+  const [costLinesValues, breakEvenLabel] = await Promise.all([
+    readNamedRange(guvSheetId, GUV_COST_LINES_RANGE),
+    readBreakEvenLabel(guvSheetId),
+  ]);
+  return assembleFinanceData(overrides, buildCostLines(costLinesValues), breakEvenLabel);
 }
 
 /**
@@ -245,23 +405,17 @@ function assembleFinanceData(
  * gibt es zurück. Wirft bei endgültigem Fehler (nicht-transient ODER Retries
  * erschöpft) — der Aufrufer (runFinanceSync) fängt das ab.
  */
-async function buildFromSheetsWithRetry(): Promise<FinanceData> {
+async function buildFromSheetsWithRetry(
+  scenario: FinanceScenario,
+  now: Date,
+): Promise<FinanceData> {
   const map = loadSheetMap();
 
   let lastErr: unknown;
   // Erster Versuch + RETRY_BACKOFF_MS.length Wiederholungen.
   for (let attempt = 0; attempt <= RETRY_BACKOFF_MS.length; attempt++) {
     try {
-      const overrides = await readSheetOverrides(map);
-      const guvSheetId = map.sheets.guv;
-      if (!guvSheetId) {
-        throw new Error('Sheet-Map: "guv" Sheet fehlt');
-      }
-      const [costLinesValues, breakEvenLabel] = await Promise.all([
-        readNamedRange(guvSheetId, GUV_COST_LINES_RANGE),
-        readBreakEvenLabel(guvSheetId),
-      ]);
-      return assembleFinanceData(overrides, buildCostLines(costLinesValues), breakEvenLabel);
+      return scenario === 'current' ? buildCurrentFromSheets(map, now) : buildExistFromSheets(map);
     } catch (err) {
       lastErr = err;
       // Nicht-transiente Fehler (fehlende Range, kaputte Zelle) → kein Retry.
@@ -303,17 +457,16 @@ async function alert(reason: string): Promise<void> {
  * Wirft NIE — gibt immer ein SyncResult zurück. Jeder Lese-/Parse-/Gate-Fehler
  * verhindert den Insert (letzter guter Snapshot bleibt) und löst einen Alarm aus.
  */
-export async function runFinanceSync(): Promise<SyncResult> {
-  // 1. Aktives Szenario aus Env, validiert (Default 'current').
-  const envScenario = process.env.ACTIVE_FINANCE_SCENARIO;
-  const activeScenario: FinanceScenario = isFinanceScenario(envScenario)
-    ? envScenario
-    : 'current';
+export async function runFinanceSync(
+  scenario?: FinanceScenario,
+  now: Date = new Date(),
+): Promise<SyncResult> {
+  const selectedScenario = scenario ?? activeScenario(now);
 
   // 2.–4. Sheets lesen + FinanceData bauen (mit Retry). Fehler → kein Insert + Alarm.
   let data: FinanceData;
   try {
-    data = await buildFromSheetsWithRetry();
+    data = await buildFromSheetsWithRetry(selectedScenario, now);
   } catch (err) {
     const reason = `Sheet-Lesen/Parsen fehlgeschlagen: ${
       err instanceof Error ? err.message : String(err)
@@ -332,10 +485,10 @@ export async function runFinanceSync(): Promise<SyncResult> {
 
   // 6. Insert des aktiven Szenarios. Auch ein DB-Fehler darf nicht crashen.
   try {
-    const id = await insertFinanceSnapshot(activeScenario, data, SOURCE);
+    const id = await insertFinanceSnapshot(selectedScenario, data, SOURCE);
     return { ok: true, id, data };
   } catch (err) {
-    const reason = `Snapshot-Insert fehlgeschlagen (${activeScenario}): ${
+    const reason = `Snapshot-Insert fehlgeschlagen (${selectedScenario}): ${
       err instanceof Error ? err.message : String(err)
     }`;
     await alert(reason);

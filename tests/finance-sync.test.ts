@@ -28,14 +28,15 @@ vi.mock('@/lib/telegram', () => ({
   sendTelegramMessage: (...args: unknown[]) => sendTelegramMessageMock(...args),
 }));
 
-import { parseEur, runFinanceSync } from '@/lib/finance-sync';
+import { activeScenario, parseEur, runFinanceSync } from '@/lib/finance-sync';
+import { checkFinanceConsistency } from '@/lib/finance-gate';
 import type { SheetMap } from '@/lib/google-sheets';
 
 // Map deckt nur die live existierenden OUTPUT-Named-Ranges ab. Plan-/Delta-/
 // Runway-/Input-Felder bleiben absichtlich draußen und werden im Sync abgeleitet.
 function syncMap(): SheetMap {
   return {
-    sheets: { guv: 'guv-id' },
+    sheets: { guv: 'guv-id', preexist: 'preexist-id' },
     fields: {
       cash_on_hand_eur: {
         sheet: 'guv',
@@ -127,7 +128,7 @@ beforeEach(() => {
   sendTelegramMessageMock.mockReset();
   sendTelegramMessageMock.mockResolvedValue({ ok: true });
   process.env.FINANCE_ALERT_CHAT_ID = 'alert-chat';
-  process.env.ACTIVE_FINANCE_SCENARIO = 'current';
+  delete process.env.ACTIVE_FINANCE_SCENARIO;
 });
 
 describe('parseEur — deutsches Format', () => {
@@ -145,8 +146,24 @@ describe('parseEur — deutsches Format', () => {
   });
 });
 
+describe('activeScenario', () => {
+  it('wählt vor dem 2026-08-01 das current-Szenario', () => {
+    expect(activeScenario(new Date('2026-07-31T21:59:59.999Z'))).toBe('current');
+  });
+
+  it('wählt ab dem 2026-08-01 das exist-Szenario', () => {
+    expect(activeScenario(new Date('2026-08-01T00:00:00.000Z'))).toBe('exist');
+  });
+
+  it('lässt ACTIVE_FINANCE_SCENARIO als Override gewinnen', () => {
+    process.env.ACTIVE_FINANCE_SCENARIO = 'exist';
+
+    expect(activeScenario(new Date('2026-06-15T00:00:00.000Z'))).toBe('exist');
+  });
+});
+
 describe('runFinanceSync — Happy-Path', () => {
-  it('baut FinanceData aus Live-Outputs und leitet Plan/Delta/Runway selbst ab', async () => {
+  it('baut exist-FinanceData aus Live-Outputs und leitet Plan/Delta/Runway selbst ab', async () => {
     loadSheetMapMock.mockReturnValue(syncMap());
     readNamedRangeMock.mockImplementation(
       rangeResponder({
@@ -184,7 +201,7 @@ describe('runFinanceSync — Happy-Path', () => {
     );
     insertFinanceSnapshotMock.mockResolvedValue('snap-id-1');
 
-    const result = await runFinanceSync();
+    const result = await runFinanceSync('exist');
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('expected ok');
@@ -193,7 +210,7 @@ describe('runFinanceSync — Happy-Path', () => {
     // Insert genau einmal, mit aktivem Szenario + selbst gerechneten Werten.
     expect(insertFinanceSnapshotMock).toHaveBeenCalledTimes(1);
     const [scenario, data, source] = insertFinanceSnapshotMock.mock.calls[0];
-    expect(scenario).toBe('current');
+    expect(scenario).toBe('exist');
     expect(source).toBe('cfo-kai:app-sync');
     expect(data.as_of).toBe('GuV Finanzplan · M1 Aug');
     expect(data.cash_on_hand_eur).toBe(7333);
@@ -220,6 +237,98 @@ describe('runFinanceSync — Happy-Path', () => {
     expect(data.pilot_health).toEqual([{ name: '13 Piloten', status: 'green', note: '' }]);
 
     expect(sendTelegramMessageMock).not.toHaveBeenCalled();
+  });
+
+  it('baut current-FinanceData aus dem Pre-EXIST-Sheet und passiert das Gate', async () => {
+    loadSheetMapMock.mockReturnValue(syncMap());
+    readNamedRangeMock.mockImplementation(
+      rangeResponder({
+        "'Übersicht'!C8:D10": [
+          ['389,00 €', '389,00 €'],
+          ['412,00 €', '0,00 €'],
+          ['450,00 €', ''],
+        ],
+        "'Übersicht'!G8:I11": [
+          ['Claude', '', '210,00 €'],
+          ['Hosting', '', '49,00 €'],
+          ['Workspace', '', '90,00 €'],
+          ['OpenAI', '', '40,00 €'],
+        ],
+        "'Übersicht'!B16:C18": [
+          ['Paul', '150,00 €'],
+          ['Felix', '199,00 €'],
+          ['Leon', '40,00 €'],
+        ],
+      }),
+    );
+    insertFinanceSnapshotMock.mockResolvedValue('snap-current-1');
+
+    const result = await runFinanceSync('current', new Date('2026-06-20T12:00:00.000Z'));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected ok');
+    const [scenario, data] = insertFinanceSnapshotMock.mock.calls[0];
+    expect(scenario).toBe('current');
+    expect(data.as_of).toBe('Pre-EXIST · Übersicht · Jun');
+    expect(data.cash_on_hand_eur).toBe(0);
+    expect(data.runway_months).toBe(0);
+    expect(data.break_even_label).toBe('M6 · Jan');
+    expect(data.monthly_burn).toEqual({
+      actual_eur: 389,
+      plan_eur: 389,
+      delta_eur: 0,
+    });
+    expect(data.cost_lines).toEqual([
+      { label: 'Claude', amount_eur: 210, fixed: false, paid_by: 'Company' },
+      { label: 'Hosting', amount_eur: 49, fixed: false, paid_by: 'Company' },
+      { label: 'Workspace', amount_eur: 90, fixed: false, paid_by: 'Company' },
+      { label: 'OpenAI', amount_eur: 40, fixed: false, paid_by: 'Company' },
+    ]);
+    expect(data.paid_by).toEqual([
+      { name: 'Paul', value_eur: 150 },
+      { name: 'Felix', value_eur: 199 },
+      { name: 'Leon', value_eur: 40 },
+    ]);
+    expect(data.forecast_6m).toEqual([
+      { month: 'Jun', cash_eur: 0, burn_eur: 389 },
+      { month: 'Jul', cash_eur: 0, burn_eur: 412 },
+      { month: 'Aug', cash_eur: 0, burn_eur: 450 },
+    ]);
+    expect(data.pilot_health).toEqual([
+      { name: 'Pre-EXIST (Bootstrap)', status: 'green', note: 'EXIST-Förderung ab Aug' },
+    ]);
+    expect(checkFinanceConsistency(data)).toEqual({ ok: true });
+    expect(sendTelegramMessageMock).not.toHaveBeenCalled();
+  });
+
+  it('nutzt beim current-Forecast Ist-Werte und fällt bei Ist 0 oder leer auf Plan zurück', async () => {
+    loadSheetMapMock.mockReturnValue(syncMap());
+    readNamedRangeMock.mockImplementation(
+      rangeResponder({
+        "'Übersicht'!C8:D10": [
+          ['389,00 €', '389,00 €'],
+          ['412,00 €', '0,00 €'],
+          ['450,00 €', ''],
+        ],
+        "'Übersicht'!G8:I11": [['Claude', '', '210,00 €']],
+        "'Übersicht'!B16:C18": [['Felix', '210,00 €']],
+      }),
+    );
+    insertFinanceSnapshotMock.mockResolvedValue('snap-current-2');
+
+    const result = await runFinanceSync('current', new Date('2026-07-03T00:00:00.000Z'));
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('expected ok');
+    const [, data] = insertFinanceSnapshotMock.mock.calls[0];
+    expect(data.monthly_burn).toEqual({
+      actual_eur: 412,
+      plan_eur: 412,
+      delta_eur: 0,
+    });
+    expect(data.forecast_6m.map((point: { burn_eur: number }) => point.burn_eur)).toEqual([
+      389, 412, 450,
+    ]);
   });
 });
 
@@ -248,7 +357,7 @@ describe('runFinanceSync — Gate-Fail', () => {
       }),
     );
 
-    const result = await runFinanceSync();
+    const result = await runFinanceSync('exist');
 
     expect(result.ok).toBe(false);
     if (result.ok) throw new Error('expected fail');
