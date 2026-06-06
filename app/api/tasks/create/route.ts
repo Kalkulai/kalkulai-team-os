@@ -4,6 +4,8 @@ import { requireActor } from '@/lib/auth-context';
 import { supabaseAdmin } from '@/lib/supabase';
 import { buildTeamTaskDescription } from '@/lib/team-tasks';
 import { revalidateDashboard } from '@/lib/revalidate';
+import { parseTaskMeta, quadrantToPriority } from '@/lib/task-meta';
+import { upsertTaskMeta } from '@/lib/task-meta-db';
 
 const SOURCE_LABEL: Record<'hermes' | 'notion', string> = {
   hermes: 'Hermes',
@@ -36,6 +38,9 @@ export async function POST(req: NextRequest) {
     priority?: number;
     dueDate?: string | null;
   };
+
+  const meta = 'meta' in body ? parseTaskMeta(body.meta) : null;
+  const effectivePriority = meta ? quadrantToPriority(meta.important, meta.urgent) : priority;
 
   try {
     const teamId = await getLinearTeamId();
@@ -113,9 +118,13 @@ export async function POST(req: NextRequest) {
       title.trim(),
       resolvedAssignee,
       labelIds,
-      priority,
+      effectivePriority,
       dueDate ?? null,
     );
+    if (meta) {
+      const ownerId = userId ?? actor.memberId ?? null;
+      if (ownerId) await upsertTaskMeta(issue.id, ownerId, meta);
+    }
     revalidateDashboard();
     return NextResponse.json(issue);
   } catch (err) {

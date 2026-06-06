@@ -20,6 +20,9 @@ import {
 import type { UnifiedTask, UnifiedStatus } from '@/lib/unified-tasks';
 import type { ClaudeSession } from '@/types';
 import { KanbanCard } from './KanbanCard';
+import { TaskMetaFields } from './TaskMetaFields';
+import { TaskEditModal } from './TaskEditModal';
+import { EMPTY_TASK_META, type TaskMeta } from '@/lib/task-meta';
 
 
 const SECRET = process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? '';
@@ -35,11 +38,15 @@ function DraggableCard({
   done,
   members,
   activeClaude,
+  onOpen,
+  projects,
 }: {
   task: UnifiedTask;
   done?: boolean;
   members: Array<{ id: string; name: string }>;
   activeClaude?: ClaudeSession[];
+  onOpen?: () => void;
+  projects?: Array<{ id: string; name: string }>;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: task.id,
@@ -53,7 +60,7 @@ function DraggableCard({
       {...attributes}
       className={`kanban-draggable${isDragging ? ' is-dragging' : ''}`}
     >
-      <KanbanCard task={task} done={done} members={members} activeClaude={activeClaude} />
+      <KanbanCard task={task} done={done} members={members} activeClaude={activeClaude} onOpen={onOpen} projects={projects} />
     </div>
   );
 }
@@ -68,6 +75,9 @@ function DroppableColumn({
   addOpen,
   onToggleAdd,
   onSubmitAdd,
+  metaEnabled,
+  projects,
+  onOpenCard,
 }: {
   colId: string;
   label: string;
@@ -77,12 +87,16 @@ function DroppableColumn({
   done?: boolean;
   addOpen?: boolean;
   onToggleAdd?: () => void;
-  onSubmitAdd?: (args: { title: string; dueDate: string | null; priority: number }) => Promise<void>;
+  onSubmitAdd?: (args: { title: string; dueDate: string | null; priority: number; meta?: TaskMeta }) => Promise<void>;
+  metaEnabled?: boolean;
+  projects?: Array<{ id: string; name: string }>;
+  onOpenCard?: (task: UnifiedTask) => void;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: colId });
   const [title, setTitle] = useState('');
   const [due, setDue] = useState<string | null>(null);
   const [priority, setPriority] = useState<number>(0);
+  const [meta, setMeta] = useState<TaskMeta>(EMPTY_TASK_META);
   const [busy, setBusy] = useState(false);
 
   async function submit(e?: React.FormEvent) {
@@ -91,10 +105,11 @@ function DroppableColumn({
     if (!v || !onSubmitAdd || busy) return;
     setBusy(true);
     try {
-      await onSubmitAdd({ title: v, dueDate: due, priority });
+      await onSubmitAdd({ title: v, dueDate: due, priority, meta: metaEnabled ? meta : undefined });
       setTitle('');
       setDue(null);
       setPriority(0);
+      setMeta(EMPTY_TASK_META);
     } finally {
       setBusy(false);
     }
@@ -148,6 +163,8 @@ function DroppableColumn({
               done={done}
               members={members}
               activeClaude={task.identifier ? activeClaudeByIdentifier?.[task.identifier] : undefined}
+              onOpen={onOpenCard && !done ? () => onOpenCard(task) : undefined}
+              projects={projects}
             />
           ))}
           {addOpen && onSubmitAdd && (
@@ -162,25 +179,30 @@ function DroppableColumn({
                 onKeyDown={onKey}
                 disabled={busy}
               />
+              {metaEnabled && (
+                <TaskMetaFields value={meta} onChange={setMeta} projects={projects ?? []} />
+              )}
               <div className="kanban-add-row">
                 <DatePicker value={due} onChange={setDue} placeholder="Datum optional" />
-                <div className="kanban-add-prio">
-                  {[
-                    { p: 1, label: 'urgent' },
-                    { p: 2, label: 'high' },
-                    { p: 3, label: 'medium' },
-                    { p: 4, label: 'low' },
-                  ].map((x) => (
-                    <button
-                      key={x.p}
-                      type="button"
-                      className={priority === x.p ? 'is-on' : ''}
-                      onClick={() => setPriority(priority === x.p ? 0 : x.p)}
-                    >
-                      {x.label}
-                    </button>
-                  ))}
-                </div>
+                {!metaEnabled && (
+                  <div className="kanban-add-prio">
+                    {[
+                      { p: 1, label: 'urgent' },
+                      { p: 2, label: 'high' },
+                      { p: 3, label: 'medium' },
+                      { p: 4, label: 'low' },
+                    ].map((x) => (
+                      <button
+                        key={x.p}
+                        type="button"
+                        className={priority === x.p ? 'is-on' : ''}
+                        onClick={() => setPriority(priority === x.p ? 0 : x.p)}
+                      >
+                        {x.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <div className="kanban-add-spacer" />
                 <button
                   type="submit"
@@ -206,6 +228,8 @@ export function KanbanBoard({
   backlogEnabled = false,
   members = [],
   activeClaudeByIdentifier,
+  metaEnabled = false,
+  projects = [],
 }: {
   tasks: UnifiedTask[];
   doneTasks?: UnifiedTask[];
@@ -215,6 +239,10 @@ export function KanbanBoard({
   /** Map of Linear-identifier → live Claude-Code sessions touching that card.
    * Powers the 🤖 live badge. Server-fetched in page.tsx. */
   activeClaudeByIdentifier?: Record<string, ClaudeSession[]>;
+  /** Felix-only: enables planning-metadata controls + card badges + edit modal. */
+  metaEnabled?: boolean;
+  /** User's dashboard projects, for the meta project dropdown + card label. */
+  projects?: Array<{ id: string; name: string }>;
 }) {
   const router = useRouter();
   const { activeId: memberId } = useActiveMember();
@@ -225,8 +253,9 @@ export function KanbanBoard({
   const [selectedProjectId, setSelectedProjectId] = useState<string>('all');
   const [activeTask, setActiveTask] = useState<UnifiedTask | null>(null);
   const [addOpen, setAddOpen] = useState<UnifiedStatus | null>(null);
+  const [editingTask, setEditingTask] = useState<UnifiedTask | null>(null);
 
-  async function handleCreate(col: UnifiedStatus, args: { title: string; dueDate: string | null; priority: number }) {
+  async function handleCreate(col: UnifiedStatus, args: { title: string; dueDate: string | null; priority: number; meta?: TaskMeta }) {
     if (!memberId) return;
     const body: Record<string, unknown> = {
       title: args.title,
@@ -235,6 +264,7 @@ export function KanbanBoard({
     };
     if (args.dueDate) body.dueDate = args.dueDate;
     if (args.priority > 0) body.priority = args.priority;
+    if (args.meta) body.meta = args.meta;
     const res = await fetch('/api/tasks/create', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -273,6 +303,7 @@ export function KanbanBoard({
         priority: args.priority > 0 ? args.priority : undefined,
         source: 'linear',
         project: null,
+        meta: args.meta ?? null,
       };
       setTasks((prev) => [newTask, ...prev]);
     }
@@ -460,6 +491,9 @@ export function KanbanBoard({
             addOpen={addOpen === col.id}
             onToggleAdd={() => setAddOpen(addOpen === col.id ? null : col.id)}
             onSubmitAdd={(args) => handleCreate(col.id, args)}
+            metaEnabled={metaEnabled}
+            projects={projects}
+            onOpenCard={metaEnabled ? setEditingTask : undefined}
           />
         ))}
         <DroppableColumn
@@ -477,6 +511,24 @@ export function KanbanBoard({
           </div>
         ) : null}
       </DragOverlay>
+      {editingTask && (
+        <TaskEditModal
+          task={editingTask}
+          projects={projects}
+          userId={memberId}
+          onClose={() => setEditingTask(null)}
+          onSaved={(patch) => {
+            setTasks((prev) =>
+              prev.map((t) =>
+                t.id === editingTask.id
+                  ? { ...t, title: patch.title, dueDate: patch.dueDate, priority: patch.priority, meta: patch.meta }
+                  : t,
+              ),
+            );
+            router.refresh();
+          }}
+        />
+      )}
     </DndContext>
   );
 }

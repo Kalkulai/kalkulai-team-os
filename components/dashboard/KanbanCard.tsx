@@ -3,6 +3,7 @@ import { de } from 'date-fns/locale';
 import type { UnifiedTask } from '@/lib/unified-tasks';
 import type { ClaudeSession } from '@/types';
 import { AvatarStack } from '@/components/dashboard/AvatarStack';
+import { hasMeta, quadrantBadge, effortLabel } from '@/lib/task-meta';
 
 function duePill(iso: string | null): { label: string; cls: string } | null {
   if (!iso) return null;
@@ -31,20 +32,36 @@ export function KanbanCard({
   done = false,
   members = [],
   activeClaude = [],
+  onOpen,
+  projects = [],
 }: {
   task: UnifiedTask;
   done?: boolean;
   members?: Array<{ id: string; name: string }>;
   /** Live Claude-Code sessions touching this card right now (see KAL-89). */
   activeClaude?: ClaudeSession[];
+  /** When set, clicking the card body opens the edit modal (Felix-only). */
+  onOpen?: () => void;
+  /** For resolving a meta.projectId → project name on the badge. */
+  projects?: Array<{ id: string; name: string }>;
 }) {
   const due = duePill(task.dueDate);
   const prio = task.priority ?? 0;
+  const meta = task.meta ?? null;
+  const showMeta = hasMeta(meta);
+  const q = meta ? quadrantBadge(meta.important, meta.urgent) : null;
+  const projectName = meta?.projectId
+    ? projects.find((p) => p.id === meta.projectId)?.name ?? null
+    : null;
+  const effort = effortLabel(meta?.effortMinutes ?? null);
 
   return (
     <div
-      className={`kanban-card${done ? ' kanban-card-done' : ''}`}
+      className={`kanban-card${done ? ' kanban-card-done' : ''}${
+        showMeta && q ? ` kanban-card-${q.label.toLowerCase()}` : ''
+      }${onOpen ? ' kanban-card-clickable' : ''}`}
       data-status={task.status}
+      onClick={onOpen}
     >
       {task.project && (
         <span className="kanban-card-project" title={`Schritt von ${task.project.name}`}>
@@ -83,9 +100,26 @@ export function KanbanCard({
             🤖 live
           </span>
         )}
-        {prio > 0 && (
-          <span className={`pill ${PRIORITY_PILL[prio]} text-[10px]`}>{PRIORITY_LABEL[prio]}</span>
+        {showMeta && q ? (
+          <span className={`pill ${q.cls} text-[10px]`} title="Eisenhower-Quadrant">{q.label}</span>
+        ) : (
+          prio > 0 && (
+            <span className={`pill ${PRIORITY_PILL[prio]} text-[10px]`}>{PRIORITY_LABEL[prio]}</span>
+          )
         )}
+        {meta?.context && (
+          <span className={`pill ${meta.context === 'business' ? 'pill-blue' : 'pill-mute'} text-[10px]`}>
+            {meta.context === 'business' ? 'Geschäftlich' : 'Privat'}
+          </span>
+        )}
+        {effort && <span className="pill pill-mute mono text-[10px]">⏱ {effort}</span>}
+        {meta?.energy && (
+          <span className="pill pill-mute text-[10px]">
+            {meta.energy === 'deep' ? '🧠 Deep' : '⚙️ Admin'}
+          </span>
+        )}
+        {projectName && <span className="pill pill-mute text-[10px]">📁 {projectName}</span>}
+        {meta?.fixed && <span className="pill pill-amber text-[10px]">📌 Fix</span>}
         {due && (
           <span className={`pill ${due.cls} mono text-[10px]`}>{due.label}</span>
         )}

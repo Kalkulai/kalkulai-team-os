@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { updateIssue } from '@/lib/linear';
-import { requireApiAuth } from '@/lib/api-auth';
+import { requireActor } from '@/lib/auth-context';
 import { revalidateDashboard } from '@/lib/revalidate';
+import { parseTaskMeta, quadrantToPriority } from '@/lib/task-meta';
+import { upsertTaskMeta } from '@/lib/task-meta-db';
 
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  if (!requireApiAuth(req)) {
+  const actor = await requireActor(req, { allowMember: true, scopes: ['tasks:write'] });
+  if (!actor) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
   const { id } = await params;
@@ -15,6 +18,8 @@ export async function PATCH(
 
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: 'body required' }, { status: 400 });
+
+  const meta = 'meta' in body ? parseTaskMeta(body.meta) : null;
 
   const patch: { title?: string; priority?: number | null; dueDate?: string | null } = {};
 
@@ -44,12 +49,22 @@ export async function PATCH(
     }
   }
 
-  if (Object.keys(patch).length === 0) {
+  // Eisenhower drives Linear priority so the existing briefing/sort keeps working.
+  if (meta) patch.priority = quadrantToPriority(meta.important, meta.urgent);
+
+  if (Object.keys(patch).length === 0 && !meta) {
     return NextResponse.json({ error: 'no fields to update' }, { status: 400 });
   }
 
   try {
-    await updateIssue(id, patch);
+    if (Object.keys(patch).length > 0) await updateIssue(id, patch);
+    if (meta) {
+      const ownerId = actor.memberId ?? (typeof body.userId === 'string' ? body.userId : null);
+      if (!ownerId) {
+        return NextResponse.json({ error: 'userId required for meta' }, { status: 400 });
+      }
+      await upsertTaskMeta(id, ownerId, meta);
+    }
     revalidateDashboard();
     return NextResponse.json({ ok: true });
   } catch (err) {

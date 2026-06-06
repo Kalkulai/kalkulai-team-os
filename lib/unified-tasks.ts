@@ -1,6 +1,7 @@
 import { differenceInCalendarDays, parseISO } from 'date-fns';
 import type { KpiWithWeek, LinearIssue, TaskSource } from '@/types';
 import { parseTeamTaskGroupId, parseTeamTaskAssignees } from '@/lib/team-tasks';
+import type { TaskMeta } from '@/lib/task-meta';
 
 export type UnifiedStatus = 'todo' | 'in-progress' | 'on-hold' | 'done' | 'backlog';
 export type UnifiedTaskKind = 'linear' | 'step';
@@ -18,6 +19,8 @@ export interface UnifiedTask {
   project?: { id: string; name: string } | null;
   completedAt?: string;
   teamTask?: { groupId: string; assigneeUserIds: string[] };
+  /** Felix-only planning metadata (context, effort, Eisenhower, energy, project, fixed). */
+  meta?: TaskMeta | null;
 }
 
 export function deriveLinearStatus(issue: LinearIssue): UnifiedStatus {
@@ -52,6 +55,7 @@ export function mergeTasks(
   issues: LinearIssue[],
   steps: KpiWithWeek[],
   projects: KpiWithWeek[],
+  metaByIssueId?: Record<string, TaskMeta>,
 ): UnifiedTask[] {
   const projectMap = new Map(projects.map((p) => [p.id, p.name]));
 
@@ -71,6 +75,7 @@ export function mergeTasks(
       source: issue.source,
       project: null,
       teamTask,
+      meta: metaByIssueId?.[issue.id] ?? null,
     };
   });
 

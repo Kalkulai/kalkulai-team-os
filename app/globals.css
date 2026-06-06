@@ -4874,3 +4874,53 @@ html.light .agent-launch-error {
   background: rgba(194, 53, 26, .08);
   color: #9f2f1b;
 }
+
+/* ── Task planning metadata (Felix-only): form controls, card badges, edit modal ── */
+.kanban-meta-fields { display: flex; flex-direction: column; gap: 8px; margin-top: 2px; }
+.kanban-meta-group { display: flex; flex-direction: column; gap: 4px; }
+.kanban-meta-label {
+  font: 600 10px/1 var(--font); letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.kanban-meta-eisenhower { align-items: center; }
+.kanban-meta-select {
+  width: 100%; padding: 6px 8px; border-radius: 8px;
+  border: 1px solid var(--line-1); background: rgba(255, 255, 255, 0.04);
+  color: var(--ink-1); font: 500 12.5px/1 var(--font); outline: none;
+}
+.kanban-meta-select:focus { border-color: var(--line-3); }
+
+/* Eisenhower quadrant pills (used as `pill kanban-meta-qX`) */
+.kanban-meta-q1 { background: rgba(255, 107, 92, 0.16); color: #FF8A7C; border: 1px solid rgba(255, 107, 92, 0.28); }
+.kanban-meta-q2 { background: rgba(60, 224, 140, 0.14); color: #7FECB1; border: 1px solid rgba(60, 224, 140, 0.24); }
+.kanban-meta-q3 { background: rgba(242, 184, 75, 0.16); color: #F2C168; border: 1px solid rgba(242, 184, 75, 0.26); }
+.kanban-meta-q4 { background: rgba(255, 255, 255, 0.06); color: var(--ink-3); border: 1px solid var(--line-1); }
+
+/* Card quadrant stripe + click affordance */
+.kanban-card-clickable { cursor: pointer; }
+.kanban-card-q1 { border-left: 3px solid #FF6B5C; }
+.kanban-card-q2 { border-left: 3px solid var(--ok); }
+.kanban-card-q3 { border-left: 3px solid var(--warn); }
+.kanban-card-q4 { border-left: 3px solid var(--ink-4); }
+
+/* Edit modal (reuses .hermes-modal-bg + .glass + .hermes-modal-close) */
+.task-edit-modal {
+  position: relative; width: min(560px, 100%); max-height: 88vh; overflow: auto;
+  border-radius: 18px; box-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.55);
+}
+.task-edit-body { display: flex; flex-direction: column; gap: 14px; padding: 22px; }
+.task-edit-head { display: flex; align-items: center; gap: 8px; }
+.task-edit-title { font: 600 15px/1.3 var(--font); }
+.task-edit-error { color: #FF8A7C; font-size: 12px; }
+.task-edit-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.task-edit-cancel {
+  padding: 8px 14px; border-radius: 9px; border: 1px solid var(--line-1);
+  background: transparent; color: var(--ink-2); cursor: pointer; font: 500 13px/1 var(--font);
+}
+.task-edit-cancel:hover { border-color: var(--line-2); color: var(--ink-1); }
+.task-edit-save {
+  padding: 8px 18px; border-radius: 9px; border: 0; cursor: pointer; color: #fff;
+  font: 600 13px/1 var(--font); background: linear-gradient(135deg, var(--brand), var(--brand-2));
+}
+.task-edit-save:hover { filter: brightness(1.08); }
+.task-edit-save:disabled { opacity: 0.45; cursor: not-allowed; }
