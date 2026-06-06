@@ -4,6 +4,9 @@ import { getIssuesForUser, getCompletedIssuesSince } from '@/lib/linear';
 import { listUserKpis } from '@/lib/kpis';
 import { backlogEnabledForMember } from '@/lib/backlog-access';
 import { mergeTasks, mergeDoneTasks, mergeBacklogTasks } from '@/lib/unified-tasks';
+import { getTaskMetaByIssueIds } from '@/lib/task-meta-db';
+import { isFelixMemberId } from '@/lib/agent-access';
+import type { TaskMeta } from '@/lib/task-meta';
 import { getActiveSessionsByIdentifier } from '@/lib/claude-sessions';
 import type { ClaudeSession } from '@/types';
 import { KanbanBoard } from '@/components/dashboard/KanbanBoard';
@@ -51,7 +54,20 @@ export default async function BoardPage({
   const steps = allKpis.filter((k) => k.type === 'step' && !k.completed);
   const completedSteps = allKpis.filter((k) => k.type === 'step' && k.completed);
   const projects = allKpis.filter((k) => k.type === 'project');
-  const tasks = mergeTasks(issues, steps, projects);
+
+  // Felix-only planning metadata (context/effort/Eisenhower/energy/project/fixed).
+  const metaEnabled = isFelixMemberId(me.id);
+  let metaByIssueId: Record<string, TaskMeta> = {};
+  if (metaEnabled) {
+    try {
+      metaByIssueId = await getTaskMetaByIssueIds(issues.map((i) => i.id));
+    } catch (err) {
+      console.warn('[board] task_meta lookup failed (table missing?):', err);
+    }
+  }
+
+  const tasks = mergeTasks(issues, steps, projects, metaByIssueId);
+  const projectOptions = projects.map((p) => ({ id: p.id, name: p.name }));
   const doneTasks = mergeDoneTasks(completedLinear, completedSteps, projects, 3);
   const backlogEnabled = backlogEnabledForMember(me.id);
   const backlogTasks = backlogEnabled ? mergeBacklogTasks(steps, projects) : [];
@@ -78,6 +94,8 @@ export default async function BoardPage({
         backlogEnabled={backlogEnabled}
         members={members}
         activeClaudeByIdentifier={activeClaudeByIdentifier}
+        metaEnabled={metaEnabled}
+        projects={projectOptions}
       />
     </>
   );
