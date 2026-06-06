@@ -1,53 +1,77 @@
 {
   "sheets": {
-    "guv": "1IymAzVVM9_EDsX96I3n_nhGQ06mRcPndMzMfQtAW-QM",
-    "finanzplan": "1L2Tp3R5RodrsgAiRoRL3-n0V-6mZbig_0VgSPErOVsE",
-    "coaching": "18arghJXb80KEihdyIqz8hFZFnvBvuB645U5yh76MYTw",
-    "preexist": "12N_ZQ8luK99GNYP11ODJWS-AOD03XbZ0BEIIWAFUbow"
+    "guv": "1IymAzVVM9_EDsX96I3n_nhGQ06mRcPndMzMfQtAW-QM"
   },
   "fields": {
-    "cash_on_hand_eur":        { "sheet": "guv",        "namedRange": "cfo_cash_on_hand_eur",           "kind": "output" },
-    "runway_months":           { "sheet": "guv",        "namedRange": "cfo_runway_months",              "kind": "output" },
-    "break_even_label":        { "sheet": "guv",        "namedRange": "cfo_break_even_label",           "kind": "output" },
-    "monthly_burn.actual_eur": { "sheet": "guv",        "namedRange": "cfo_monthly_burn_actual_eur",    "kind": "output" },
-    "monthly_burn.plan_eur":   { "sheet": "finanzplan", "namedRange": "cfo_monthly_burn_plan_eur",      "kind": "input"  },
-    "monthly_burn.delta_eur":  { "sheet": "guv",        "namedRange": "cfo_monthly_burn_delta_eur",     "kind": "output" },
-
-    "forecast_6m.0.cash_eur":  { "sheet": "guv",        "namedRange": "cfo_forecast_m1_cash_eur",       "kind": "output" },
-    "forecast_6m.0.burn_eur":  { "sheet": "guv",        "namedRange": "cfo_forecast_m1_burn_eur",       "kind": "output" },
-    "forecast_6m.1.cash_eur":  { "sheet": "guv",        "namedRange": "cfo_forecast_m2_cash_eur",       "kind": "output" },
-    "forecast_6m.1.burn_eur":  { "sheet": "guv",        "namedRange": "cfo_forecast_m2_burn_eur",       "kind": "output" },
-    "forecast_6m.2.cash_eur":  { "sheet": "guv",        "namedRange": "cfo_forecast_m3_cash_eur",       "kind": "output" },
-    "forecast_6m.2.burn_eur":  { "sheet": "guv",        "namedRange": "cfo_forecast_m3_burn_eur",       "kind": "output" },
-    "forecast_6m.3.cash_eur":  { "sheet": "guv",        "namedRange": "cfo_forecast_m4_cash_eur",       "kind": "output" },
-    "forecast_6m.3.burn_eur":  { "sheet": "guv",        "namedRange": "cfo_forecast_m4_burn_eur",       "kind": "output" },
-    "forecast_6m.4.cash_eur":  { "sheet": "guv",        "namedRange": "cfo_forecast_m5_cash_eur",       "kind": "output" },
-    "forecast_6m.4.burn_eur":  { "sheet": "guv",        "namedRange": "cfo_forecast_m5_burn_eur",       "kind": "output" },
-    "forecast_6m.5.cash_eur":  { "sheet": "guv",        "namedRange": "cfo_forecast_m6_cash_eur",       "kind": "output" },
-    "forecast_6m.5.burn_eur":  { "sheet": "guv",        "namedRange": "cfo_forecast_m6_burn_eur",       "kind": "output" },
-
-    "plan.cost_lines.infrastructure_m1_eur":        { "sheet": "finanzplan", "namedRange": "cfo_input_cost_infrastructure_m1_eur",        "kind": "input" },
-    "plan.cost_lines.development_tools_m1_eur":     { "sheet": "finanzplan", "namedRange": "cfo_input_cost_development_tools_m1_eur",     "kind": "input" },
-    "plan.cost_lines.monitoring_office_m1_eur":     { "sheet": "finanzplan", "namedRange": "cfo_input_cost_monitoring_office_m1_eur",     "kind": "input" },
-    "plan.cost_lines.sales_tools_m1_eur":           { "sheet": "finanzplan", "namedRange": "cfo_input_cost_sales_tools_m1_eur",           "kind": "input" },
-    "plan.cost_lines.marketing_m1_eur":             { "sheet": "finanzplan", "namedRange": "cfo_input_cost_marketing_m1_eur",             "kind": "input" },
-    "plan.cost_lines.insurance_m1_eur":             { "sheet": "finanzplan", "namedRange": "cfo_input_cost_insurance_m1_eur",             "kind": "input" },
-    "plan.cost_lines.bank_account_m1_eur":          { "sheet": "finanzplan", "namedRange": "cfo_input_cost_bank_account_m1_eur",          "kind": "input" },
-    "plan.assumptions.ug_foundation_eur":           { "sheet": "finanzplan", "namedRange": "cfo_input_ug_foundation_eur",                 "kind": "input" },
-    "plan.assumptions.api_cost_per_customer_eur":   { "sheet": "finanzplan", "namedRange": "cfo_input_api_cost_per_customer_eur",         "kind": "input" },
-    "plan.assumptions.stripe_fee_rate":             { "sheet": "finanzplan", "namedRange": "cfo_input_stripe_fee_rate",                   "kind": "input" },
-    "plan.assumptions.pilot_start_count":           { "sheet": "finanzplan", "namedRange": "cfo_input_pilot_start_count",                 "kind": "input" },
-    "plan.assumptions.pilot_new_customers_m2_m5":   { "sheet": "finanzplan", "namedRange": "cfo_input_pilot_new_customers_m2_m5",         "kind": "input" },
-    "plan.assumptions.pilot_conversion_rate_m6":    { "sheet": "finanzplan", "namedRange": "cfo_input_pilot_conversion_rate_m6",          "kind": "input" },
-
-    "plan.coaching.sales_gtm_eur":        { "sheet": "coaching", "namedRange": "cfo_input_coaching_sales_gtm_eur",        "kind": "input" },
-    "plan.coaching.pitch_eur":            { "sheet": "coaching", "namedRange": "cfo_input_coaching_pitch_eur",            "kind": "input" },
-    "plan.coaching.finance_strategy_eur": { "sheet": "coaching", "namedRange": "cfo_input_coaching_finance_strategy_eur", "kind": "input" },
-    "plan.coaching.pricing_eur":          { "sheet": "coaching", "namedRange": "cfo_input_coaching_pricing_eur",          "kind": "input" },
-    "plan.coaching.legal_tax_eur":        { "sheet": "coaching", "namedRange": "cfo_input_coaching_legal_tax_eur",        "kind": "input" },
-    "plan.coaching.ip_strategy_eur":      { "sheet": "coaching", "namedRange": "cfo_input_coaching_ip_strategy_eur",      "kind": "input" },
-    "plan.coaching.scaling_eur":          { "sheet": "coaching", "namedRange": "cfo_input_coaching_scaling_eur",          "kind": "input" },
-    "plan.coaching.reserve_eur":          { "sheet": "coaching", "namedRange": "cfo_input_coaching_reserve_eur",          "kind": "input" },
-    "plan.coaching.total_eur":            { "sheet": "coaching", "namedRange": "cfo_coaching_total_eur",                  "kind": "output" }
+    "cash_on_hand_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_cash_on_hand_eur",
+      "kind": "output"
+    },
+    "monthly_burn.actual_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_monthly_burn_actual_eur",
+      "kind": "output"
+    },
+    "forecast_6m.0.cash_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_forecast_m1_cash_eur",
+      "kind": "output"
+    },
+    "forecast_6m.0.burn_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_forecast_m1_burn_eur",
+      "kind": "output"
+    },
+    "forecast_6m.1.cash_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_forecast_m2_cash_eur",
+      "kind": "output"
+    },
+    "forecast_6m.1.burn_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_forecast_m2_burn_eur",
+      "kind": "output"
+    },
+    "forecast_6m.2.cash_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_forecast_m3_cash_eur",
+      "kind": "output"
+    },
+    "forecast_6m.2.burn_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_forecast_m3_burn_eur",
+      "kind": "output"
+    },
+    "forecast_6m.3.cash_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_forecast_m4_cash_eur",
+      "kind": "output"
+    },
+    "forecast_6m.3.burn_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_forecast_m4_burn_eur",
+      "kind": "output"
+    },
+    "forecast_6m.4.cash_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_forecast_m5_cash_eur",
+      "kind": "output"
+    },
+    "forecast_6m.4.burn_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_forecast_m5_burn_eur",
+      "kind": "output"
+    },
+    "forecast_6m.5.cash_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_forecast_m6_cash_eur",
+      "kind": "output"
+    },
+    "forecast_6m.5.burn_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_forecast_m6_burn_eur",
+      "kind": "output"
+    }
   }
 }

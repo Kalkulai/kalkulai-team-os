@@ -70,22 +70,34 @@ describe('loadSheetMap — reale Platzhalter-Config', () => {
     }
   });
 
-  it('deckt die CFO-Kai Ergebnisfelder read-only und Plan-Hebel writable ab', () => {
+  it('deckt nur die live existierenden CFO-Kai Read-Path Ergebnisfelder ab', () => {
     const map = loadSheetMap();
 
-    expect(map.fields['monthly_burn.plan_eur']).toMatchObject({ kind: 'input' });
-    expect(map.fields['plan.cost_lines.marketing_m1_eur']).toMatchObject({ kind: 'input' });
-    expect(map.fields['plan.coaching.reserve_eur']).toMatchObject({ kind: 'input' });
-
-    for (const field of [
+    expect(Object.keys(map.fields).sort()).toEqual([
       'cash_on_hand_eur',
       'monthly_burn.actual_eur',
-      'monthly_burn.delta_eur',
-      'runway_months',
-      'break_even_label',
-    ]) {
+      'forecast_6m.0.burn_eur',
+      'forecast_6m.0.cash_eur',
+      'forecast_6m.1.burn_eur',
+      'forecast_6m.1.cash_eur',
+      'forecast_6m.2.burn_eur',
+      'forecast_6m.2.cash_eur',
+      'forecast_6m.3.burn_eur',
+      'forecast_6m.3.cash_eur',
+      'forecast_6m.4.burn_eur',
+      'forecast_6m.4.cash_eur',
+      'forecast_6m.5.burn_eur',
+      'forecast_6m.5.cash_eur',
+    ].sort());
+
+    for (const field of Object.keys(map.fields)) {
       expect(map.fields[field]).toMatchObject({ kind: 'output' });
     }
+    expect(map.fields['monthly_burn.plan_eur']).toBeUndefined();
+    expect(map.fields['monthly_burn.delta_eur']).toBeUndefined();
+    expect(map.fields.runway_months).toBeUndefined();
+    expect(map.fields.break_even_label).toBeUndefined();
+    expect(map.fields['plan.cost_lines.marketing_m1_eur']).toBeUndefined();
   });
 });
 

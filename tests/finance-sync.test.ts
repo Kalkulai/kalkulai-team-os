@@ -31,27 +31,92 @@ vi.mock('@/lib/telegram', () => ({
 import { parseEur, runFinanceSync } from '@/lib/finance-sync';
 import type { SheetMap } from '@/lib/google-sheets';
 
-// Map deckt cash_on_hand_eur + burn actual/plan + break_even ab; price_per_pilot
-// ist absichtlich dabei (nicht auf FinanceData gemappt → muss ignoriert werden).
+// Map deckt nur die live existierenden OUTPUT-Named-Ranges ab. Plan-/Delta-/
+// Runway-/Input-Felder bleiben absichtlich draußen und werden im Sync abgeleitet.
 function syncMap(): SheetMap {
   return {
-    sheets: { guv: 'guv-id', finanzplan: 'fp-id' },
+    sheets: { guv: 'guv-id' },
     fields: {
-      cash_on_hand_eur: { sheet: 'guv', namedRange: 'cash_on_hand', kind: 'output' },
-      'monthly_burn.actual_eur': { sheet: 'guv', namedRange: 'burn_actual', kind: 'output' },
-      'monthly_burn.plan_eur': { sheet: 'finanzplan', namedRange: 'burn_plan', kind: 'input' },
-      break_even_label: { sheet: 'guv', namedRange: 'break_even', kind: 'output' },
-      price_per_pilot: { sheet: 'finanzplan', namedRange: 'price_per_pilot', kind: 'input' },
+      cash_on_hand_eur: {
+        sheet: 'guv',
+        namedRange: 'cfo_cash_on_hand_eur',
+        kind: 'output',
+      },
+      'monthly_burn.actual_eur': {
+        sheet: 'guv',
+        namedRange: 'cfo_monthly_burn_actual_eur',
+        kind: 'output',
+      },
+      'forecast_6m.0.cash_eur': {
+        sheet: 'guv',
+        namedRange: 'cfo_forecast_m1_cash_eur',
+        kind: 'output',
+      },
+      'forecast_6m.0.burn_eur': {
+        sheet: 'guv',
+        namedRange: 'cfo_forecast_m1_burn_eur',
+        kind: 'output',
+      },
+      'forecast_6m.1.cash_eur': {
+        sheet: 'guv',
+        namedRange: 'cfo_forecast_m2_cash_eur',
+        kind: 'output',
+      },
+      'forecast_6m.1.burn_eur': {
+        sheet: 'guv',
+        namedRange: 'cfo_forecast_m2_burn_eur',
+        kind: 'output',
+      },
+      'forecast_6m.2.cash_eur': {
+        sheet: 'guv',
+        namedRange: 'cfo_forecast_m3_cash_eur',
+        kind: 'output',
+      },
+      'forecast_6m.2.burn_eur': {
+        sheet: 'guv',
+        namedRange: 'cfo_forecast_m3_burn_eur',
+        kind: 'output',
+      },
+      'forecast_6m.3.cash_eur': {
+        sheet: 'guv',
+        namedRange: 'cfo_forecast_m4_cash_eur',
+        kind: 'output',
+      },
+      'forecast_6m.3.burn_eur': {
+        sheet: 'guv',
+        namedRange: 'cfo_forecast_m4_burn_eur',
+        kind: 'output',
+      },
+      'forecast_6m.4.cash_eur': {
+        sheet: 'guv',
+        namedRange: 'cfo_forecast_m5_cash_eur',
+        kind: 'output',
+      },
+      'forecast_6m.4.burn_eur': {
+        sheet: 'guv',
+        namedRange: 'cfo_forecast_m5_burn_eur',
+        kind: 'output',
+      },
+      'forecast_6m.5.cash_eur': {
+        sheet: 'guv',
+        namedRange: 'cfo_forecast_m6_cash_eur',
+        kind: 'output',
+      },
+      'forecast_6m.5.burn_eur': {
+        sheet: 'guv',
+        namedRange: 'cfo_forecast_m6_burn_eur',
+        kind: 'output',
+      },
     },
   };
 }
 
-/** Mappt eine Named-Range auf ihren rohen Zellwert (string[][]). */
-function rangeResponder(byRange: Record<string, string>) {
+/** Mappt eine Range auf ihre rohen Zellwerte (string[][]). */
+function rangeResponder(byRange: Record<string, string | string[][]>) {
   return async (_sheetId: string, namedRange: string): Promise<string[][]> => {
     const v = byRange[namedRange];
     if (v === undefined) throw new Error(`unexpected range ${namedRange}`);
-    return [[v]];
+    return typeof v === 'string' ? [[v]] : v;
   };
 }
 
@@ -81,15 +146,40 @@ describe('parseEur — deutsches Format', () => {
 });
 
 describe('runFinanceSync — Happy-Path', () => {
-  it('rechnet runway + delta SELBST und inserted den Snapshot', async () => {
+  it('baut FinanceData aus Live-Outputs und leitet Plan/Delta/Runway selbst ab', async () => {
     loadSheetMapMock.mockReturnValue(syncMap());
-    // cash 18000, actual 3000, plan 2500 → delta=500, runway=18000/3000=6.0
     readNamedRangeMock.mockImplementation(
       rangeResponder({
-        cash_on_hand: '18.000,00 €',
-        burn_actual: '3.000',
-        burn_plan: '2.500',
-        break_even: 'M7 · Feb 2027',
+        cfo_cash_on_hand_eur: '7.333,00 €',
+        cfo_monthly_burn_actual_eur: '1.367',
+        cfo_forecast_m1_cash_eur: '7.333',
+        cfo_forecast_m1_burn_eur: '1.367',
+        cfo_forecast_m2_cash_eur: '16.814',
+        cfo_forecast_m2_burn_eur: '819',
+        cfo_forecast_m3_cash_eur: '26.293',
+        cfo_forecast_m3_burn_eur: '921',
+        cfo_forecast_m4_cash_eur: '35.420',
+        cfo_forecast_m4_burn_eur: '1.373',
+        cfo_forecast_m5_cash_eur: '44.545',
+        cfo_forecast_m5_burn_eur: '1.475',
+        cfo_forecast_m6_cash_eur: '54.834',
+        cfo_forecast_m6_burn_eur: '4.211',
+        "'GuV Finanzplan'!B23:D37": [
+          ['API (Azure + Whisper)', '', '400'],
+          ['Infrastruktur', '', '48'],
+          ['Development Tools', '', '220'],
+          ['Monitoring & Office', '', '45'],
+          ['Leere Zwischenüberschrift'],
+          ['Sales-Tools', '', '50'],
+          ['Marketing & Vertrieb', '', '100'],
+          ['', '', ''],
+          ['Versicherung (IT+Cyber)', '', '80'],
+          ['Geschäftskonto', '', '50'],
+          ['UG Gründung', '', '300'],
+          ['Legal & Beratung', '', '417'],
+          ['Stripe Gebühren', '', '9'],
+        ],
+        "'GuV Finanzplan'!D52": 'M6 (Jan) – Business Break-Even',
       }),
     );
     insertFinanceSnapshotMock.mockResolvedValue('snap-id-1');
@@ -105,14 +195,29 @@ describe('runFinanceSync — Happy-Path', () => {
     const [scenario, data, source] = insertFinanceSnapshotMock.mock.calls[0];
     expect(scenario).toBe('current');
     expect(source).toBe('cfo-kai:app-sync');
-    expect(data.cash_on_hand_eur).toBe(18000);
-    expect(data.monthly_burn.actual_eur).toBe(3000);
-    expect(data.monthly_burn.plan_eur).toBe(2500);
-    expect(data.monthly_burn.delta_eur).toBe(500); // SELBST: actual - plan
-    expect(data.runway_months).toBe(6); // SELBST: 18000 / 3000
-    expect(data.break_even_label).toBe('M7 · Feb 2027');
-    // Komplexe Felder kommen aus den Defaults.
-    expect(data.cost_lines.length).toBeGreaterThan(0);
+    expect(data.as_of).toBe('GuV Finanzplan · M1 Aug');
+    expect(data.cash_on_hand_eur).toBe(7333);
+    expect(data.monthly_burn.actual_eur).toBe(1367);
+    expect(data.monthly_burn.plan_eur).toBe(1367);
+    expect(data.monthly_burn.delta_eur).toBe(0);
+    expect(data.runway_months).toBe(5.4);
+    expect(data.break_even_label).toBe('M6 · Jan');
+    expect(data.forecast_6m).toEqual([
+      { month: 'Aug', cash_eur: 7333, burn_eur: 1367 },
+      { month: 'Sep', cash_eur: 16814, burn_eur: 819 },
+      { month: 'Okt', cash_eur: 26293, burn_eur: 921 },
+      { month: 'Nov', cash_eur: 35420, burn_eur: 1373 },
+      { month: 'Dez', cash_eur: 44545, burn_eur: 1475 },
+      { month: 'Jan', cash_eur: 54834, burn_eur: 4211 },
+    ]);
+    expect(data.cost_lines).toContainEqual({
+      label: 'API (Azure + Whisper)',
+      amount_eur: 400,
+      fixed: false,
+      paid_by: 'Company',
+    });
+    expect(data.paid_by).toEqual([{ name: 'Company', value_eur: 1719 }]);
+    expect(data.pilot_health).toEqual([{ name: '13 Piloten', status: 'green', note: '' }]);
 
     expect(sendTelegramMessageMock).not.toHaveBeenCalled();
   });
@@ -124,10 +229,22 @@ describe('runFinanceSync — Gate-Fail', () => {
     // cash negativ → Sanity-Gate (cash_on_hand_eur >= 0) schlägt fehl.
     readNamedRangeMock.mockImplementation(
       rangeResponder({
-        cash_on_hand: '-5.000,00 €',
-        burn_actual: '3.000',
-        burn_plan: '2.500',
-        break_even: 'M7',
+        cfo_cash_on_hand_eur: '-5.000,00 €',
+        cfo_monthly_burn_actual_eur: '3.000',
+        cfo_forecast_m1_cash_eur: '7.333',
+        cfo_forecast_m1_burn_eur: '1.367',
+        cfo_forecast_m2_cash_eur: '16.814',
+        cfo_forecast_m2_burn_eur: '819',
+        cfo_forecast_m3_cash_eur: '26.293',
+        cfo_forecast_m3_burn_eur: '921',
+        cfo_forecast_m4_cash_eur: '35.420',
+        cfo_forecast_m4_burn_eur: '1.373',
+        cfo_forecast_m5_cash_eur: '44.545',
+        cfo_forecast_m5_burn_eur: '1.475',
+        cfo_forecast_m6_cash_eur: '54.834',
+        cfo_forecast_m6_burn_eur: '4.211',
+        "'GuV Finanzplan'!B23:D37": [['Kosten', '', '3000']],
+        "'GuV Finanzplan'!D52": 'M7',
       }),
     );
 
