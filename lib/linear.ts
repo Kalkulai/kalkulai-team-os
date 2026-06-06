@@ -155,6 +155,17 @@ export async function updateIssue(
   );
 }
 
+/** Archive a Linear issue (moves it to trash — recoverable in Linear, and
+ *  excluded from the dashboard's issue queries so the card disappears). */
+export async function archiveIssue(issueId: string): Promise<void> {
+  await gql(
+    `mutation ArchiveIssue($id: String!) {
+       issueArchive(id: $id) { success }
+     }`,
+    { id: issueId },
+  );
+}
+
 export interface LinearIssueByIdentifier {
   id: string;
   identifier: string;

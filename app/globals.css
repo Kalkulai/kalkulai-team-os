@@ -4924,3 +4924,15 @@ html.light .agent-launch-error {
 }
 .task-edit-save:hover { filter: brightness(1.08); }
 .task-edit-save:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Edit-modal delete button (left-aligned; two-click confirm) */
+.task-edit-spacer { flex: 1; }
+.task-edit-delete {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 12px; border-radius: 9px; cursor: pointer;
+  border: 1px solid rgba(255, 107, 92, 0.3); background: rgba(255, 107, 92, 0.08);
+  color: #FF8A7C; font: 500 13px/1 var(--font);
+}
+.task-edit-delete:hover { background: rgba(255, 107, 92, 0.14); border-color: rgba(255, 107, 92, 0.45); }
+.task-edit-delete.is-confirm { background: rgba(255, 107, 92, 0.2); border-color: #FF6B5C; color: #fff; font-weight: 600; }
+.task-edit-delete:disabled { opacity: 0.5; cursor: not-allowed; }

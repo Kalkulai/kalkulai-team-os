@@ -76,3 +76,12 @@ export async function getTaskMetaOwner(linearIssueId: string): Promise<string | 
   if (error) throw error;
   return (data?.user_id as string | undefined) ?? null;
 }
+
+/** Removes the task_meta row for an issue (best-effort cleanup on delete). */
+export async function deleteTaskMeta(linearIssueId: string): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('task_meta')
+    .delete()
+    .eq('linear_issue_id', linearIssueId);
+  if (error) throw error;
+}
