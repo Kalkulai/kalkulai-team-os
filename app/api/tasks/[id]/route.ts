@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { updateIssue } from '@/lib/linear';
+import { updateIssue, archiveIssue } from '@/lib/linear';
 import { requireActor } from '@/lib/auth-context';
 import { revalidateDashboard } from '@/lib/revalidate';
 import { parseTaskMeta, quadrantToPriority } from '@/lib/task-meta';
-import { upsertTaskMeta, getTaskMetaOwner } from '@/lib/task-meta-db';
+import { upsertTaskMeta, getTaskMetaOwner, deleteTaskMeta } from '@/lib/task-meta-db';
 
 export async function PATCH(
   req: NextRequest,
@@ -76,6 +76,38 @@ export async function PATCH(
       }
       await upsertTaskMeta(id, ownerId, meta);
     }
+    revalidateDashboard();
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 502 });
+  }
+}
+
+export async function DELETE(
+  req: NextRequest,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const actor = await requireActor(req, { allowMember: true, scopes: ['tasks:write'] });
+  if (!actor) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const { id } = await params;
+  if (!id) return NextResponse.json({ error: 'id required' }, { status: 400 });
+
+  // Members may only delete a task whose metadata they own (if any exists).
+  if (actor.type === 'member') {
+    const existingOwner = await getTaskMetaOwner(id).catch(() => null);
+    if (existingOwner && existingOwner !== actor.memberId) {
+      return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+    }
+  }
+
+  try {
+    await archiveIssue(id);
+    await deleteTaskMeta(id).catch((err) => {
+      console.warn('[/api/tasks/:id DELETE] task_meta cleanup failed:', err);
+    });
     revalidateDashboard();
     return NextResponse.json({ ok: true });
   } catch (err) {

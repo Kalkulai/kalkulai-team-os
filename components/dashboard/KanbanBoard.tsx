@@ -163,7 +163,7 @@ function DroppableColumn({
               done={done}
               members={members}
               activeClaude={task.identifier ? activeClaudeByIdentifier?.[task.identifier] : undefined}
-              onOpen={onOpenCard && !done ? () => onOpenCard(task) : undefined}
+              onOpen={onOpenCard && !done && task.kind === 'linear' ? () => onOpenCard(task) : undefined}
               projects={projects}
             />
           ))}
@@ -525,6 +525,10 @@ export function KanbanBoard({
                   : t,
               ),
             );
+            router.refresh();
+          }}
+          onDeleted={() => {
+            setTasks((prev) => prev.filter((t) => t.id !== editingTask.id));
             router.refresh();
           }}
         />

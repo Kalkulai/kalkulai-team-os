@@ -2,20 +2,22 @@
 
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { X, Trash2 } from 'lucide-react';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { TaskMetaFields } from './TaskMetaFields';
 import type { UnifiedTask } from '@/lib/unified-tasks';
 import { EMPTY_TASK_META, quadrantToPriority, type TaskMeta } from '@/lib/task-meta';
 
 /** Click-to-edit modal for a Kanban card (Felix-only). Edits title, deadline and
- * the planning metadata; persists via PATCH /api/tasks/[id]. */
+ * the planning metadata; persists via PATCH /api/tasks/[id]. Delete archives the
+ * Linear issue (recoverable in Linear's trash). */
 export function TaskEditModal({
   task,
   projects,
   userId,
   onClose,
   onSaved,
+  onDeleted,
 }: {
   task: UnifiedTask;
   projects: Array<{ id: string; name: string }>;
@@ -27,16 +29,19 @@ export function TaskEditModal({
     meta: TaskMeta;
     priority: number;
   }) => void;
+  onDeleted: () => void;
 }) {
   const [title, setTitle] = useState(task.title);
   const [due, setDue] = useState<string | null>(task.dueDate ?? null);
   const [meta, setMeta] = useState<TaskMeta>(task.meta ?? EMPTY_TASK_META);
   const [busy, setBusy] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function save() {
     const t = title.trim();
-    if (!t || busy) return;
+    if (!t || busy || deleting) return;
     setBusy(true);
     setError(null);
     try {
@@ -60,6 +65,33 @@ export function TaskEditModal({
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function del() {
+    if (busy || deleting) return;
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status}: ${txt.slice(0, 200)}`);
+      }
+      onDeleted();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+      setConfirmDelete(false);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -93,14 +125,25 @@ export function TaskEditModal({
           <TaskMetaFields value={meta} onChange={setMeta} projects={projects} />
           {error && <p className="task-edit-error">{error}</p>}
           <div className="task-edit-actions">
-            <button type="button" className="task-edit-cancel" onClick={onClose} disabled={busy}>
+            <button
+              type="button"
+              className={`task-edit-delete${confirmDelete ? ' is-confirm' : ''}`}
+              onClick={del}
+              disabled={busy || deleting}
+              title="Task archivieren"
+            >
+              <Trash2 size={13} aria-hidden />
+              {deleting ? 'Lösche …' : confirmDelete ? 'Wirklich löschen?' : 'Löschen'}
+            </button>
+            <span className="task-edit-spacer" />
+            <button type="button" className="task-edit-cancel" onClick={onClose} disabled={busy || deleting}>
               Abbrechen
             </button>
             <button
               type="button"
               className="task-edit-save"
               onClick={save}
-              disabled={!title.trim() || busy}
+              disabled={!title.trim() || busy || deleting}
             >
               {busy ? 'Speichern …' : 'Speichern'}
             </button>
