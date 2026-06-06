@@ -16,6 +16,10 @@ import { getActiveSessionsByIdentifier, getActiveSessionsForUser, listLiveClaude
 import type { ClaudeActiveSessionSnapshot, ClaudeSession } from '@/types';
 import { ViewToggle } from '@/components/dashboard/ViewToggle';
 import { KanbanRealtimeListener } from '@/components/dashboard/KanbanRealtimeListener';
+import { DayPlanTimeline } from '@/components/dashboard/DayPlanTimeline';
+import { getDayPlan } from '@/lib/day-plan-db';
+import { isFelixMemberId } from '@/lib/agent-access';
+import type { DayPlan } from '@/lib/day-plan';
 import { differenceInCalendarDays, format, getISOWeek, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import { GitBranch, AlertTriangle } from 'lucide-react';
@@ -114,10 +118,21 @@ export default async function DashboardPage({
     console.warn('[dashboard] claude_sessions lookup failed:', err);
   }
 
+  // Felix-only: Kai's timeboxed day plan, shown as a timeline at the top.
+  let dayPlan: DayPlan | null = null;
+  if (isFelixMemberId(me.id)) {
+    try {
+      dayPlan = await getDayPlan(me.id, new Date().toISOString().slice(0, 10));
+    } catch (err) {
+      console.warn('[dashboard] day_plan lookup failed (table missing?):', err);
+    }
+  }
+
   return (
     <>
       <KanbanRealtimeListener />
       <ViewToggle currentView="day" memberId={me.id} />
+      {dayPlan && <DayPlanTimeline plan={dayPlan} />}
       {briefing.activeBranches.length > 0 && (
         <div className="mb-5 flex flex-wrap items-center gap-2.5">
           {briefing.activeBranches.map((br) => {
