@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
   // Sanity-Gate: interne Widersprüche (z.B. runway != cash/burn) ablehnen.
   const consistency = checkFinanceConsistency(validated.value);
   if (!consistency.ok) {
-    return NextResponse.json({ error: consistency.reason }, { status: 422 });
+    return NextResponse.json({ error: consistency.reason }, { status: 400 });
   }
 
   const source = isStr(body.source) ? body.source : undefined;
