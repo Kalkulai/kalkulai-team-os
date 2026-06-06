@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { setIssueStatus } from '@/lib/linear';
-import { requireApiAuth } from '@/lib/api-auth';
+import { requireActor } from '@/lib/auth-context';
 import { revalidateDashboard } from '@/lib/revalidate';
 
 const STATE_MAP: Record<string, string | undefined> = {
@@ -11,7 +11,8 @@ const STATE_MAP: Record<string, string | undefined> = {
 };
 
 export async function PATCH(req: NextRequest) {
-  if (!requireApiAuth(req)) {
+  const actor = await requireActor(req, { allowMember: true, scopes: ['tasks:write'] });
+  if (!actor) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

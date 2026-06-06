@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiAuth } from '@/lib/api-auth';
+import { requireActor } from '@/lib/auth-context';
 import { updateKpiDefinition, setKpiTarget, deleteKpi } from '@/lib/kpis';
 import { currentWeekStart } from '@/lib/supabase';
 import { revalidateDashboard } from '@/lib/revalidate';
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!requireApiAuth(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const actor = await requireActor(req, { allowMember: true, scopes: ['kpis:write'] });
+  if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: 'body required' }, { status: 400 });
@@ -51,7 +52,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  if (!requireApiAuth(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const actor = await requireActor(req, { allowMember: true, scopes: ['kpis:write'] });
+  if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
   await deleteKpi(id);
   revalidateDashboard();
