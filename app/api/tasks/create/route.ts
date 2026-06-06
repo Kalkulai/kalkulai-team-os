@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createIssue, ensureLabelId, getLinearTeamId } from '@/lib/linear';
-import { requireApiAuth } from '@/lib/api-auth';
+import { requireActor } from '@/lib/auth-context';
 import { supabaseAdmin } from '@/lib/supabase';
 import { buildTeamTaskDescription } from '@/lib/team-tasks';
 import { revalidateDashboard } from '@/lib/revalidate';
@@ -11,7 +11,8 @@ const SOURCE_LABEL: Record<'hermes' | 'notion', string> = {
 };
 
 export async function POST(req: NextRequest) {
-  if (!requireApiAuth(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const actor = await requireActor(req, { allowMember: true, scopes: ['tasks:write'] });
+  if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const body = await req.json().catch(() => null);
   if (!body?.title || typeof body.title !== 'string' || !body.title.trim()) {
     return NextResponse.json({ error: 'title required' }, { status: 400 });
