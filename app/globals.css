@@ -4936,3 +4936,37 @@ html.light .agent-launch-error {
 .task-edit-delete:hover { background: rgba(255, 107, 92, 0.14); border-color: rgba(255, 107, 92, 0.45); }
 .task-edit-delete.is-confirm { background: rgba(255, 107, 92, 0.2); border-color: #FF6B5C; color: #fff; font-weight: 600; }
 .task-edit-delete:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Kai suggestion section in the task edit modal */
+.task-kai {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 12px; border-radius: 11px;
+  border: 1px solid rgba(91, 140, 255, 0.22); background: rgba(91, 140, 255, 0.06);
+}
+.task-kai-head { font: 600 12px/1 var(--font); color: #9DB6FF; }
+.task-kai-next { font: 400 13px/1.45 var(--font); color: var(--ink-2); margin: 0; }
+.task-kai-followups { display: flex; flex-direction: column; gap: 6px; }
+.task-kai-followup {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 8px 10px; border-radius: 9px;
+  border: 1px solid var(--line-1); background: rgba(255, 255, 255, 0.03);
+}
+.task-kai-followup-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.task-kai-followup-title { font: 500 12.5px/1.35 var(--font); color: var(--ink-1); }
+.task-kai-followup-note { font: 400 11.5px/1.4 var(--font); color: var(--ink-3); }
+.task-kai-followup-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+.task-kai-accept {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 9px; border-radius: 7px; cursor: pointer;
+  border: 1px solid rgba(91, 140, 255, 0.3); background: rgba(91, 140, 255, 0.12);
+  color: #9DB6FF; font: 500 11.5px/1 var(--font);
+}
+.task-kai-accept:hover { background: rgba(91, 140, 255, 0.2); }
+.task-kai-accept:disabled { opacity: 0.5; cursor: not-allowed; }
+.task-kai-dismiss {
+  display: inline-grid; place-items: center; width: 24px; height: 24px;
+  border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--line-1); background: transparent; color: var(--ink-3);
+}
+.task-kai-dismiss:hover { color: var(--ink-1); border-color: var(--line-2); }
+.task-kai-dismiss:disabled { opacity: 0.5; cursor: not-allowed; }
