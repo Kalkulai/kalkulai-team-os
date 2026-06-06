@@ -117,7 +117,7 @@ function firstCell(values: string[][], fieldName: string): string {
 /**
  * Liest alle gemappten Skalar-Felder aus dem Sheet und gibt die rohen Overrides
  * als Punkt-Pfad → Wert (number | string) zurück. Nicht-FinanceData-Felder in
- * der Map (z.B. price_per_pilot) werden ignoriert. Wirft bei jedem Lese-/Parse-
+ * der Map (z.B. price_full_eur) werden ignoriert. Wirft bei jedem Lese-/Parse-
  * fehler — der Aufrufer entscheidet über Retry/Alarm.
  */
 async function readSheetOverrides(map: SheetMap): Promise<Map<string, number | string>> {

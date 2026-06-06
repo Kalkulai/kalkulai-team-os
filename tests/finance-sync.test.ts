@@ -32,8 +32,42 @@ import { activeScenario, parseEur, runFinanceSync } from '@/lib/finance-sync';
 import { checkFinanceConsistency } from '@/lib/finance-gate';
 import type { SheetMap } from '@/lib/google-sheets';
 
-// Map deckt nur die live existierenden OUTPUT-Named-Ranges ab. Plan-/Delta-/
-// Runway-/Input-Felder bleiben absichtlich draußen und werden im Sync abgeleitet.
+const INPUT_FIELD_NAMED_RANGES = {
+  churn_rate_monthly: 'cfo_input_churn_rate_monthly',
+  price_full_eur: 'cfo_input_price_full_eur',
+  price_pilot_eur: 'cfo_input_price_pilot_eur',
+  api_cost_per_customer_eur: 'cfo_input_api_cost_per_customer_eur',
+  stripe_fee_rate: 'cfo_input_stripe_fee_rate',
+  pilot_start_count: 'cfo_input_pilot_start_count',
+  pilot_new_per_month: 'cfo_input_pilot_new_per_month',
+  pilot_conversion_rate: 'cfo_input_pilot_conversion_rate',
+  stipend_m1_eur: 'cfo_input_stipend_m1_eur',
+  stipend_m2plus_eur: 'cfo_input_stipend_m2plus_eur',
+  ug_foundation_eur: 'cfo_input_ug_foundation_eur',
+  postexist_gf_salary_eur: 'cfo_input_postexist_gf_salary_eur',
+  postexist_gf_count: 'cfo_input_postexist_gf_count',
+  postexist_intern_salary_eur: 'cfo_input_postexist_intern_salary_eur',
+  postexist_intern_count_y2: 'cfo_input_postexist_intern_count_y2',
+  cost_infrastructure_eur: 'cfo_input_cost_infrastructure_eur',
+  cost_development_tools_eur: 'cfo_input_cost_development_tools_eur',
+  cost_monitoring_office_eur: 'cfo_input_cost_monitoring_office_eur',
+  cost_rnd_finetuning_eur: 'cfo_input_cost_rnd_finetuning_eur',
+  cost_sales_tools_eur: 'cfo_input_cost_sales_tools_eur',
+  cost_marketing_eur: 'cfo_input_cost_marketing_eur',
+  cost_insurance_eur: 'cfo_input_cost_insurance_eur',
+  cost_bank_account_eur: 'cfo_input_cost_bank_account_eur',
+} as const satisfies Record<string, string>;
+
+function inputFields(): SheetMap['fields'] {
+  const fields: SheetMap['fields'] = {};
+  for (const [field, namedRange] of Object.entries(INPUT_FIELD_NAMED_RANGES)) {
+    fields[field] = { sheet: 'guv', namedRange, kind: 'input' };
+  }
+  return fields;
+}
+
+// Map enthält Outputs plus schreibbare Input-Hebel. Der Sync darf trotzdem nur
+// NUMERIC_FIELDS lesen; Plan-/Delta-/Runway-/Input-Werte werden abgeleitet/ignoriert.
 function syncMap(): SheetMap {
   return {
     sheets: { guv: 'guv-id', preexist: 'preexist-id' },
@@ -108,6 +142,7 @@ function syncMap(): SheetMap {
         namedRange: 'cfo_forecast_m6_burn_eur',
         kind: 'output',
       },
+      ...inputFields(),
     },
   };
 }
