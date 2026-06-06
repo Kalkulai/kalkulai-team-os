@@ -2,15 +2,16 @@
 
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Trash2 } from 'lucide-react';
+import { X, Trash2, Plus } from 'lucide-react';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { TaskMetaFields } from './TaskMetaFields';
 import type { UnifiedTask } from '@/lib/unified-tasks';
 import { EMPTY_TASK_META, quadrantToPriority, type TaskMeta } from '@/lib/task-meta';
+import { hasAssist, type TaskFollowup } from '@/lib/task-assist';
 
 /** Click-to-edit modal for a Kanban card (Felix-only). Edits title, deadline and
- * the planning metadata; persists via PATCH /api/tasks/[id]. Delete archives the
- * Linear issue (recoverable in Linear's trash). */
+ * planning metadata; shows Kai's suggestions (next step + follow-up tasks) with
+ * one-click accept. Delete archives the Linear issue. */
 export function TaskEditModal({
   task,
   projects,
@@ -18,26 +19,92 @@ export function TaskEditModal({
   onClose,
   onSaved,
   onDeleted,
+  onFollowupAccepted,
 }: {
   task: UnifiedTask;
   projects: Array<{ id: string; name: string }>;
   userId: string | null;
   onClose: () => void;
-  onSaved: (patch: {
-    title: string;
-    dueDate: string | null;
-    meta: TaskMeta;
-    priority: number;
-  }) => void;
+  onSaved: (patch: { title: string; dueDate: string | null; meta: TaskMeta; priority: number }) => void;
   onDeleted: () => void;
+  onFollowupAccepted: (created: UnifiedTask) => void;
 }) {
   const [title, setTitle] = useState(task.title);
   const [due, setDue] = useState<string | null>(task.dueDate ?? null);
   const [meta, setMeta] = useState<TaskMeta>(task.meta ?? EMPTY_TASK_META);
+  const [followups, setFollowups] = useState<TaskFollowup[]>(
+    task.assist?.suggestedFollowups ?? [],
+  );
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingFollowup, setPendingFollowup] = useState<number | null>(null);
+
+  const nextStep = task.assist?.suggestedNextStep ?? null;
+  const showKai = hasAssist(task.assist) || followups.length > 0;
+
+  async function persistFollowups(remaining: TaskFollowup[]) {
+    await fetch(`/api/tasks/${encodeURIComponent(task.id)}/assist`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId, nextStep, followups: remaining }),
+    }).catch(() => {});
+  }
+
+  async function acceptFollowup(idx: number) {
+    if (pendingFollowup !== null) return;
+    const f = followups[idx];
+    setPendingFollowup(idx);
+    setError(null);
+    try {
+      const fMeta: TaskMeta = {
+        ...EMPTY_TASK_META,
+        context: f.context ?? null,
+        energy: f.energy ?? null,
+        effortMinutes: f.effortMinutes ?? null,
+      };
+      const res = await fetch('/api/tasks/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: f.title, userId, source: 'linear', meta: fMeta }),
+      });
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status}: ${txt.slice(0, 200)}`);
+      }
+      const created = (await res.json().catch(() => null)) as
+        | { id?: string; identifier?: string; url?: string }
+        | null;
+      if (created?.id) {
+        onFollowupAccepted({
+          id: created.id,
+          kind: 'linear',
+          title: f.title,
+          status: 'todo',
+          dueDate: null,
+          identifier: created.identifier,
+          url: created.url,
+          source: 'linear',
+          project: null,
+          meta: fMeta,
+        });
+      }
+      const remaining = followups.filter((_, i) => i !== idx);
+      setFollowups(remaining);
+      await persistFollowups(remaining);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setPendingFollowup(null);
+    }
+  }
+
+  async function dismissFollowup(idx: number) {
+    const remaining = followups.filter((_, i) => i !== idx);
+    setFollowups(remaining);
+    await persistFollowups(remaining);
+  }
 
   async function save() {
     const t = title.trim();
@@ -54,12 +121,7 @@ export function TaskEditModal({
         const txt = await res.text().catch(() => '');
         throw new Error(`HTTP ${res.status}: ${txt.slice(0, 200)}`);
       }
-      onSaved({
-        title: t,
-        dueDate: due,
-        meta,
-        priority: quadrantToPriority(meta.important, meta.urgent),
-      });
+      onSaved({ title: t, dueDate: due, meta, priority: quadrantToPriority(meta.important, meta.urgent) });
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -77,10 +139,7 @@ export function TaskEditModal({
     setDeleting(true);
     setError(null);
     try {
-      const res = await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const res = await fetch(`/api/tasks/${encodeURIComponent(task.id)}`, { method: 'DELETE' });
       if (!res.ok) {
         const txt = await res.text().catch(() => '');
         throw new Error(`HTTP ${res.status}: ${txt.slice(0, 200)}`);
@@ -123,6 +182,49 @@ export function TaskEditModal({
             <DatePicker value={due} onChange={setDue} placeholder="Datum optional" />
           </div>
           <TaskMetaFields value={meta} onChange={setMeta} projects={projects} />
+
+          {showKai && (
+            <div className="task-kai">
+              <div className="task-kai-head">💡 Kai</div>
+              {nextStep && <p className="task-kai-next">{nextStep}</p>}
+              {followups.length > 0 && (
+                <>
+                  <span className="kanban-meta-label">Folgetasks</span>
+                  <div className="task-kai-followups">
+                    {followups.map((f, i) => (
+                      <div key={i} className="task-kai-followup">
+                        <div className="task-kai-followup-text">
+                          <span className="task-kai-followup-title">{f.title}</span>
+                          {f.note && <span className="task-kai-followup-note">{f.note}</span>}
+                        </div>
+                        <div className="task-kai-followup-actions">
+                          <button
+                            type="button"
+                            className="task-kai-accept"
+                            onClick={() => acceptFollowup(i)}
+                            disabled={pendingFollowup !== null}
+                            title="Als Task übernehmen"
+                          >
+                            <Plus size={12} aria-hidden /> Übernehmen
+                          </button>
+                          <button
+                            type="button"
+                            className="task-kai-dismiss"
+                            onClick={() => dismissFollowup(i)}
+                            disabled={pendingFollowup !== null}
+                            title="Verwerfen"
+                          >
+                            <X size={12} aria-hidden />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {error && <p className="task-edit-error">{error}</p>}
           <div className="task-edit-actions">
             <button

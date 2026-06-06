@@ -4,6 +4,7 @@ import type { UnifiedTask } from '@/lib/unified-tasks';
 import type { ClaudeSession } from '@/types';
 import { AvatarStack } from '@/components/dashboard/AvatarStack';
 import { hasMeta, quadrantBadge, effortLabel } from '@/lib/task-meta';
+import { hasAssist } from '@/lib/task-assist';
 
 function duePill(iso: string | null): { label: string; cls: string } | null {
   if (!iso) return null;
@@ -91,6 +92,9 @@ export function KanbanCard({
       <div className="kanban-card-meta">
         {task.identifier && (
           <span className="pill pill-mute mono text-[10px]">{task.identifier}</span>
+        )}
+        {hasAssist(task.assist) && (
+          <span className="pill pill-blue text-[10px]" title="Kai hat Vorschläge">💡 Kai</span>
         )}
         {activeClaude.length > 0 && (
           <span

@@ -531,6 +531,7 @@ export function KanbanBoard({
             setTasks((prev) => prev.filter((t) => t.id !== editingTask.id));
             router.refresh();
           }}
+          onFollowupAccepted={(created) => setTasks((prev) => [created, ...prev])}
         />
       )}
     </DndContext>
