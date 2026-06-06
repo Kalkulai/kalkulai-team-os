@@ -122,7 +122,8 @@ export async function POST(req: NextRequest) {
       dueDate ?? null,
     );
     if (meta) {
-      const ownerId = userId ?? actor.memberId ?? null;
+      // Owner is the authenticated member; bearer (service) callers may name a user.
+      const ownerId = actor.type === 'member' ? actor.memberId ?? null : userId ?? null;
       if (ownerId) await upsertTaskMeta(issue.id, ownerId, meta);
     }
     revalidateDashboard();

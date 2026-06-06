@@ -3,7 +3,7 @@ import { updateIssue } from '@/lib/linear';
 import { requireActor } from '@/lib/auth-context';
 import { revalidateDashboard } from '@/lib/revalidate';
 import { parseTaskMeta, quadrantToPriority } from '@/lib/task-meta';
-import { upsertTaskMeta } from '@/lib/task-meta-db';
+import { upsertTaskMeta, getTaskMetaOwner } from '@/lib/task-meta-db';
 
 export async function PATCH(
   req: NextRequest,
@@ -59,9 +59,20 @@ export async function PATCH(
   try {
     if (Object.keys(patch).length > 0) await updateIssue(id, patch);
     if (meta) {
-      const ownerId = actor.memberId ?? (typeof body.userId === 'string' ? body.userId : null);
+      // Owner is the authenticated member; bearer (service) callers may name a user.
+      const ownerId =
+        actor.type === 'member'
+          ? actor.memberId ?? null
+          : typeof body.userId === 'string'
+            ? body.userId
+            : null;
       if (!ownerId) {
-        return NextResponse.json({ error: 'userId required for meta' }, { status: 400 });
+        return NextResponse.json({ error: 'no owner for meta' }, { status: 403 });
+      }
+      // Don't let one user overwrite another user's task_meta ownership.
+      const existingOwner = await getTaskMetaOwner(id);
+      if (existingOwner && existingOwner !== ownerId) {
+        return NextResponse.json({ error: 'forbidden' }, { status: 403 });
       }
       await upsertTaskMeta(id, ownerId, meta);
     }
