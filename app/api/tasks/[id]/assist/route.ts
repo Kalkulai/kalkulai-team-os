@@ -4,6 +4,7 @@ import { memberCanMutateIssue } from '@/lib/task-auth';
 import { parseAssistInput } from '@/lib/task-assist';
 import { upsertTaskAssist } from '@/lib/task-assist-db';
 import { revalidateDashboard } from '@/lib/revalidate';
+import { isFelixMemberId } from '@/lib/agent-access';
 
 /** Kai (or Felix) writes the per-task suggestion: next step + follow-up tasks. */
 export async function POST(
@@ -26,7 +27,7 @@ export async function POST(
   const ownerId =
     actor.type === 'member'
       ? actor.memberId ?? null
-      : typeof body.userId === 'string'
+      : typeof body.userId === 'string' && isFelixMemberId(body.userId)
         ? body.userId
         : null;
   if (!ownerId) return NextResponse.json({ error: 'no owner' }, { status: 403 });

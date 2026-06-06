@@ -3,6 +3,7 @@ import { requireActor } from '@/lib/auth-context';
 import { parseDayBlocks } from '@/lib/day-plan';
 import { getDayPlan, upsertDayPlan } from '@/lib/day-plan-db';
 import { revalidateDashboard } from '@/lib/revalidate';
+import { isFelixMemberId } from '@/lib/agent-access';
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -34,10 +35,12 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: 'body required' }, { status: 400 });
 
+  // Day plan is a Felix-only feature: members write their own row; service/bearer
+  // callers (Kai) may only target the allowlisted Felix id, not arbitrary userIds.
   const ownerId =
     actor.type === 'member'
       ? actor.memberId ?? null
-      : typeof body.userId === 'string'
+      : typeof body.userId === 'string' && isFelixMemberId(body.userId)
         ? body.userId
         : null;
   if (!ownerId) return NextResponse.json({ error: 'no owner' }, { status: 403 });
