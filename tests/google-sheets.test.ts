@@ -35,13 +35,56 @@ import {
   type SheetMap,
 } from '../lib/google-sheets';
 
+const READ_OUTPUT_FIELDS = [
+  'cash_on_hand_eur',
+  'monthly_burn.actual_eur',
+  'forecast_6m.0.burn_eur',
+  'forecast_6m.0.cash_eur',
+  'forecast_6m.1.burn_eur',
+  'forecast_6m.1.cash_eur',
+  'forecast_6m.2.burn_eur',
+  'forecast_6m.2.cash_eur',
+  'forecast_6m.3.burn_eur',
+  'forecast_6m.3.cash_eur',
+  'forecast_6m.4.burn_eur',
+  'forecast_6m.4.cash_eur',
+  'forecast_6m.5.burn_eur',
+  'forecast_6m.5.cash_eur',
+] as const;
+
+const INPUT_FIELD_NAMED_RANGES = {
+  churn_rate_monthly: 'cfo_input_churn_rate_monthly',
+  price_full_eur: 'cfo_input_price_full_eur',
+  price_pilot_eur: 'cfo_input_price_pilot_eur',
+  api_cost_per_customer_eur: 'cfo_input_api_cost_per_customer_eur',
+  stripe_fee_rate: 'cfo_input_stripe_fee_rate',
+  pilot_start_count: 'cfo_input_pilot_start_count',
+  pilot_new_per_month: 'cfo_input_pilot_new_per_month',
+  pilot_conversion_rate: 'cfo_input_pilot_conversion_rate',
+  stipend_m1_eur: 'cfo_input_stipend_m1_eur',
+  stipend_m2plus_eur: 'cfo_input_stipend_m2plus_eur',
+  ug_foundation_eur: 'cfo_input_ug_foundation_eur',
+  postexist_gf_salary_eur: 'cfo_input_postexist_gf_salary_eur',
+  postexist_gf_count: 'cfo_input_postexist_gf_count',
+  postexist_intern_salary_eur: 'cfo_input_postexist_intern_salary_eur',
+  postexist_intern_count_y2: 'cfo_input_postexist_intern_count_y2',
+  cost_infrastructure_eur: 'cfo_input_cost_infrastructure_eur',
+  cost_development_tools_eur: 'cfo_input_cost_development_tools_eur',
+  cost_monitoring_office_eur: 'cfo_input_cost_monitoring_office_eur',
+  cost_rnd_finetuning_eur: 'cfo_input_cost_rnd_finetuning_eur',
+  cost_sales_tools_eur: 'cfo_input_cost_sales_tools_eur',
+  cost_marketing_eur: 'cfo_input_cost_marketing_eur',
+  cost_insurance_eur: 'cfo_input_cost_insurance_eur',
+  cost_bank_account_eur: 'cfo_input_cost_bank_account_eur',
+} as const satisfies Record<string, string>;
+
 // Valide Minimal-Config für die Shape-Validierung.
 function validMap(): SheetMap {
   return {
     sheets: { guv: 'sheet-id-1', finanzplan: 'sheet-id-2' },
     fields: {
       cash_on_hand_eur: { sheet: 'guv', namedRange: 'cash_on_hand', kind: 'output' },
-      price_per_pilot: { sheet: 'finanzplan', namedRange: 'price_per_pilot', kind: 'input' },
+      price_full_eur: { sheet: 'finanzplan', namedRange: 'price_full_eur', kind: 'input' },
     },
   };
 }
@@ -70,27 +113,27 @@ describe('loadSheetMap — reale Platzhalter-Config', () => {
     }
   });
 
-  it('deckt nur die live existierenden CFO-Kai Read-Path Ergebnisfelder ab', () => {
+  it('akzeptiert die 23 CFO-Kai Input-Hebel als schreibbare GUV-Felder', () => {
     const map = loadSheetMap();
 
-    expect(Object.keys(map.fields).sort()).toEqual([
-      'cash_on_hand_eur',
-      'monthly_burn.actual_eur',
-      'forecast_6m.0.burn_eur',
-      'forecast_6m.0.cash_eur',
-      'forecast_6m.1.burn_eur',
-      'forecast_6m.1.cash_eur',
-      'forecast_6m.2.burn_eur',
-      'forecast_6m.2.cash_eur',
-      'forecast_6m.3.burn_eur',
-      'forecast_6m.3.cash_eur',
-      'forecast_6m.4.burn_eur',
-      'forecast_6m.4.cash_eur',
-      'forecast_6m.5.burn_eur',
-      'forecast_6m.5.cash_eur',
-    ].sort());
+    expect(Object.keys(INPUT_FIELD_NAMED_RANGES)).toHaveLength(23);
+    for (const [field, namedRange] of Object.entries(INPUT_FIELD_NAMED_RANGES)) {
+      expect(map.fields[field]).toEqual({
+        sheet: 'guv',
+        namedRange,
+        kind: 'input',
+      });
+    }
+  });
 
-    for (const field of Object.keys(map.fields)) {
+  it('behält die 14 CFO-Kai Read-Path Ergebnisfelder als Outputs bei', () => {
+    const map = loadSheetMap();
+
+    expect(Object.keys(map.fields).sort()).toEqual(
+      [...READ_OUTPUT_FIELDS, ...Object.keys(INPUT_FIELD_NAMED_RANGES)].sort(),
+    );
+
+    for (const field of READ_OUTPUT_FIELDS) {
       expect(map.fields[field]).toMatchObject({ kind: 'output' });
     }
     expect(map.fields['monthly_burn.plan_eur']).toBeUndefined();

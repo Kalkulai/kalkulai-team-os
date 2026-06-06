@@ -72,6 +72,121 @@
       "sheet": "guv",
       "namedRange": "cfo_forecast_m6_burn_eur",
       "kind": "output"
+    },
+    "churn_rate_monthly": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_churn_rate_monthly",
+      "kind": "input"
+    },
+    "price_full_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_price_full_eur",
+      "kind": "input"
+    },
+    "price_pilot_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_price_pilot_eur",
+      "kind": "input"
+    },
+    "api_cost_per_customer_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_api_cost_per_customer_eur",
+      "kind": "input"
+    },
+    "stripe_fee_rate": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_stripe_fee_rate",
+      "kind": "input"
+    },
+    "pilot_start_count": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_pilot_start_count",
+      "kind": "input"
+    },
+    "pilot_new_per_month": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_pilot_new_per_month",
+      "kind": "input"
+    },
+    "pilot_conversion_rate": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_pilot_conversion_rate",
+      "kind": "input"
+    },
+    "stipend_m1_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_stipend_m1_eur",
+      "kind": "input"
+    },
+    "stipend_m2plus_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_stipend_m2plus_eur",
+      "kind": "input"
+    },
+    "ug_foundation_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_ug_foundation_eur",
+      "kind": "input"
+    },
+    "postexist_gf_salary_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_postexist_gf_salary_eur",
+      "kind": "input"
+    },
+    "postexist_gf_count": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_postexist_gf_count",
+      "kind": "input"
+    },
+    "postexist_intern_salary_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_postexist_intern_salary_eur",
+      "kind": "input"
+    },
+    "postexist_intern_count_y2": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_postexist_intern_count_y2",
+      "kind": "input"
+    },
+    "cost_infrastructure_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_cost_infrastructure_eur",
+      "kind": "input"
+    },
+    "cost_development_tools_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_cost_development_tools_eur",
+      "kind": "input"
+    },
+    "cost_monitoring_office_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_cost_monitoring_office_eur",
+      "kind": "input"
+    },
+    "cost_rnd_finetuning_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_cost_rnd_finetuning_eur",
+      "kind": "input"
+    },
+    "cost_sales_tools_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_cost_sales_tools_eur",
+      "kind": "input"
+    },
+    "cost_marketing_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_cost_marketing_eur",
+      "kind": "input"
+    },
+    "cost_insurance_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_cost_insurance_eur",
+      "kind": "input"
+    },
+    "cost_bank_account_eur": {
+      "sheet": "guv",
+      "namedRange": "cfo_input_cost_bank_account_eur",
+      "kind": "input"
     }
   }
 }

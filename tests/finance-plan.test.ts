@@ -28,10 +28,14 @@ import type { SheetMap } from '@/lib/google-sheets';
 
 function planMap(): SheetMap {
   return {
-    sheets: { finanzplan: 'fp-id', guv: 'guv-id' },
+    sheets: { guv: 'guv-id' },
     fields: {
-      price_per_pilot: { sheet: 'finanzplan', namedRange: 'price_per_pilot', kind: 'input' },
-      'monthly_burn.plan_eur': { sheet: 'finanzplan', namedRange: 'burn_plan', kind: 'input' },
+      price_full_eur: { sheet: 'guv', namedRange: 'cfo_input_price_full_eur', kind: 'input' },
+      churn_rate_monthly: {
+        sheet: 'guv',
+        namedRange: 'cfo_input_churn_rate_monthly',
+        kind: 'input',
+      },
       cash_on_hand_eur: { sheet: 'guv', namedRange: 'cash_on_hand', kind: 'output' },
     },
   };
@@ -66,7 +70,7 @@ describe('POST /api/finance/plan — auth', () => {
       new NextRequest('http://localhost/api/finance/plan', {
         method: 'POST',
         headers: new Headers({ 'content-type': 'application/json' }),
-        body: JSON.stringify({ intent: 'x', edits: [{ field: 'price_per_pilot', value: 1 }] }),
+        body: JSON.stringify({ intent: 'x', edits: [{ field: 'price_full_eur', value: 1 }] }),
       }),
     );
     expect(res.status).toBe(401);
@@ -80,7 +84,7 @@ describe('POST /api/finance/plan — dry-run', () => {
     const res = await plan(
       request({
         intent: 'Pilotpreis anheben',
-        edits: [{ field: 'price_per_pilot', value: 1200 }],
+        edits: [{ field: 'price_full_eur', value: 1200 }],
         dryRun: true,
       }),
     );
@@ -90,9 +94,9 @@ describe('POST /api/finance/plan — dry-run', () => {
     expect(json.dryRun).toBe(true);
     expect(json.diff).toEqual([
       {
-        field: 'price_per_pilot',
-        namedRange: 'price_per_pilot',
-        sheet: 'finanzplan',
+        field: 'price_full_eur',
+        namedRange: 'cfo_input_price_full_eur',
+        sheet: 'guv',
         old: '900,00 €',
         new: 1200,
       },
@@ -104,7 +108,7 @@ describe('POST /api/finance/plan — dry-run', () => {
   it('dryRun auch via Query-Param ?dryRun=1', async () => {
     const res = await plan(
       request(
-        { intent: 'Burn planen', edits: [{ field: 'monthly_burn.plan_eur', value: 1500 }] },
+        { intent: 'Churn planen', edits: [{ field: 'churn_rate_monthly', value: 0.05 }] },
         'http://localhost/api/finance/plan?dryRun=1',
       ),
     );
@@ -114,11 +118,11 @@ describe('POST /api/finance/plan — dry-run', () => {
     expect(json.dryRun).toBe(true);
     expect(json.diff).toEqual([
       {
-        field: 'monthly_burn.plan_eur',
-        namedRange: 'burn_plan',
-        sheet: 'finanzplan',
+        field: 'churn_rate_monthly',
+        namedRange: 'cfo_input_churn_rate_monthly',
+        sheet: 'guv',
         old: '900',
-        new: 1500,
+        new: 0.05,
       },
     ]);
     expect(writeNamedRangeMock).not.toHaveBeenCalled();
@@ -150,10 +154,10 @@ describe('POST /api/finance/plan — apply', () => {
   it('(d) input-Feld → writeNamedRange korrekt + runFinanceSync danach', async () => {
     const res = await plan(
       request({
-        intent: 'Pilotpreis + Burn anpassen',
+        intent: 'Pilotpreis + Churn anpassen',
         edits: [
-          { field: 'price_per_pilot', value: 1200 },
-          { field: 'monthly_burn.plan_eur', value: 2800 },
+          { field: 'price_full_eur', value: 1200 },
+          { field: 'churn_rate_monthly', value: 0.04 },
         ],
       }),
     );
@@ -164,8 +168,12 @@ describe('POST /api/finance/plan — apply', () => {
     expect(json.sync).toEqual({ ok: true, id: 'snap-1' });
 
     expect(writeNamedRangeMock).toHaveBeenCalledTimes(2);
-    expect(writeNamedRangeMock).toHaveBeenNthCalledWith(1, 'fp-id', 'price_per_pilot', [[1200]]);
-    expect(writeNamedRangeMock).toHaveBeenNthCalledWith(2, 'fp-id', 'burn_plan', [[2800]]);
+    expect(writeNamedRangeMock).toHaveBeenNthCalledWith(1, 'guv-id', 'cfo_input_price_full_eur', [
+      [1200],
+    ]);
+    expect(writeNamedRangeMock).toHaveBeenNthCalledWith(2, 'guv-id', 'cfo_input_churn_rate_monthly', [
+      [0.04],
+    ]);
 
     expect(runFinanceSyncMock).toHaveBeenCalledOnce();
     expect(json.applied).toHaveLength(2);
@@ -174,10 +182,10 @@ describe('POST /api/finance/plan — apply', () => {
   it('Schreibfehler → 502 mit konkretem Feld, kein Sync', async () => {
     writeNamedRangeMock.mockRejectedValueOnce(new Error('quota exceeded'));
     const res = await plan(
-      request({ intent: 'x', edits: [{ field: 'price_per_pilot', value: 1200 }] }),
+      request({ intent: 'x', edits: [{ field: 'price_full_eur', value: 1200 }] }),
     );
     expect(res.status).toBe(502);
-    expect((await res.json()).error).toMatch(/price_per_pilot/);
+    expect((await res.json()).error).toMatch(/price_full_eur/);
     expect(runFinanceSyncMock).not.toHaveBeenCalled();
   });
 });
@@ -191,7 +199,7 @@ describe('POST /api/finance/plan — Body-Validierung', () => {
 
   it('(e) value NaN → 400, kein Write', async () => {
     const res = await plan(
-      request({ intent: 'x', edits: [{ field: 'price_per_pilot', value: Number.NaN }] }),
+      request({ intent: 'x', edits: [{ field: 'price_full_eur', value: Number.NaN }] }),
     );
     // NaN serialisiert zu null im JSON → schlägt am number-Check fehl.
     expect(res.status).toBe(400);
@@ -199,7 +207,7 @@ describe('POST /api/finance/plan — Body-Validierung', () => {
   });
 
   it('fehlender intent → 400', async () => {
-    const res = await plan(request({ edits: [{ field: 'price_per_pilot', value: 1 }] }));
+    const res = await plan(request({ edits: [{ field: 'price_full_eur', value: 1 }] }));
     expect(res.status).toBe(400);
     expect((await res.json()).error).toMatch(/intent/);
   });
