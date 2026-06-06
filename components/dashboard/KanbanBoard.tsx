@@ -244,19 +244,37 @@ export function KanbanBoard({
       console.error('[Kanban] create failed', res.status);
       return;
     }
-    if (col !== 'todo') {
+    const created = (await res.json().catch(() => null)) as
+      | { id?: string; identifier?: string; url?: string }
+      | null;
+    if (col !== 'todo' && created?.id) {
       try {
-        const created = (await res.json()) as { id?: string };
-        if (created.id) {
-          await fetch('/api/tasks/status', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ issueId: created.id, status: col }),
-          });
-        }
+        await fetch('/api/tasks/status', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ issueId: created.id, status: col }),
+        });
       } catch (err) {
         console.error('[Kanban] post-create status flip failed', err);
       }
+    }
+    // Optimistic insert so the new card appears immediately. router.refresh()
+    // alone does not update the board because tasks live in useState(initialTasks),
+    // which is not re-synced from props on a soft refresh.
+    if (created?.id) {
+      const newTask: UnifiedTask = {
+        id: created.id,
+        kind: 'linear',
+        title: args.title,
+        status: col,
+        dueDate: args.dueDate ?? null,
+        identifier: created.identifier,
+        url: created.url,
+        priority: args.priority > 0 ? args.priority : undefined,
+        source: 'linear',
+        project: null,
+      };
+      setTasks((prev) => [newTask, ...prev]);
     }
     setAddOpen(null);
     router.refresh();
