@@ -61,12 +61,30 @@ describe('loadSheetMap — reale Platzhalter-Config', () => {
     expect(Object.keys(map.sheets).length).toBeGreaterThan(0);
     expect(map.fields.cash_on_hand_eur).toEqual({
       sheet: 'guv',
-      namedRange: 'cash_on_hand',
+      namedRange: 'cfo_cash_on_hand_eur',
       kind: 'output',
     });
     // Jedes Feld referenziert ein existierendes Sheet.
     for (const spec of Object.values(map.fields)) {
       expect(map.sheets[spec.sheet]).toBeDefined();
+    }
+  });
+
+  it('deckt die CFO-Kai Ergebnisfelder read-only und Plan-Hebel writable ab', () => {
+    const map = loadSheetMap();
+
+    expect(map.fields['monthly_burn.plan_eur']).toMatchObject({ kind: 'input' });
+    expect(map.fields['plan.cost_lines.marketing_m1_eur']).toMatchObject({ kind: 'input' });
+    expect(map.fields['plan.coaching.reserve_eur']).toMatchObject({ kind: 'input' });
+
+    for (const field of [
+      'cash_on_hand_eur',
+      'monthly_burn.actual_eur',
+      'monthly_burn.delta_eur',
+      'runway_months',
+      'break_even_label',
+    ]) {
+      expect(map.fields[field]).toMatchObject({ kind: 'output' });
     }
   });
 });
