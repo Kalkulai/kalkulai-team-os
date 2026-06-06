@@ -155,6 +155,19 @@ export async function updateIssue(
   );
 }
 
+/** Returns the Linear user-id of an issue's assignee, or null if unassigned. */
+export async function getIssueAssigneeUserId(issueId: string): Promise<string | null> {
+  const data = await gql(
+    `query IssueAssignee($id: String!) {
+       issue(id: $id) { assignee { id } }
+     }`,
+    { id: issueId },
+  );
+  return (
+    (data as { issue: { assignee: { id: string } | null } | null }).issue?.assignee?.id ?? null
+  );
+}
+
 /** Archive a Linear issue (moves it to trash — recoverable in Linear, and
  *  excluded from the dashboard's issue queries so the card disappears). */
 export async function archiveIssue(issueId: string): Promise<void> {
