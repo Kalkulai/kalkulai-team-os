@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiAuth } from '@/lib/api-auth';
+import { requireActor } from '@/lib/auth-context';
 import { defaultStepStatus } from '@/lib/backlog-access';
 import { listUserKpis, createKpi } from '@/lib/kpis';
 import { currentWeekStart } from '@/lib/supabase';
 
 export async function GET(req: NextRequest) {
-  if (!requireApiAuth(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const actor = await requireActor(req, { allowMember: true, scopes: ['kpis:read'] });
+  if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const userId = req.nextUrl.searchParams.get('userId');
   if (!userId) return NextResponse.json({ error: 'userId required' }, { status: 400 });
   const kpis = await listUserKpis(userId, currentWeekStart());
@@ -15,7 +16,8 @@ export async function GET(req: NextRequest) {
 const ALLOWED_SOURCES = new Set(['manual', 'hubspot:calls-week']);
 
 export async function POST(req: NextRequest) {
-  if (!requireApiAuth(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  const actor = await requireActor(req, { allowMember: true, scopes: ['kpis:write'] });
+  if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const body = await req.json().catch(() => null);
   if (!body?.user_id || !body?.name?.trim()) {
     return NextResponse.json({ error: 'user_id and name required' }, { status: 400 });
