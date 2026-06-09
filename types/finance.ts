@@ -52,6 +52,12 @@ export interface PilotHealthRow {
 export interface FinanceData {
   /** ISO 8601 timestamp of when the snapshot was produced. */
   generated_at: string;
+  /** Provenienz der Antwort: "db" = persistiertes Supabase-Snapshot,
+   *  "defaults" = Code-Fallback (lib/finance-data.ts). Server-derived, wie
+   *  generated_at — nie aus Input übernommen. CFO-Kai nutzt das, um in Reports
+   *  Live-Stände von Template-Defaults zu unterscheiden. Erweiterbar (z.B. "sheets-live").
+   *  FinanceData ist Master-Contract, abgestimmt mit cfo-advisor. */
+  data_origin: 'db' | 'defaults';
   /** Provenance + freshness of the underlying figures (shown in the UI). */
   as_of: string;
   currency: 'EUR';

@@ -7,6 +7,7 @@ import type { FinanceData } from '../types/finance';
 function baseFinanceData(): FinanceData {
   return {
     generated_at: '2026-05-01T00:00:00.000Z',
+    data_origin: 'db',
     as_of: '2026-05-01',
     currency: 'EUR',
     cash_on_hand_eur: 6000,

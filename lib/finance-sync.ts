@@ -243,6 +243,7 @@ function assembleFinanceData(
 
   return {
     generated_at: new Date().toISOString(),
+    data_origin: 'db',
     as_of: EXIST_AS_OF,
     currency: 'EUR',
     cash_on_hand_eur: cashOnHand,
@@ -355,6 +356,7 @@ function assembleCurrentFinanceData(
 
   return {
     generated_at: new Date().toISOString(),
+    data_origin: 'db',
     as_of: `Pre-EXIST · Übersicht · ${CURRENT_FORECAST_MONTHS[monthIndex]}`,
     currency: 'EUR',
     cash_on_hand_eur: 0,
