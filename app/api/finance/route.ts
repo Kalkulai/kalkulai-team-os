@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const snapshot = await getLatestFinanceSnapshot(scenario);
-    if (snapshot) return NextResponse.json(snapshot);
+    if (snapshot) return NextResponse.json({ ...snapshot, data_origin: 'db' });
   } catch (err) {
     console.warn(
       '[finance] snapshot read failed, serving defaults:',
@@ -33,5 +33,6 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  console.info('[finance] no snapshot for scenario %s — serving defaults', scenario);
   return NextResponse.json(buildFinanceData());
 }

@@ -12,9 +12,8 @@ vi.mock('@/lib/finance-store', () => ({
 
 import { POST } from '@/app/api/finance/snapshot/route';
 
-function validFinanceData(): FinanceData {
+function validFinanceData(): Omit<FinanceData, 'generated_at' | 'data_origin'> {
   return {
-    generated_at: '2026-06-01T00:00:00.000Z',
     as_of: 'Finanzplan June-August · 2026-06-01',
     currency: 'EUR',
     cash_on_hand_eur: 7333,
@@ -28,7 +27,7 @@ function validFinanceData(): FinanceData {
   };
 }
 
-function request(data: FinanceData): NextRequest {
+function request(data: Omit<FinanceData, 'generated_at' | 'data_origin'>): NextRequest {
   return new NextRequest('http://localhost/api/finance/snapshot', {
     method: 'POST',
     headers: new Headers({
@@ -64,5 +63,6 @@ describe('POST /api/finance/snapshot — Konsistenz-Gate', () => {
     expect(res.status).toBe(200);
     expect(json).toMatchObject({ ok: true, id: 'snapshot-1', scenario: 'current' });
     expect(insertFinanceSnapshotMock).toHaveBeenCalledOnce();
+    expect(insertFinanceSnapshotMock.mock.calls[0][1].data_origin).toBe('db');
   });
 });

@@ -64,7 +64,7 @@ function validateFinanceData(v: unknown): { ok: true; value: FinanceData } | { o
     return { ok: false, error: 'pilot_health must be PilotHealthRow[]' };
   }
   // generated_at is stamped server-side regardless of input.
-  return { ok: true, value: { ...(v as unknown as FinanceData), generated_at: new Date().toISOString() } };
+  return { ok: true, value: { ...(v as unknown as FinanceData), generated_at: new Date().toISOString(), data_origin: 'db' } };
 }
 
 export async function POST(req: NextRequest) {

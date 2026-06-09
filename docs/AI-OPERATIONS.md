@@ -344,17 +344,17 @@ Quelle: Google Sheets → `forecasting.py` (Hermes) → `POST /api/finance/snaps
 GET /api/finance[?scenario=current|exist]
 Authorization: Bearer ${SECRET}
 ```
-Liefert das **neueste** Snapshot (ohne Param: szenario-übergreifend; mit Param: gepinnt). Fallback auf Code-Defaults (`lib/finance-data.ts`), solange kein Snapshot existiert. Response: `FinanceData` (`types/finance.ts`).
+Liefert das **neueste** Snapshot. Ohne Param = aktives Szenario (`activeScenario()`); `?scenario` pinnt `current`/`exist`. Fallback auf Code-Defaults (`lib/finance-data.ts`), solange kein Snapshot existiert. Response: `FinanceData` (`types/finance.ts`) inkl. `data_origin`: `'db'` = persistiertes Snapshot, `'defaults'` = Code-Fallback (server-gestempelt, wie `generated_at`).
 
 ```http
 POST /api/finance/snapshot
 Authorization: Bearer ${SECRET}
 Content-Type: application/json
 
-{ "scenario": "current", "source": "cfo-kai:forecasting.py", "data": <FinanceData ohne generated_at> }
+{ "scenario": "current", "source": "cfo-kai:forecasting.py", "data": <FinanceData ohne generated_at + data_origin> }
 ```
 - `scenario`: `"exist"` (EXIST-Förderplan) | `"current"` (laufender Plan).
-- `data`: volle `FinanceData` — Boundary-validiert, ungültig → 400 mit Grund. `generated_at` wird serverseitig gesetzt.
+- `data`: volle `FinanceData` — Boundary-validiert, ungültig → 400 mit Grund. `generated_at` und `data_origin` (`'db'`) werden serverseitig gesetzt, nicht aus dem Input übernommen.
 - Append-only; Reads nehmen das neueste pro Szenario.
 - DB: team-os Supabase `jtakzjvaxctmnpzsszrf`, Migration `021_finance_snapshots.sql`.
 

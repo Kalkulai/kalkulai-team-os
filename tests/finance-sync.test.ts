@@ -247,6 +247,7 @@ describe('runFinanceSync — Happy-Path', () => {
     const [scenario, data, source] = insertFinanceSnapshotMock.mock.calls[0];
     expect(scenario).toBe('exist');
     expect(source).toBe('cfo-kai:app-sync');
+    expect(data.data_origin).toBe('db');
     expect(data.as_of).toBe('GuV Finanzplan · M1 Aug');
     expect(data.cash_on_hand_eur).toBe(7333);
     expect(data.monthly_burn.actual_eur).toBe(1367);
@@ -304,6 +305,7 @@ describe('runFinanceSync — Happy-Path', () => {
     if (!result.ok) throw new Error('expected ok');
     const [scenario, data] = insertFinanceSnapshotMock.mock.calls[0];
     expect(scenario).toBe('current');
+    expect(data.data_origin).toBe('db');
     expect(data.as_of).toBe('Pre-EXIST · Übersicht · Jun');
     expect(data.cash_on_hand_eur).toBe(0);
     expect(data.runway_months).toBe(0);

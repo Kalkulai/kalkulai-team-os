@@ -60,6 +60,7 @@ function buildPaidBy(lines: CostLine[]) {
 export function buildFinanceData(): FinanceData {
   return {
     generated_at: new Date().toISOString(),
+    data_origin: 'defaults',
     as_of: AS_OF,
     currency: 'EUR',
     cash_on_hand_eur: EXIST_FUNDING_Y1_EUR,
