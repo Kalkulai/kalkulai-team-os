@@ -22,6 +22,10 @@ async function gql(query: string, variables: Record<string, unknown> = {}): Prom
   return json.data as Record<string, unknown>;
 }
 
+function markdownImageAlt(name: string): string {
+  return name.replace(/[\[\]\n\r]/g, ' ').trim() || 'image';
+}
+
 /**
  * Resolve a task's source from its Linear labels. Convention:
  *   - 'Hermes' / 'from-hermes' → 'hermes'  (created by the Hermes agent)
@@ -153,6 +157,74 @@ export async function updateIssue(
      }`,
     { id: issueId, input },
   );
+}
+
+export async function uploadFileToLinear(
+  bytes: ArrayBuffer,
+  contentType: string,
+  filename: string,
+  size: number,
+): Promise<string> {
+  const data = await gql(
+    `mutation RequestUpload($filename: String!, $contentType: String!, $size: Int!) {
+       fileUpload(filename: $filename, contentType: $contentType, size: $size) {
+         success
+         uploadFile {
+           uploadUrl
+           assetUrl
+           headers { key value }
+         }
+       }
+     }`,
+    { filename, contentType, size },
+  );
+  const payload = data.fileUpload as {
+    success?: boolean;
+    uploadFile?: {
+      uploadUrl: string;
+      assetUrl: string;
+      headers?: Array<{ key: string; value: string }>;
+    } | null;
+  } | null;
+  if (!payload?.success || !payload.uploadFile) {
+    throw new Error('Linear fileUpload did not return an upload URL');
+  }
+
+  const headers = new Headers();
+  headers.set('Content-Type', contentType);
+  headers.set('Cache-Control', 'public, max-age=31536000');
+  for (const header of payload.uploadFile.headers ?? []) {
+    headers.set(header.key, header.value);
+  }
+
+  const upload = await fetch(payload.uploadFile.uploadUrl, {
+    method: 'PUT',
+    headers,
+    body: bytes,
+  });
+  if (!upload.ok) {
+    const text = await upload.text().catch(() => '');
+    throw new Error(`Linear file upload ${upload.status}: ${text.slice(0, 300)}`);
+  }
+
+  return payload.uploadFile.assetUrl;
+}
+
+export async function appendImageToIssueDescription(
+  issueId: string,
+  assetUrl: string,
+  name: string,
+): Promise<void> {
+  const data = await gql(
+    `query IssueDescription($id: String!) {
+       issue(id: $id) { description }
+     }`,
+    { id: issueId },
+  );
+  const current = (data as { issue: { description: string | null } | null }).issue?.description ?? '';
+  const image = `![${markdownImageAlt(name)}](${assetUrl})`;
+  const description = current.trimEnd() ? `${current.trimEnd()}\n\n${image}` : image;
+  await updateIssue(issueId, { description });
 }
 
 /** Returns the Linear user-id of an issue's assignee, or null if unassigned. */

@@ -8,6 +8,7 @@ import { TaskMetaFields } from './TaskMetaFields';
 import type { UnifiedTask } from '@/lib/unified-tasks';
 import { EMPTY_TASK_META, quadrantToPriority, type TaskMeta } from '@/lib/task-meta';
 import { hasAssist, type TaskFollowup } from '@/lib/task-assist';
+import { TaskImages } from './TaskImages';
 
 /** Click-to-edit modal for a Kanban card (Felix-only). Edits title, deadline and
  * planning metadata; shows Kai's suggestions (next step + follow-up tasks) with
@@ -180,6 +181,10 @@ export function TaskEditModal({
           <div className="kanban-meta-group">
             <span className="kanban-meta-label">Deadline</span>
             <DatePicker value={due} onChange={setDue} placeholder="Datum optional" />
+          </div>
+          <div className="kanban-meta-group">
+            <span className="kanban-meta-label">Bilder</span>
+            <TaskImages issueId={task.id} imageUrls={task.imageUrls ?? []} />
           </div>
           <TaskMetaFields value={meta} onChange={setMeta} projects={projects} />
 

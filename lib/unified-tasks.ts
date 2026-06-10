@@ -3,6 +3,7 @@ import type { KpiWithWeek, LinearIssue, TaskSource } from '@/types';
 import { parseTeamTaskGroupId, parseTeamTaskAssignees } from '@/lib/team-tasks';
 import type { TaskMeta } from '@/lib/task-meta';
 import type { TaskAssist } from '@/lib/task-assist';
+import { extractImageUrls } from '@/lib/task-images';
 
 export type UnifiedStatus = 'todo' | 'in-progress' | 'on-hold' | 'done' | 'backlog';
 export type UnifiedTaskKind = 'linear' | 'step';
@@ -24,6 +25,8 @@ export interface UnifiedTask {
   meta?: TaskMeta | null;
   /** Felix-only: Kai's per-task suggestion (next step + follow-up tasks). */
   assist?: TaskAssist | null;
+  /** Linear-hosted images embedded in the issue description. */
+  imageUrls?: string[];
 }
 
 export function deriveLinearStatus(issue: LinearIssue): UnifiedStatus {
@@ -81,6 +84,7 @@ export function mergeTasks(
       teamTask,
       meta: metaByIssueId?.[issue.id] ?? null,
       assist: assistByIssueId?.[issue.id] ?? null,
+      imageUrls: extractImageUrls(issue.description),
     };
   });
 

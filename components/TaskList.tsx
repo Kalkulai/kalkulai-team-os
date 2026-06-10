@@ -8,6 +8,9 @@ import { de } from 'date-fns/locale';
 import type { LinearIssue, KpiWithWeek, TaskSource, ClaudeSession } from '@/types';
 import { mergeTasks, type UnifiedTask, type UnifiedStatus } from '@/lib/unified-tasks';
 import { AvatarStack } from '@/components/dashboard/AvatarStack';
+import { TaskImagePicker } from '@/components/dashboard/TaskImagePicker';
+import { TaskImages } from '@/components/dashboard/TaskImages';
+import { uploadTaskImages } from '@/lib/task-images-client';
 
 type StoredLocalTask = {
   id: string;
@@ -353,6 +356,9 @@ function TaskEditForm({
             </div>
           )}
         </div>
+        {!isStep && !task.id.startsWith('local-') && (
+          <TaskImages issueId={task.id} imageUrls={task.imageUrls ?? []} />
+        )}
         {error && <p className="text-[11.5px] text-[var(--danger)]">{error}</p>}
       </form>
     </li>
@@ -378,6 +384,7 @@ export function TaskList({
   const [draft, setDraft] = useState('');
   const [draftDue, setDraftDue] = useState('');
   const [draftPrio, setDraftPrio] = useState<number>(0);
+  const [draftImages, setDraftImages] = useState<File[]>([]);
   const [selectedAssignees, setSelectedAssignees] = useState<Set<string>>(new Set());
   const [createError, setCreateError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -640,7 +647,9 @@ export function TaskList({
       };
       setLocalStore((prev) => [optimistic, ...prev]);
 
+      let linearSynced = false;
       try {
+        let createdIssue: { id?: string } | null = null;
         const res = await fetch('/api/tasks/create', {
           method: 'POST',
           headers: {
@@ -658,21 +667,35 @@ export function TaskList({
           const data = (await res.json().catch(() => null)) as { error?: string } | null;
           throw new Error(data?.error ?? `Linear-Sync fehlgeschlagen (HTTP ${res.status})`);
         }
+        createdIssue = (await res.json().catch(() => null)) as { id?: string } | null;
+        linearSynced = true;
+        if (draftImages.length > 0) {
+          if (!createdIssue?.id) throw new Error('Linear-Response ohne Issue-ID');
+          await uploadTaskImages(createdIssue.id, draftImages);
+        }
         setLocalStore((prev) => prev.filter((t) => t.id !== optimisticId));
         setDraft('');
         setDraftDue('');
         setDraftPrio(0);
+        setDraftImages([]);
         router.refresh();
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Unbekannter Fehler';
-        setCreateError(`Linear-Sync fehlgeschlagen — Task nur lokal gespeichert. (${msg})`);
-        setLocalStore((prev) => {
-          persistLocal(userId, prev);
-          return prev;
-        });
+        if (linearSynced) {
+          setCreateError(`Task angelegt, aber Bild-Upload fehlgeschlagen. (${msg})`);
+          setLocalStore((prev) => prev.filter((t) => t.id !== optimisticId));
+          router.refresh();
+        } else {
+          setCreateError(`Linear-Sync fehlgeschlagen — Task nur lokal gespeichert. (${msg})`);
+          setLocalStore((prev) => {
+            persistLocal(userId, prev);
+            return prev;
+          });
+        }
         setDraft('');
         setDraftDue('');
         setDraftPrio(0);
+        setDraftImages([]);
       } finally {
         setSubmitting(false);
         inputRef.current?.focus();
@@ -681,6 +704,7 @@ export function TaskList({
     }
 
     // Multi-assignee Team Task
+    let teamSynced = false;
     try {
       const res = await fetch('/api/tasks/create', {
         method: 'POST',
@@ -699,14 +723,32 @@ export function TaskList({
         const data = (await res.json().catch(() => null)) as { error?: string } | null;
         throw new Error(data?.error ?? `Team Task fehlgeschlagen (HTTP ${res.status})`);
       }
+      teamSynced = true;
+      const data = (await res.json().catch(() => null)) as { tasks?: Array<{ id?: string }> } | null;
+      if (draftImages.length > 0) {
+        const ids = data?.tasks?.map((task) => task.id).filter((id): id is string => !!id) ?? [];
+        if (ids.length === 0) throw new Error('Linear-Response ohne Issue-IDs');
+        await Promise.all(ids.map((id) => uploadTaskImages(id, draftImages)));
+      }
       setDraft('');
       setDraftDue('');
       setDraftPrio(0);
+      setDraftImages([]);
       setSelectedAssignees(new Set());
       router.refresh();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unbekannter Fehler';
-      setCreateError(`Team Task fehlgeschlagen. (${msg})`);
+      if (teamSynced) {
+        setCreateError(`Team Task angelegt, aber Bild-Upload fehlgeschlagen. (${msg})`);
+        setDraft('');
+        setDraftDue('');
+        setDraftPrio(0);
+        setDraftImages([]);
+        setSelectedAssignees(new Set());
+        router.refresh();
+      } else {
+        setCreateError(`Team Task fehlgeschlagen. (${msg})`);
+      }
     } finally {
       setSubmitting(false);
       inputRef.current?.focus();
@@ -719,6 +761,7 @@ export function TaskList({
       setDraft('');
       setDraftDue('');
       setDraftPrio(0);
+      setDraftImages([]);
       setSelectedAssignees(new Set());
       setCreateError(null);
     } else {
@@ -873,6 +916,7 @@ export function TaskList({
               </button>
             </div>
           )}
+          <TaskImagePicker files={draftImages} onChange={setDraftImages} disabled={submitting} />
         </form>
       )}
       {createError && (
