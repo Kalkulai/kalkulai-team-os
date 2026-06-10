@@ -45,6 +45,8 @@ export interface LinearIssue {
   labels?: string[];
   /** Raw description text from Linear. Used for team-task group markers. */
   description?: string | null;
+  /** Linear-hosted images embedded in the issue description. */
+  imageUrls?: string[];
 }
 
 export interface GitHubBranch {

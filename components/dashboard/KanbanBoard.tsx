@@ -23,6 +23,8 @@ import { KanbanCard } from './KanbanCard';
 import { TaskMetaFields } from './TaskMetaFields';
 import { TaskEditModal } from './TaskEditModal';
 import { EMPTY_TASK_META, type TaskMeta } from '@/lib/task-meta';
+import { TaskImagePicker } from './TaskImagePicker';
+import { uploadTaskImages } from '@/lib/task-images-client';
 
 
 const SECRET = process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? '';
@@ -87,7 +89,7 @@ function DroppableColumn({
   done?: boolean;
   addOpen?: boolean;
   onToggleAdd?: () => void;
-  onSubmitAdd?: (args: { title: string; dueDate: string | null; priority: number; meta?: TaskMeta }) => Promise<void>;
+  onSubmitAdd?: (args: { title: string; dueDate: string | null; priority: number; meta?: TaskMeta; images: File[] }) => Promise<void>;
   metaEnabled?: boolean;
   projects?: Array<{ id: string; name: string }>;
   onOpenCard?: (task: UnifiedTask) => void;
@@ -97,6 +99,8 @@ function DroppableColumn({
   const [due, setDue] = useState<string | null>(null);
   const [priority, setPriority] = useState<number>(0);
   const [meta, setMeta] = useState<TaskMeta>(EMPTY_TASK_META);
+  const [images, setImages] = useState<File[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   async function submit(e?: React.FormEvent) {
@@ -104,12 +108,16 @@ function DroppableColumn({
     const v = title.trim();
     if (!v || !onSubmitAdd || busy) return;
     setBusy(true);
+    setError(null);
     try {
-      await onSubmitAdd({ title: v, dueDate: due, priority, meta: metaEnabled ? meta : undefined });
+      await onSubmitAdd({ title: v, dueDate: due, priority, meta: metaEnabled ? meta : undefined, images });
       setTitle('');
       setDue(null);
       setPriority(0);
       setMeta(EMPTY_TASK_META);
+      setImages([]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Task konnte nicht angelegt werden');
     } finally {
       setBusy(false);
     }
@@ -182,6 +190,7 @@ function DroppableColumn({
               {metaEnabled && (
                 <TaskMetaFields value={meta} onChange={setMeta} projects={projects ?? []} />
               )}
+              <TaskImagePicker files={images} onChange={setImages} disabled={busy} />
               <div className="kanban-add-row">
                 <DatePicker value={due} onChange={setDue} placeholder="Datum optional" />
                 {!metaEnabled && (
@@ -213,6 +222,7 @@ function DroppableColumn({
                   <ArrowUp size={13} aria-hidden />
                 </button>
               </div>
+              {error && <p className="task-image-error">{error}</p>}
             </form>
           )}
         </div>
@@ -255,7 +265,10 @@ export function KanbanBoard({
   const [addOpen, setAddOpen] = useState<UnifiedStatus | null>(null);
   const [editingTask, setEditingTask] = useState<UnifiedTask | null>(null);
 
-  async function handleCreate(col: UnifiedStatus, args: { title: string; dueDate: string | null; priority: number; meta?: TaskMeta }) {
+  async function handleCreate(
+    col: UnifiedStatus,
+    args: { title: string; dueDate: string | null; priority: number; meta?: TaskMeta; images: File[] },
+  ) {
     if (!memberId) return;
     const body: Record<string, unknown> = {
       title: args.title,
@@ -271,12 +284,13 @@ export function KanbanBoard({
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      console.error('[Kanban] create failed', res.status);
-      return;
+      const text = await res.text().catch(() => '');
+      throw new Error(`Task konnte nicht angelegt werden (HTTP ${res.status}: ${text.slice(0, 160)})`);
     }
     const created = (await res.json().catch(() => null)) as
       | { id?: string; identifier?: string; url?: string }
       | null;
+    if (!created?.id) throw new Error('Linear-Response ohne Issue-ID');
     if (col !== 'todo' && created?.id) {
       try {
         await fetch('/api/tasks/status', {
@@ -288,25 +302,27 @@ export function KanbanBoard({
         console.error('[Kanban] post-create status flip failed', err);
       }
     }
+    const imageUrls = args.images.length > 0
+      ? await uploadTaskImages(created.id, args.images)
+      : [];
     // Optimistic insert so the new card appears immediately. router.refresh()
     // alone does not update the board because tasks live in useState(initialTasks),
     // which is not re-synced from props on a soft refresh.
-    if (created?.id) {
-      const newTask: UnifiedTask = {
-        id: created.id,
-        kind: 'linear',
-        title: args.title,
-        status: col,
-        dueDate: args.dueDate ?? null,
-        identifier: created.identifier,
-        url: created.url,
-        priority: args.priority > 0 ? args.priority : undefined,
-        source: 'linear',
-        project: null,
-        meta: args.meta ?? null,
-      };
-      setTasks((prev) => [newTask, ...prev]);
-    }
+    const newTask: UnifiedTask = {
+      id: created.id,
+      kind: 'linear',
+      title: args.title,
+      status: col,
+      dueDate: args.dueDate ?? null,
+      identifier: created.identifier,
+      url: created.url,
+      priority: args.priority > 0 ? args.priority : undefined,
+      source: 'linear',
+      project: null,
+      meta: args.meta ?? null,
+      imageUrls,
+    };
+    setTasks((prev) => [newTask, ...prev]);
     setAddOpen(null);
     router.refresh();
   }
