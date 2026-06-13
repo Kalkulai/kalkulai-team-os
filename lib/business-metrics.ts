@@ -167,6 +167,10 @@ export const METRIC_KEYS = {
   CUSTOMER_CONVERSATIONS: 'customer_conversations',
   COMMITMENT_HIT_PCT: 'commitment_hit_pct',
   DEEP_WORK_BLOCKS: 'deep_work_blocks',
+  // GTM / Outreach (personal) — derived from campaign_events, see metric-collectors/gmail.ts
+  MAILS_SENT: 'mails_sent',
+  REPLIES_RECEIVED: 'replies_received',
+  MEETINGS_BOOKED: 'meetings_booked',
 } as const;
 
 export type MetricKey = typeof METRIC_KEYS[keyof typeof METRIC_KEYS];

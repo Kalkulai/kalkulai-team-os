@@ -162,10 +162,13 @@ export type KpiType = 'counter' | 'project' | 'step';
  * Tracking source for counter-KPIs.
  *   manual              — value lives in kpi_weeks.actual, +/- buttons increment
  *   hubspot:calls-week  — value = HubSpot calls this week for member.hubspot_owner_id
+ *   external:gmail      — actual written by external sync (kpis/sync), e.g. GTM mail metrics
+ *   external:campaigns  — actual written by external sync (kpis/sync) from campaign events
  *
  * Project/step rows always carry 'manual' (source has no meaning for non-counters).
+ * Any non-'manual' source is read-only from the UI (+/- adjust is rejected).
  */
-export type KpiSource = 'manual' | 'hubspot:calls-week';
+export type KpiSource = 'manual' | 'hubspot:calls-week' | 'external:gmail' | 'external:campaigns';
 
 export interface Kpi {
   id: string;
@@ -182,6 +185,12 @@ export interface Kpi {
   status?: 'todo' | 'in-progress' | 'on-hold' | 'backlog' | null;
   created_at: string;
   source: KpiSource;
+  /** Optional link to the campaign whose work this KPI tracks. */
+  campaign_id?: string | null;
+  /** Optional link to the project (projects table) this KPI tracks. */
+  project_id?: string | null;
+  /** Denormalized project label, shown as a badge when no campaign is linked. */
+  project_name?: string | null;
 }
 
 export interface KpiWithWeek extends Kpi {

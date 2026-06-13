@@ -1,4 +1,4 @@
-import { supabaseAdmin } from './supabase';
+import { supabaseAdmin, currentWeekStart } from './supabase';
 import { getCallsThisWeek } from './hubspot';
 import type { Kpi, KpiWithWeek, KpiType, KpiSource, TeamMember } from '@/types';
 
@@ -14,6 +14,9 @@ interface KpiRow {
   completed: boolean;
   created_at: string;
   source: KpiSource;
+  campaign_id: string | null;
+  project_id: string | null;
+  project_name: string | null;
 }
 
 /**
@@ -140,11 +143,13 @@ export async function listUserKpis(userId: string, weekStart: string): Promise<K
     }
   }
 
-  // Resolve actuals for non-manual counters live from their external source.
-  // Only fetch member if at least one auto-source KPI exists (saves a DB hop).
+  // Resolve actuals for live-API counters (currently only hubspot:calls-week)
+  // from their external source. external:* sources persist their actual in
+  // kpi_weeks (written by kpis/sync), so they read like a manual counter.
+  // Only fetch member if at least one live-source KPI exists (saves a DB hop).
   const autoDefById = new Map<string, KpiRow>();
   for (const d of definitions) {
-    if (d.type === 'counter' && d.source !== 'manual') autoDefById.set(d.id, d);
+    if (d.type === 'counter' && d.source === 'hubspot:calls-week') autoDefById.set(d.id, d);
   }
   let member: TeamMember | null = null;
   if (autoDefById.size > 0) {
@@ -442,4 +447,180 @@ export async function adjustKpiActual(
 export async function deleteKpi(id: string): Promise<void> {
   const { error } = await supabaseAdmin.from('kpis').delete().eq('id', id);
   if (error) throw error;
+}
+
+/** Sources an external sync (kpis/sync) is allowed to write. */
+export const EXTERNAL_KPI_SOURCES: KpiSource[] = ['external:gmail', 'external:campaigns'];
+
+/** Sources whose actual is written by sync/automation, never by UI +/-. */
+export const AUTO_KPI_SOURCES: KpiSource[] = [
+  'hubspot:calls-week',
+  'external:gmail',
+  'external:campaigns',
+];
+
+export interface KpiProjectInput {
+  id?: string;
+  owner_member_id?: string | null;
+  name: string;
+  description?: string | null;
+}
+
+export interface KpiSyncRow {
+  user_id: string;
+  name: string;
+  unit?: string;
+  target?: number;
+  actual?: number;
+  week_start?: string;
+  source: KpiSource;
+  campaign_id?: string | null;
+  project_id?: string | null;
+  project_name?: string | null;
+}
+
+export interface KpiSyncPayload {
+  mode?: 'append';
+  projects?: KpiProjectInput[];
+  kpis?: KpiSyncRow[];
+}
+
+export interface KpiSyncResult {
+  ok: true;
+  upserted: number;
+  updated: number;
+  projects: number;
+}
+
+interface ExistingKpiRow {
+  id: string;
+  user_id: string;
+  name: string;
+  source: KpiSource;
+  campaign_id: string | null;
+  project_id: string | null;
+  project_name: string | null;
+}
+
+/**
+ * Idempotent upsert of counter-KPIs from an external system + their week
+ * actual/target. Stable key is (user_id, name, source). Projects (if given)
+ * are upserted first so KPIs can reference project_id. Only external:* sources
+ * are accepted here — manual/hubspot KPIs are managed via the normal API.
+ */
+export async function syncKpiPayload(input: KpiSyncPayload): Promise<KpiSyncResult> {
+  const projects = input.projects ?? [];
+  const rows = input.kpis ?? [];
+
+  for (const row of rows) {
+    if (!row.user_id || !row.name?.trim()) {
+      throw new Error('kpi sync rows need user_id and name');
+    }
+    if (!EXTERNAL_KPI_SOURCES.includes(row.source)) {
+      throw new Error(
+        `kpi sync only accepts source in [${EXTERNAL_KPI_SOURCES.join(', ')}], got ${row.source}`,
+      );
+    }
+  }
+
+  let projectCount = 0;
+  if (projects.length > 0) {
+    for (const p of projects) {
+      if (!p.name?.trim()) throw new Error('project sync rows need a name');
+    }
+    const { error } = await supabaseAdmin.from('projects').upsert(
+      projects.map((p) => ({
+        ...(p.id ? { id: p.id } : {}),
+        owner_member_id: p.owner_member_id ?? null,
+        name: p.name.trim(),
+        description: p.description ?? null,
+      })),
+    );
+    if (error) throw new Error(`sync projects: ${error.message}`);
+    projectCount = projects.length;
+  }
+
+  if (rows.length === 0) {
+    return { ok: true, upserted: 0, updated: 0, projects: projectCount };
+  }
+
+  // Resolve existing KPIs by (user_id, name, source) so we update in place.
+  const userIds = Array.from(new Set(rows.map((r) => r.user_id)));
+  const { data: existing, error: existErr } = await supabaseAdmin
+    .from('kpis')
+    .select('id, user_id, name, source, campaign_id, project_id, project_name')
+    .in('user_id', userIds)
+    .eq('type', 'counter');
+  if (existErr) throw existErr;
+  const byKey = new Map<string, ExistingKpiRow>();
+  for (const r of (existing ?? []) as ExistingKpiRow[]) {
+    byKey.set(`${r.user_id}|${r.name}|${r.source}`, r);
+  }
+
+  let upserted = 0;
+  let updated = 0;
+
+  for (const row of rows) {
+    const weekStart = row.week_start ?? currentWeekStart();
+    const key = `${row.user_id}|${row.name.trim()}|${row.source}`;
+    let kpiId = byKey.get(key)?.id;
+
+    if (!kpiId) {
+      const { data: maxRow } = await supabaseAdmin
+        .from('kpis')
+        .select('position')
+        .eq('user_id', row.user_id)
+        .order('position', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const nextPosition = ((maxRow?.position as number | undefined) ?? -1) + 1;
+
+      const { data: created, error: createErr } = await supabaseAdmin
+        .from('kpis')
+        .insert({
+          user_id: row.user_id,
+          name: row.name.trim(),
+          unit: row.unit ?? '',
+          position: nextPosition,
+          type: 'counter',
+          source: row.source,
+          campaign_id: row.campaign_id ?? null,
+          project_id: row.project_id ?? null,
+          project_name: row.project_name ?? null,
+        })
+        .select('id')
+        .single();
+      if (createErr) throw new Error(`sync kpis insert: ${createErr.message}`);
+      kpiId = created.id as string;
+      upserted += 1;
+    } else {
+      const { error: updErr } = await supabaseAdmin
+        .from('kpis')
+        .update({
+          unit: row.unit ?? '',
+          campaign_id: row.campaign_id ?? null,
+          project_id: row.project_id ?? null,
+          project_name: row.project_name ?? null,
+        })
+        .eq('id', kpiId);
+      if (updErr) throw new Error(`sync kpis update: ${updErr.message}`);
+      updated += 1;
+    }
+
+    const weekPatch: { kpi_id: string; week_start: string; target?: number; actual?: number } = {
+      kpi_id: kpiId,
+      week_start: weekStart,
+    };
+    if (typeof row.target === 'number') weekPatch.target = Math.max(0, row.target);
+    if (typeof row.actual === 'number') weekPatch.actual = Math.max(0, row.actual);
+
+    if (weekPatch.target !== undefined || weekPatch.actual !== undefined) {
+      const { error: weekErr } = await supabaseAdmin
+        .from('kpi_weeks')
+        .upsert(weekPatch, { onConflict: 'kpi_id,week_start' });
+      if (weekErr) throw new Error(`sync kpi_weeks: ${weekErr.message}`);
+    }
+  }
+
+  return { ok: true, upserted, updated, projects: projectCount };
 }
