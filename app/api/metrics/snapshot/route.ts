@@ -4,6 +4,7 @@ import { collectLinearMetrics } from '@/lib/metric-collectors/linear';
 import { collectGithubMetrics } from '@/lib/metric-collectors/github';
 import { collectHubspotMetrics } from '@/lib/metric-collectors/hubspot';
 import { collectCalendarMetrics } from '@/lib/metric-collectors/calendar';
+import { collectGmailMetrics } from '@/lib/metric-collectors/gmail';
 import { syncWeeklyHealthReport } from '@/lib/vault-sync';
 
 export const runtime = 'nodejs';
@@ -28,6 +29,7 @@ export async function POST(req: NextRequest) {
     ['github',   collectGithubMetrics],
     ['hubspot',  collectHubspotMetrics],
     ['calendar', collectCalendarMetrics],
+    ['gmail',    collectGmailMetrics],
   ] as const) {
     try {
       results[name] = await fn();

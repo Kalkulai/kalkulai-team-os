@@ -72,6 +72,11 @@ export function KpiTracker({ userId }: { userId: string }) {
                 >
                   {sourceLabel}
                 </span>
+                {linkBadge(k) && (
+                  <span className="pill pill-blue" title="Verknuepft mit Kampagne/Projekt">
+                    {linkBadge(k)}
+                  </span>
+                )}
               </span>
               <span className="kpi-actions">
                 {!isAuto && (
@@ -121,8 +126,19 @@ function sourceBadgeLabel(source: KpiWithWeek['source']): string {
   switch (source) {
     case 'hubspot:calls-week':
       return 'HubSpot';
+    case 'external:gmail':
+      return 'GTM';
+    case 'external:campaigns':
+      return 'Kampagnen';
     case 'manual':
     default:
       return 'Manual';
   }
+}
+// Campaign/project badge: prefer explicit project_name, else mark the link type.
+function linkBadge(k: KpiWithWeek): string | null {
+  if (k.project_name) return k.project_name;
+  if (k.project_id) return 'Projekt';
+  if (k.campaign_id) return 'Kampagne';
+  return null;
 }

@@ -25,6 +25,9 @@ export const PERSONAL_WIDGETS: WidgetDef[] = [
   { key: METRIC_KEYS.BUGS_CLOSED,            label: 'Bugs geschlossen',  unit: '/Woche' },
   { key: METRIC_KEYS.CUSTOMER_CONVERSATIONS, label: 'Kunden-Calls',      unit: '/Woche', threshold: { good: 3, warn: 1 } },
   { key: METRIC_KEYS.COMMITMENT_HIT_PCT,     label: 'Commitment-Hit',    unit: '%',      threshold: { good: 80, warn: 50 } },
+  { key: METRIC_KEYS.MAILS_SENT,             label: 'Mails gesendet',    unit: '/Woche', threshold: { good: 50, warn: 15 } },
+  { key: METRIC_KEYS.REPLIES_RECEIVED,       label: 'Antworten',         unit: '/Woche', threshold: { good: 5, warn: 1 } },
+  { key: METRIC_KEYS.MEETINGS_BOOKED,        label: 'Termine gebucht',   unit: '/Woche', threshold: { good: 3, warn: 1 } },
 ];
 
 // Cross-cutting company KPIs — these belong on the Firma-page, not on
