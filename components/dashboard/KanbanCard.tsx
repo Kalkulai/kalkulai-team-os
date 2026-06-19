@@ -112,7 +112,7 @@ export function KanbanCard({
           )
         )}
         {meta?.context && (
-          <span className={`pill ${meta.context === 'business' ? 'pill-blue' : 'pill-mute'} text-[10px]`}>
+          <span className={`pill ${meta.context === 'business' ? 'pill-blue' : 'pill-amber'} text-[10px]`}>
             {meta.context === 'business' ? 'Geschäftlich' : 'Privat'}
           </span>
         )}
