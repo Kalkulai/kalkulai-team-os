@@ -5099,3 +5099,29 @@ html.light .agent-launch-error {
 }
 .day-block-title { font: 500 13px/1.3 var(--font); color: var(--ink-1); }
 .day-block-note { font: 400 11.5px/1.4 var(--font); color: var(--ink-3); }
+
+/* ── Inline subtask checklist on KanbanCard ─────────────────── */
+.kanban-subtask-list {
+  display: flex; flex-direction: column; gap: 2px;
+  margin-top: 8px; padding-top: 8px;
+  border-top: 1px solid var(--line-1);
+}
+.kanban-subtask-item {
+  display: flex; align-items: baseline; gap: 6px;
+  padding: 2px 4px; border-radius: 4px;
+  background: none; border: none; cursor: pointer;
+  text-align: left; width: 100%;
+}
+.kanban-subtask-item:hover { background: rgba(255,255,255,0.05); }
+.kanban-subtask-check {
+  font: 500 12px/1 var(--font); color: var(--ink-3);
+  flex-shrink: 0; width: 14px;
+}
+.kanban-subtask-item.is-done .kanban-subtask-check { color: var(--ok); }
+.kanban-subtask-label {
+  font: 400 11.5px/1.4 var(--font); color: var(--ink-2);
+  white-space: normal; word-break: break-word;
+}
+.kanban-subtask-item.is-done .kanban-subtask-label {
+  text-decoration: line-through; color: var(--ink-4);
+}

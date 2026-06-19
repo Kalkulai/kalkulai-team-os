@@ -2,6 +2,7 @@ import { differenceInCalendarDays, parseISO } from 'date-fns';
 import type { KpiWithWeek, LinearIssue, TaskSource } from '@/types';
 import { parseTeamTaskGroupId, parseTeamTaskAssignees } from '@/lib/team-tasks';
 import type { TaskMeta } from '@/lib/task-meta';
+import type { TaskSubtask } from '@/types';
 import type { TaskAssist } from '@/lib/task-assist';
 import { extractImageUrls } from '@/lib/task-images';
 
@@ -29,6 +30,8 @@ export interface UnifiedTask {
   imageUrls?: string[];
   /** Aggregated subtask progress (loaded from task_subtasks table). */
   subtaskCount?: { total: number; done: number };
+  /** Full subtask list for inline board rendering. */
+  subtasks?: TaskSubtask[];
 }
 
 export function deriveLinearStatus(issue: LinearIssue): UnifiedStatus {

@@ -1,6 +1,10 @@
+'use client';
+
+import { useState } from 'react';
 import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { de } from 'date-fns/locale';
 import type { UnifiedTask } from '@/lib/unified-tasks';
+import type { TaskSubtask } from '@/types';
 import type { ClaudeSession } from '@/types';
 import { AvatarStack } from '@/components/dashboard/AvatarStack';
 import { hasMeta, quadrantBadge, effortLabel } from '@/lib/task-meta';
@@ -55,6 +59,19 @@ export function KanbanCard({
     ? projects.find((p) => p.id === meta.projectId)?.name ?? null
     : null;
   const effort = effortLabel(meta?.effortMinutes ?? null);
+
+  const [localSubtasks, setLocalSubtasks] = useState<TaskSubtask[]>(task.subtasks ?? []);
+
+  async function toggleSubtask(e: React.MouseEvent, sub: TaskSubtask) {
+    e.stopPropagation();
+    const next = !sub.completed;
+    setLocalSubtasks((prev) => prev.map((s) => (s.id === sub.id ? { ...s, completed: next } : s)));
+    await fetch(`/api/tasks/${encodeURIComponent(task.id)}/subtasks/${encodeURIComponent(sub.id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ completed: next }),
+    }).catch(() => {});
+  }
 
   return (
     <div
@@ -127,12 +144,28 @@ export function KanbanCard({
         {due && (
           <span className={`pill ${due.cls} mono text-[10px]`}>{due.label}</span>
         )}
-        {task.subtaskCount && task.subtaskCount.total > 0 && (
+        {localSubtasks.length > 0 && (
           <span className="pill pill-mute text-[10px]" title="Subtasks">
-            ☑ {task.subtaskCount.done}/{task.subtaskCount.total}
+            ☑ {localSubtasks.filter((s) => s.completed).length}/{localSubtasks.length}
           </span>
         )}
       </div>
+      {localSubtasks.length > 0 && (
+        <div className="kanban-subtask-list">
+          {localSubtasks.map((sub) => (
+            <button
+              key={sub.id}
+              type="button"
+              className={`kanban-subtask-item${sub.completed ? ' is-done' : ''}`}
+              onClick={(e) => toggleSubtask(e, sub)}
+              title={sub.completed ? 'Als offen markieren' : 'Als erledigt markieren'}
+            >
+              <span className="kanban-subtask-check">{sub.completed ? '☑' : '☐'}</span>
+              <span className="kanban-subtask-label">{sub.title}</span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

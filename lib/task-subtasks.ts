@@ -79,3 +79,23 @@ export async function getSubtaskCountsForIssues(
   }
   return out;
 }
+
+export async function getSubtasksForIssues(
+  linearIssueIds: string[],
+): Promise<Record<string, TaskSubtask[]>> {
+  if (!linearIssueIds.length) return {};
+  const { data, error } = await supabaseAdmin
+    .from('task_subtasks')
+    .select('*')
+    .in('linear_issue_id', linearIssueIds)
+    .order('position', { ascending: true })
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  const out: Record<string, TaskSubtask[]> = {};
+  for (const row of (data ?? []) as SubtaskRow[]) {
+    const arr = out[row.linear_issue_id] ?? [];
+    arr.push(rowToSubtask(row));
+    out[row.linear_issue_id] = arr;
+  }
+  return out;
+}
