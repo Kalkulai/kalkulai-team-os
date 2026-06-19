@@ -27,6 +27,8 @@ export interface UnifiedTask {
   assist?: TaskAssist | null;
   /** Linear-hosted images embedded in the issue description. */
   imageUrls?: string[];
+  /** Aggregated subtask progress (loaded from task_subtasks table). */
+  subtaskCount?: { total: number; done: number };
 }
 
 export function deriveLinearStatus(issue: LinearIssue): UnifiedStatus {

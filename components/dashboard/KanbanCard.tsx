@@ -127,6 +127,11 @@ export function KanbanCard({
         {due && (
           <span className={`pill ${due.cls} mono text-[10px]`}>{due.label}</span>
         )}
+        {task.subtaskCount && task.subtaskCount.total > 0 && (
+          <span className="pill pill-mute text-[10px]" title="Subtasks">
+            ☑ {task.subtaskCount.done}/{task.subtaskCount.total}
+          </span>
+        )}
       </div>
     </div>
   );

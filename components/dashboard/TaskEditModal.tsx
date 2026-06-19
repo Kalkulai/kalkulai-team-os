@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Trash2, Plus } from 'lucide-react';
 import { DatePicker } from '@/components/ui/DatePicker';
 import { TaskMetaFields } from './TaskMetaFields';
 import type { UnifiedTask } from '@/lib/unified-tasks';
+import type { TaskSubtask } from '@/types';
 import { EMPTY_TASK_META, quadrantToPriority, type TaskMeta } from '@/lib/task-meta';
 import { hasAssist, type TaskFollowup } from '@/lib/task-assist';
 import { TaskImages } from './TaskImages';
@@ -41,6 +42,16 @@ export function TaskEditModal({
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingFollowup, setPendingFollowup] = useState<number | null>(null);
+  const [subtasks, setSubtasks] = useState<TaskSubtask[]>([]);
+  const [newSubtask, setNewSubtask] = useState('');
+  const subtaskInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    fetch(`/api/tasks/${encodeURIComponent(task.id)}/subtasks`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data: TaskSubtask[]) => setSubtasks(data))
+      .catch(() => {});
+  }, [task.id]);
 
   const nextStep = task.assist?.suggestedNextStep ?? null;
   const showKai = hasAssist(task.assist) || followups.length > 0;
@@ -105,6 +116,54 @@ export function TaskEditModal({
     const remaining = followups.filter((_, i) => i !== idx);
     setFollowups(remaining);
     await persistFollowups(remaining);
+  }
+
+  async function addSubtask() {
+    const t = newSubtask.trim();
+    if (!t) return;
+    setNewSubtask('');
+    const optimisticId = `tmp-${Date.now()}`;
+    const optimistic: TaskSubtask = {
+      id: optimisticId,
+      linearIssueId: task.id,
+      title: t,
+      completed: false,
+      position: subtasks.length,
+      createdAt: new Date().toISOString(),
+    };
+    setSubtasks((prev) => [...prev, optimistic]);
+    try {
+      const res = await fetch(`/api/tasks/${encodeURIComponent(task.id)}/subtasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: t }),
+      });
+      if (res.ok) {
+        const created: TaskSubtask = await res.json();
+        setSubtasks((prev) => prev.map((s) => (s.id === optimisticId ? created : s)));
+      } else {
+        setSubtasks((prev) => prev.filter((s) => s.id !== optimisticId));
+      }
+    } catch {
+      setSubtasks((prev) => prev.filter((s) => s.id !== optimisticId));
+    }
+  }
+
+  async function toggleSubtask(sub: TaskSubtask) {
+    const next = !sub.completed;
+    setSubtasks((prev) => prev.map((s) => (s.id === sub.id ? { ...s, completed: next } : s)));
+    await fetch(`/api/tasks/${encodeURIComponent(task.id)}/subtasks/${encodeURIComponent(sub.id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ completed: next }),
+    }).catch(() => {});
+  }
+
+  async function removeSubtask(sub: TaskSubtask) {
+    setSubtasks((prev) => prev.filter((s) => s.id !== sub.id));
+    await fetch(`/api/tasks/${encodeURIComponent(task.id)}/subtasks/${encodeURIComponent(sub.id)}`, {
+      method: 'DELETE',
+    }).catch(() => {});
   }
 
   async function save() {
@@ -187,6 +246,55 @@ export function TaskEditModal({
             <TaskImages issueId={task.id} imageUrls={task.imageUrls ?? []} />
           </div>
           <TaskMetaFields value={meta} onChange={setMeta} projects={projects} />
+
+
+          <div className="kanban-meta-group">
+            <span className="kanban-meta-label">Subtasks</span>
+            <div className="task-subtasks">
+              {subtasks.map((sub) => (
+                <div key={sub.id} className="task-subtask-row">
+                  <button
+                    type="button"
+                    className={`task-subtask-check${sub.completed ? " is-done" : ""}`}
+                    onClick={() => toggleSubtask(sub)}
+                    aria-label={sub.completed ? "Als offen markieren" : "Als erledigt markieren"}
+                  >
+                    {sub.completed ? "☑" : "☐"}
+                  </button>
+                  <span className={`task-subtask-title${sub.completed ? " is-done" : ""}`}>
+                    {sub.title}
+                  </span>
+                  <button
+                    type="button"
+                    className="task-subtask-delete"
+                    onClick={() => removeSubtask(sub)}
+                    aria-label="Löschen"
+                  >
+                    <X size={11} aria-hidden />
+                  </button>
+                </div>
+              ))}
+              <div className="task-subtask-add">
+                <input
+                  ref={subtaskInputRef}
+                  className="task-subtask-input"
+                  placeholder="Subtask hinzufügen …"
+                  value={newSubtask}
+                  onChange={(e) => setNewSubtask(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addSubtask(); } }}
+                />
+                <button
+                  type="button"
+                  className="task-subtask-add-btn"
+                  onClick={addSubtask}
+                  disabled={!newSubtask.trim()}
+                  aria-label="Subtask hinzufügen"
+                >
+                  <Plus size={12} aria-hidden />
+                </button>
+              </div>
+            </div>
+          </div>
 
           {showKai && (
             <div className="task-kai">

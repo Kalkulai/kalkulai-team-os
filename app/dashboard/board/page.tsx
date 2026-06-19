@@ -10,6 +10,7 @@ import { isFelixMemberId } from '@/lib/agent-access';
 import type { TaskMeta } from '@/lib/task-meta';
 import type { TaskAssist } from '@/lib/task-assist';
 import { getActiveSessionsByIdentifier } from '@/lib/claude-sessions';
+import { getSubtaskCountsForIssues } from '@/lib/task-subtasks';
 import type { ClaudeSession } from '@/types';
 import { KanbanBoard } from '@/components/dashboard/KanbanBoard';
 import { KanbanRealtimeListener } from '@/components/dashboard/KanbanRealtimeListener';
@@ -74,6 +75,18 @@ export default async function BoardPage({
   }
 
   const tasks = mergeTasks(issues, steps, projects, metaByIssueId, assistByIssueId);
+
+  // Subtask progress counts for the board cards.
+  let subtaskCountsById: Record<string, { total: number; done: number }> = {};
+  try {
+    const linearIds = tasks.filter((t) => t.kind === 'linear').map((t) => t.id);
+    subtaskCountsById = await getSubtaskCountsForIssues(linearIds);
+  } catch (err) {
+    console.warn('[board] subtask_counts lookup failed (table missing?):', err);
+  }
+  const tasksWithSubtasks = tasks.map((t) =>
+    subtaskCountsById[t.id] ? { ...t, subtaskCount: subtaskCountsById[t.id] } : t,
+  );
   const projectOptions = projects.map((p) => ({ id: p.id, name: p.name }));
   const doneTasks = mergeDoneTasks(completedLinear, completedSteps, projects, 3);
   const backlogEnabled = backlogEnabledForMember(me.id);
@@ -81,7 +94,7 @@ export default async function BoardPage({
 
   // Live Claude-Code session tracking (KAL-89). Best-effort — if the table
   // hasn't been migrated yet on this environment, the board still renders.
-  const identifiers = tasks.map((t) => t.identifier).filter((x): x is string => !!x);
+  const identifiers = tasksWithSubtasks.map((t) => t.identifier).filter((x): x is string => !!x);
   let activeClaudeByIdentifier: Record<string, ClaudeSession[]> = {};
   try {
     const map = await getActiveSessionsByIdentifier(identifiers);
@@ -95,7 +108,7 @@ export default async function BoardPage({
       <KanbanRealtimeListener />
       <ViewToggle currentView="board" memberId={me.id} />
       <KanbanBoard
-        tasks={tasks}
+        tasks={tasksWithSubtasks}
         doneTasks={doneTasks}
         backlogTasks={backlogTasks}
         backlogEnabled={backlogEnabled}
