@@ -28,6 +28,15 @@ export interface TeamMember {
   calendar_connected?: boolean;
 }
 
+export interface TaskSubtask {
+  id: string;
+  linearIssueId: string;
+  title: string;
+  completed: boolean;
+  position: number;
+  createdAt: string;
+}
+
 export type TaskSource = 'linear' | 'notion' | 'hermes' | 'local';
 
 export interface LinearIssue {
