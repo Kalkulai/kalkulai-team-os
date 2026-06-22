@@ -6,6 +6,7 @@ import { TeamVelocityChart } from '@/components/analytics/TeamVelocityChart';
 import { WeekHeatmap } from '@/components/analytics/WeekHeatmap';
 import { useHermes } from '@/components/hermes/HermesContext';
 import { FinanceSection } from '@/components/finance/FinanceSection';
+import { ExistCockpit } from '@/components/finance/ExistCockpit';
 import type { FinanceData } from '@/types/finance';
 
 const SECRET = process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? '';
@@ -86,6 +87,8 @@ interface CompanyData {
   pilot_activity: PilotActivity[];
 }
 
+type FinanceScenarioMode = 'pre-exist' | 'exist';
+
 function formatEur(value: number): string {
   if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k €`;
   return `${value.toFixed(0)} €`;
@@ -132,6 +135,7 @@ export default function CompanyPageClient() {
   const [finance, setFinance] = useState<FinanceData | null>(null);
   const [financeLoading, setFinanceLoading] = useState(true);
   const [financeError, setFinanceError] = useState<string | null>(null);
+  const [financeScenario, setFinanceScenario] = useState<FinanceScenarioMode>('pre-exist');
 
   useEffect(() => {
     let cancelled = false;
@@ -422,7 +426,48 @@ export default function CompanyPageClient() {
             )}
           </section>
 
-          <FinanceSection data={finance} loading={financeLoading} error={financeError} />
+          <section className="company-section">
+            <h2 className="company-section-title">Finanzszenario</h2>
+            <p className="company-section-sub">
+              Pre-EXIST zeigt die bestehende CFO-Kai-Ansicht; EXIST nutzt Ledger und Förderlogik.
+            </p>
+            <div
+              className="inline-flex w-fit rounded-[14px] border border-[var(--line-1)] bg-white/[0.03] p-1"
+              role="group"
+              aria-label="Finanzszenario wählen"
+            >
+              <button
+                type="button"
+                className={`rounded-[10px] px-3 py-2 font-[var(--mono)] text-[11px] font-semibold transition ${
+                  financeScenario === 'pre-exist'
+                    ? 'bg-[var(--glass-2)] text-[var(--ink-1)] shadow-[0_0_12px_-6px_var(--brand-2)]'
+                    : 'text-[var(--ink-3)] hover:text-[var(--ink-1)]'
+                }`}
+                aria-pressed={financeScenario === 'pre-exist'}
+                onClick={() => setFinanceScenario('pre-exist')}
+              >
+                Pre-EXIST (Ist)
+              </button>
+              <button
+                type="button"
+                className={`rounded-[10px] px-3 py-2 font-[var(--mono)] text-[11px] font-semibold transition ${
+                  financeScenario === 'exist'
+                    ? 'bg-[var(--glass-2)] text-[var(--ink-1)] shadow-[0_0_12px_-6px_var(--brand-2)]'
+                    : 'text-[var(--ink-3)] hover:text-[var(--ink-1)]'
+                }`}
+                aria-pressed={financeScenario === 'exist'}
+                onClick={() => setFinanceScenario('exist')}
+              >
+                EXIST / Förderlogik
+              </button>
+            </div>
+          </section>
+
+          {financeScenario === 'pre-exist' ? (
+            <FinanceSection data={finance} loading={financeLoading} error={financeError} />
+          ) : (
+            <ExistCockpit />
+          )}
 
           <section className="company-section">
             <h2 className="company-section-title">Team-Velocity (30 Tage)</h2>
