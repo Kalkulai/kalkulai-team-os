@@ -43,7 +43,7 @@ create table if not exists finance_expenses (
   category text,
   amount_eur numeric(12,2) not null,
 
-  paid_by text not null,            -- team_members.id (uuid-text) wenn legal_entity='private', sonst Entity-Label
+  paid_by text not null,            -- MVP write contract: stable human-readable payer label
   legal_entity text not null default 'private'
     check (legal_entity in ('private','gmbh','chair')),
   scenario text not null default 'exist'
@@ -82,7 +82,7 @@ alter table finance_expenses enable row level security;
 **Feld-Semantik (gelockt):**
 - `funding_pot` = **operative** Zuordnung / Buchungsziel.
 - `fundability` = **Bewertungs-/Sicherheitsstatus**. Überlappung mit `funding_pot` bewusst belassen; Aggregate (§4) definieren, welches Feld welches KPI treibt.
-- `paid_by` = stabile Identität, **kein Freitext**: `team_members.id` bei `legal_entity='private'`, sonst `'GmbH'`/`'Lehrstuhl'`/`'Company'`. Namens-Auflösung passiert in der UI über `/api/members`.
+- `paid_by` = stabile lesbare Identität, **keine UUID** im MVP-Write-Contract: Founder als `Leon`/`Felix`/`Paul`, sonst Entity-Label wie `'GmbH'`/`'Lehrstuhl'`/`'Company'`. Siehe aktuellen operativen Contract in `docs/AI-OPERATIONS.md`.
 - `scenario` defaultet `'exist'` (am MVP de facto immer EXIST; Spalte zukunftssicher).
 
 **`updated_at`-Trigger** oder im PATCH-Handler setzen (Handler reicht, kein DB-Trigger nötig).

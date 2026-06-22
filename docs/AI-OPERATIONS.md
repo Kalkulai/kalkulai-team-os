@@ -373,7 +373,7 @@ Content-Type: application/json
   "description": "API credits",
   "category": "AI infrastructure",
   "amount_eur": 420,
-  "paid_by": "c9677ade-e42c-4593-81c6-7a2108b145fd",
+  "paid_by": "Felix",
   "legal_entity": "private",
   "scenario": "exist",
   "funding_pot": "sachmittel",
@@ -384,15 +384,20 @@ Content-Type: application/json
   "approval_status": "checked",
   "source": "hermes",
   "source_message": "gmail:<message-id>",
-  "note": "optional",
+  "note": "Project infrastructure; receipt available.",
   "idempotency_key": "hermes:<stable-external-id-or-hash>"
 }
 ```
 
-- Pflichtfelder: `expense_date`, `vendor`, `description`, `amount_eur`, `paid_by`.
-- Defaults: `scenario:'exist'`, `legal_entity:'private'`, `funding_pot:'unclear'`, `fundability:'unclear'`, `reimbursable:'unclear'`, `reimbursement_status:'open'`, `receipt_status:'missing'`, `approval_status:'not_checked'`, `source:'manual_ui'`.
-- Enums: `scenario` = `'exist'|'pre-exist'`; `funding_pot` = `'sachmittel'|'coaching'|'stipend'|'non_fundable'|'unclear'`; `fundability` = `'fundable'|'non_fundable'|'unclear'`; `reimbursable` = `'yes'|'no'|'unclear'`; `reimbursement_status` = `'open'|'submitted'|'approved'|'reimbursed'|'rejected'|'n_a'`.
+- MVP-Write-Contract fuer neue EXIST-Ausgaben: immer explizit senden: `expense_date`, `vendor`, `description`, `amount_eur`, `paid_by`, `legal_entity`, `scenario:'exist'`, `funding_pot`, `fundability`, `reimbursable`, `reimbursement_status`, `receipt_status`, `source`, `note`.
+- `paid_by` ist ein stabil lesbarer Zahler, keine Supabase-/Linear-UUID. Founder bitte als `Leon`, `Felix` oder `Paul` senden; bekannte Kleinschreibung wird serverseitig normalisiert. Entity-Zahler bleiben lesbar, z.B. `GmbH` oder `Lehrstuhl`.
+- Keine fachlichen Defaults fuer EXIST-Classification-Felder annehmen. Wenn Hermes/CFO-Kai unsicher ist, bewusst `funding_pot:'unclear'`, `fundability:'unclear'` und/oder `reimbursable:'unclear'` setzen und den Grund kurz in `note` schreiben.
+- Konservative Foerderlogik: Hardware, Cloud und projektnahe Tools koennen `fundable`/`sachmittel` sein, wenn Beleg und Projektbezug klar sind. Coaching gehoert in `coaching`. Stipendien gehoeren in `stipend`. Notar-/GmbH-Gruendungskosten sind `non_fundable`. Marketing/Ads und unklare Legal-Faelle bleiben `unclear`, bis die Foerderfaehigkeit sauber belegt ist.
+- `reimbursement_status` nie optimistisch setzen: nur `open`, `submitted`, `approved`, `reimbursed`, `rejected`, `n_a`. Ohne echten Einreichungs-/Freigabe-/Erstattungsnachweis nicht `submitted`, `approved` oder `reimbursed` verwenden.
+- Enums: `scenario` = `'exist'` fuer diesen Create-Pfad; `legal_entity` = `'private'|'gmbh'|'chair'`; `funding_pot` = `'sachmittel'|'coaching'|'stipend'|'non_fundable'|'unclear'`; `fundability` = `'fundable'|'non_fundable'|'unclear'`; `reimbursable` = `'yes'|'no'|'unclear'`; `reimbursement_status` = `'open'|'submitted'|'approved'|'reimbursed'|'rejected'|'n_a'`; `receipt_status` = `'missing'|'available'`; `source` = `'hermes'|'manual_ui'|'import'`.
+- `approval_status` ist optional und defaultet serverseitig auf `not_checked`; setze es nur, wenn wirklich eine manuelle Pruefung passiert ist.
 - `idempotency_key` ist nullable, aber Hermes/Import soll ihn immer setzen. Bei Duplikat: `200 { "created": false, "status": "duplicate_ignored" }`. Bei Erfolg: `200 { "created": true, "expense": <FinanceExpense> }`.
+- Unclear-Faelle sind gewollt sichtbar: `GET /api/finance/exist` zaehlt sie in `unclear_items_count`, wenn `funding_pot='unclear'` oder `fundability='unclear'`.
 
 ```http
 GET /api/expenses[?scenario=exist]
