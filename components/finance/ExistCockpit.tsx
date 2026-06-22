@@ -41,7 +41,7 @@ function ampelCopy(status: ExistFinanceData['reimbursements']['ampel']): string 
 }
 
 function dataOriginLabel(origin: ExistFinanceData['data_origin']): string {
-  return origin === 'db' ? 'Ledger' : 'Defaults';
+  return origin === 'db' ? 'Live-Ledger' : 'Budget-Defaults';
 }
 
 function kpiTone(value: number): 'ok' | 'warn' | 'bad' {
@@ -191,7 +191,7 @@ export function ExistCockpit() {
     <section className="company-section">
       <h2 className="company-section-title">EXIST-CFO</h2>
       <p className="company-section-sub">
-        Offene Vorstreckungen, Förderfähigkeit und Topfverbrauch aus dem EXIST-Ledger.
+        Operative Wahrheit für Vorstreckung, Förderfähigkeit und Topfverbrauch aus dem EXIST-Ledger.
         {data && <span className="fin-asof"> · {data.as_of}</span>}
       </p>
 
@@ -216,7 +216,8 @@ export function ExistCockpit() {
                   {formatEur(data.reimbursements.pending_reimbursements_eur)}
                 </div>
                 <p className="mt-2 max-w-[720px] text-[12.5px] leading-5 text-[var(--ink-3)]">
-                  Offene private Auslagen mit bestätigter Erstattbarkeit. Unklare Fälle bleiben bis zur Prüfung draußen.
+                  Akut zu steuernde, erstattbare Vorstreckung. Unklare Fälle bleiben konservativ draußen, bis
+                  Förderfähigkeit und Erstattung geprüft sind.
                 </p>
               </div>
               <div className="grid min-w-[220px] grid-cols-2 gap-2 text-right font-[var(--mono)]">
@@ -269,7 +270,7 @@ export function ExistCockpit() {
             <article className="fin-card glass">
               <div className="fin-card-head">
                 <h3 className="fin-card-title">Topfverbrauch</h3>
-                <span className="fin-card-legend">Sachmittel & Coaching</span>
+                <span className="fin-card-legend">Founder-relevante Töpfe</span>
               </div>
               <BudgetBar
                 label="Sachmittel"
@@ -287,7 +288,8 @@ export function ExistCockpit() {
 
             <article className="fin-card glass">
               <div className="fin-card-head">
-                <h3 className="fin-card-title">Founder Out-of-Pocket</h3>
+                <h3 className="fin-card-title">Founder-Cash belastet</h3>
+                <span className="fin-card-legend">private Auslagen</span>
               </div>
               {founderOutOfPocket.length === 0 ? (
                 <p className="m-0 text-[12.5px] text-[var(--ink-3)]">Keine offenen privaten Auslagen im Ledger.</p>
@@ -346,7 +348,8 @@ export function ExistCockpit() {
             </div>
             {data.data_origin === 'defaults' && (
               <div className="rounded-[14px] border border-[rgba(242,184,75,0.35)] bg-[rgba(242,184,75,0.08)] p-3 text-[12.5px] leading-5 text-[var(--warn)]">
-                Ledger ist leer. Budgets werden angezeigt, operative Ist-Werte kommen aus Defaults.
+                Ledger ist leer. Angezeigt werden nur Förderbudget-Defaults; operative Ist-Werte entstehen erst
+                durch echte Ausgaben.
               </div>
             )}
           </article>
