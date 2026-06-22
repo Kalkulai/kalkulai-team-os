@@ -10,7 +10,7 @@ function roundMoney(value: number): number {
 
 function daysSince(expenseDate: string, now: Date): number {
   const start = new Date(`${expenseDate}T00:00:00.000Z`).getTime();
-  return Math.floor((now.getTime() - start) / MS_PER_DAY);
+  return Math.max(0, Math.floor((now.getTime() - start) / MS_PER_DAY));
 }
 
 function isOpenReimbursement(expense: FinanceExpense): boolean {
