@@ -205,7 +205,8 @@ export function ExpenseLedger({
         <div>
           <h3 className="fin-card-title">EXIST-Ausgabenbuch</h3>
           <p className="m-0 mt-1 text-[12px] leading-5 text-[var(--ink-3)]">
-            Review für Erstattung, Förderfähigkeit und Belege. Status nur ändern, wenn geprüft.
+            Review für Erstattung, Förderfähigkeit und Belege. Änderungen sind für alle Founder sichtbar;
+            Status und Förderfähigkeit nur ändern, wenn geprüft.
           </p>
         </div>
       </div>
