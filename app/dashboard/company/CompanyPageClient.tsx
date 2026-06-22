@@ -429,7 +429,7 @@ export default function CompanyPageClient() {
           <section className="company-section">
             <h2 className="company-section-title">Finanzszenario</h2>
             <p className="company-section-sub">
-              Pre-EXIST zeigt die bestehende CFO-Kai-Ansicht; EXIST nutzt Ledger und Förderlogik.
+              Pre-EXIST zeigt die bestehende CFO-Kai-Ansicht; EXIST fokussiert Vorstreckung, Topfverbrauch und Ledger-Review.
             </p>
             <div
               className="inline-flex w-fit rounded-[14px] border border-[var(--line-1)] bg-white/[0.03] p-1"
@@ -458,7 +458,7 @@ export default function CompanyPageClient() {
                 aria-pressed={financeScenario === 'exist'}
                 onClick={() => setFinanceScenario('exist')}
               >
-                EXIST / Förderlogik
+                EXIST-CFO
               </button>
             </div>
           </section>
