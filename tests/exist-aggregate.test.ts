@@ -169,6 +169,20 @@ describe('aggregateExist', () => {
     expect(red.reimbursements.overdue_reimbursement_count).toBe(1);
   });
 
+  it('clamps future-dated open reimbursements to zero outstanding days', () => {
+    const data = aggregateExist(
+      [expense({ expense_date: '2026-06-25', reimbursable: 'yes', reimbursement_status: 'open' })],
+      budget,
+      new Date('2026-06-22T12:00:00.000Z'),
+    );
+
+    expect(data.reimbursements.oldest_open_days).toBe(0);
+    expect(data.reimbursements.avg_days_outstanding).toBe(0);
+    expect(data.reimbursements.overdue_reimbursement_count).toBe(0);
+    expect(data.reimbursements.largest_open_items[0]?.days_outstanding).toBe(0);
+    expect(data.reimbursements.ampel).toBe('green');
+  });
+
   it('returns largest open items by amount with older date as the tiebreaker', () => {
     const data = aggregateExist(
       [
