@@ -32,12 +32,16 @@ function formatDate(value: string): string {
 function ampelCopy(status: ExistFinanceData['reimbursements']['ampel']): string {
   switch (status) {
     case 'green':
-      return 'Keine kritische Vorstreckung offen';
+      return 'keine kritische Vorstreckung offen';
     case 'yellow':
-      return 'Mindestens eine Vorstreckung ist älter als 14 Tage';
+      return 'mindestens ein Fall ist älter als 14 Tage';
     case 'red':
-      return 'Mindestens eine Vorstreckung ist älter als 30 Tage';
+      return 'mindestens ein Fall ist älter als 30 Tage';
   }
+}
+
+function dataOriginLabel(origin: ExistFinanceData['data_origin']): string {
+  return origin === 'db' ? 'Ledger' : 'Defaults';
 }
 
 function kpiTone(value: number): 'ok' | 'warn' | 'bad' {
@@ -100,6 +104,14 @@ export function ExistCockpit() {
   const resolvePayerName = useCallback(
     (paidBy: string) => memberNameById.get(paidBy) ?? paidBy,
     [memberNameById],
+  );
+
+  const founderOutOfPocket = useMemo(
+    () =>
+      data
+        ? data.founder_out_of_pocket_by_person.slice().sort((a, b) => b.amount_eur - a.amount_eur)
+        : [],
+    [data],
   );
 
   const fetchExistFinance = useCallback(async (force: boolean) => {
@@ -177,9 +189,9 @@ export function ExistCockpit() {
 
   return (
     <section className="company-section">
-      <h2 className="company-section-title">EXIST / Förderlogik</h2>
+      <h2 className="company-section-title">EXIST-CFO</h2>
       <p className="company-section-sub">
-        Operative Vorstreckungen, Topfverbrauch und Ledger-Review aus dem EXIST-Ausgabenbuch.
+        Offene Vorstreckungen, Förderfähigkeit und Topfverbrauch aus dem EXIST-Ledger.
         {data && <span className="fin-asof"> · {data.as_of}</span>}
       </p>
 
@@ -197,15 +209,14 @@ export function ExistCockpit() {
                 <div className="mb-3">
                   <TrafficLight
                     status={data.reimbursements.ampel}
-                    label={`Vorstreckungsampel: ${ampelCopy(data.reimbursements.ampel)}`}
+                    label={`Vorstreckung: ${ampelCopy(data.reimbursements.ampel)}`}
                   />
                 </div>
                 <div className="font-[var(--font)] text-[42px] font-semibold leading-none text-[var(--ink-1)]">
                   {formatEur(data.reimbursements.pending_reimbursements_eur)}
                 </div>
                 <p className="mt-2 max-w-[720px] text-[12.5px] leading-5 text-[var(--ink-3)]">
-                  Offene private Vorstreckungen mit reimbursable=yes; unklare Erstattbarkeit wird nicht optimistisch
-                  eingerechnet.
+                  Offene private Auslagen mit bestätigter Erstattbarkeit. Unklare Fälle bleiben bis zur Prüfung draußen.
                 </p>
               </div>
               <div className="grid min-w-[220px] grid-cols-2 gap-2 text-right font-[var(--mono)]">
@@ -213,7 +224,7 @@ export function ExistCockpit() {
                   <div className="text-[22px] font-semibold text-[var(--ink-1)]">
                     {data.reimbursements.open_reimbursement_count}
                   </div>
-                  <div className="text-[10.5px] text-[var(--ink-3)]">offen</div>
+                  <div className="text-[10.5px] text-[var(--ink-3)]">Fälle offen</div>
                 </div>
                 <div className="rounded-[12px] border border-[var(--line-1)] bg-white/[0.03] p-3">
                   <div className="text-[22px] font-semibold text-[var(--danger)]">
@@ -227,29 +238,30 @@ export function ExistCockpit() {
 
           <div className="fin-kpi-row">
             <KPICard
-              label="Pending reimbursements"
-              value={formatEur(data.reimbursements.pending_reimbursements_eur)}
-              tone={data.reimbursements.pending_reimbursements_eur === 0 ? 'ok' : 'warn'}
-              sub={`${data.reimbursements.open_reimbursement_count} offen · ${data.reimbursements.overdue_reimbursement_count} überfällig`}
+              label="Offene Fälle"
+              value={data.reimbursements.open_reimbursement_count.toFixed(0)}
+              unit="Fälle"
+              tone={data.reimbursements.open_reimbursement_count === 0 ? 'ok' : 'warn'}
+              sub={`${formatEur(data.reimbursements.pending_reimbursements_eur)} offen · ${data.reimbursements.overdue_reimbursement_count} >30 Tage`}
             />
             <KPICard
-              label="Aging"
+              label="Ältester Fall"
               value={data.reimbursements.oldest_open_days.toFixed(0)}
               unit="Tage"
               tone={data.reimbursements.oldest_open_days > 30 ? 'bad' : data.reimbursements.oldest_open_days > 14 ? 'warn' : 'ok'}
-              sub={`Ø ${data.reimbursements.avg_days_outstanding.toFixed(0)} Tage outstanding`}
+              sub={`Ø ${data.reimbursements.avg_days_outstanding.toFixed(0)} Tage offen`}
             />
             <KPICard
-              label="Non-fundable Spend"
+              label="Nicht förderfähig"
               value={formatEur(data.non_fundable_spend_eur)}
               tone={data.non_fundable_spend_eur > 0 ? 'warn' : 'ok'}
-              sub="Funding-Pot non_fundable"
+              sub="im Ledger markiert"
             />
             <KPICard
-              label="Unklare Items"
+              label="Unklar"
               value={data.unclear_items_count.toFixed(0)}
               tone={kpiTone(data.unclear_items_count)}
-              sub="Topf oder Förderfähigkeit unclear"
+              sub="Topf oder Förderfähigkeit prüfen"
             />
           </div>
 
@@ -257,6 +269,7 @@ export function ExistCockpit() {
             <article className="fin-card glass">
               <div className="fin-card-head">
                 <h3 className="fin-card-title">Topfverbrauch</h3>
+                <span className="fin-card-legend">Sachmittel & Coaching</span>
               </div>
               <BudgetBar
                 label="Sachmittel"
@@ -274,13 +287,13 @@ export function ExistCockpit() {
 
             <article className="fin-card glass">
               <div className="fin-card-head">
-                <h3 className="fin-card-title">Founder-Transparenz</h3>
+                <h3 className="fin-card-title">Founder Out-of-Pocket</h3>
               </div>
-              {data.founder_out_of_pocket_by_person.length === 0 ? (
+              {founderOutOfPocket.length === 0 ? (
                 <p className="m-0 text-[12.5px] text-[var(--ink-3)]">Keine offenen privaten Auslagen im Ledger.</p>
               ) : (
                 <ul className="fin-paidby-legend">
-                  {data.founder_out_of_pocket_by_person.map((row) => (
+                  {founderOutOfPocket.map((row) => (
                     <li key={row.paid_by} className="fin-paidby-row">
                       <span className="fin-paidby-name">{resolvePayerName(row.paid_by)}</span>
                       <span className="fin-paidby-amount">{formatEur(row.amount_eur)}</span>
@@ -294,6 +307,7 @@ export function ExistCockpit() {
           <article className="fin-card glass">
             <div className="fin-card-head">
               <h3 className="fin-card-title">Größte offene Vorstreckungen</h3>
+              <span className="fin-card-legend">nach Betrag</span>
             </div>
             {data.reimbursements.largest_open_items.length === 0 ? (
               <p className="m-0 text-[12.5px] text-[var(--ink-3)]">Keine offenen erstattbaren Items.</p>
@@ -318,16 +332,16 @@ export function ExistCockpit() {
             </div>
             <div className="grid gap-2 text-[12.5px] text-[var(--ink-3)] md:grid-cols-3">
               <div>
-                <span className="block font-[var(--mono)] text-[10.5px] uppercase text-[var(--ink-4)]">as_of</span>
+                <span className="block font-[var(--mono)] text-[10.5px] uppercase text-[var(--ink-4)]">Stand</span>
                 {data.as_of}
               </div>
               <div>
-                <span className="block font-[var(--mono)] text-[10.5px] uppercase text-[var(--ink-4)]">generated_at</span>
+                <span className="block font-[var(--mono)] text-[10.5px] uppercase text-[var(--ink-4)]">Erzeugt</span>
                 {formatDateTime(data.generated_at)}
               </div>
               <div>
-                <span className="block font-[var(--mono)] text-[10.5px] uppercase text-[var(--ink-4)]">data_origin</span>
-                {data.data_origin}
+                <span className="block font-[var(--mono)] text-[10.5px] uppercase text-[var(--ink-4)]">Quelle</span>
+                {dataOriginLabel(data.data_origin)}
               </div>
             </div>
             {data.data_origin === 'defaults' && (

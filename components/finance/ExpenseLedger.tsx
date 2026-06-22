@@ -16,7 +16,7 @@ const SECRET = process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? '';
 const FUNDING_POT_OPTIONS: Array<{ value: ExpenseFundingPot; label: string }> = [
   { value: 'sachmittel', label: 'Sachmittel' },
   { value: 'coaching', label: 'Coaching' },
-  { value: 'stipend', label: 'Stipend' },
+  { value: 'stipend', label: 'Stipendium' },
   { value: 'non_fundable', label: 'Nicht förderfähig' },
   { value: 'unclear', label: 'Unklar' },
 ];
@@ -39,7 +39,7 @@ const REIMBURSEMENT_STATUS_OPTIONS: Array<{ value: ExpenseReimbursementStatus; l
 const SOURCE_LABEL: Record<ExpenseSource, string> = {
   hermes: 'Hermes',
   import: 'Import',
-  manual_ui: 'Manual UI',
+  manual_ui: 'Manuell',
 };
 
 const SOURCE_CLASS: Record<ExpenseSource, string> = {
@@ -203,16 +203,16 @@ export function ExpenseLedger({
     <article className="fin-card glass">
       <div className="fin-card-head">
         <div>
-          <h3 className="fin-card-title">Expense Ledger</h3>
+          <h3 className="fin-card-title">EXIST-Ausgabenbuch</h3>
           <p className="m-0 mt-1 text-[12px] leading-5 text-[var(--ink-3)]">
-            Änderungen sind für alle Founder sichtbar — Status/Förderfähigkeit nur ändern, wenn geprüft.
+            Review für Erstattung, Förderfähigkeit und Belege. Status nur ändern, wenn geprüft.
           </p>
         </div>
       </div>
 
-      {loading && <p className="m-0 text-[13px] text-[var(--ink-3)]">Lade Expense-Ledger …</p>}
+      {loading && <p className="m-0 text-[13px] text-[var(--ink-3)]">Lade Ausgabenbuch …</p>}
       {!loading && error && (
-        <div className="company-pilot-empty glass">Expense-Ledger konnte nicht geladen werden: {error}</div>
+        <div className="company-pilot-empty glass">Ausgabenbuch konnte nicht geladen werden: {error}</div>
       )}
       {!loading && !error && expenses.length === 0 && (
         <div className="company-pilot-empty glass">Noch keine EXIST-Ausgaben im Ledger.</div>
@@ -224,7 +224,7 @@ export function ExpenseLedger({
             <thead className="font-[var(--mono)] text-[10.5px] uppercase text-[var(--ink-4)]">
               <tr>
                 <th className="px-3 py-1 font-semibold">Datum</th>
-                <th className="px-3 py-1 font-semibold">Vendor</th>
+                <th className="px-3 py-1 font-semibold">Empfänger</th>
                 <th className="px-3 py-1 font-semibold">Beschreibung</th>
                 <th className="px-3 py-1 text-right font-semibold">Betrag</th>
                 <th className="px-3 py-1 font-semibold">Zahler</th>
@@ -232,7 +232,7 @@ export function ExpenseLedger({
                 <th className="px-3 py-1 font-semibold">Förderfähigkeit</th>
                 <th className="px-3 py-1 font-semibold">Erstattung</th>
                 <th className="px-3 py-1 font-semibold">Beleg</th>
-                <th className="px-3 py-1 font-semibold">Source</th>
+                <th className="px-3 py-1 font-semibold">Quelle</th>
                 <th className="px-3 py-1 font-semibold">Notiz</th>
                 <th className="px-3 py-1 font-semibold">Aktion</th>
               </tr>
