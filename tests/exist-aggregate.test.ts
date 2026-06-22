@@ -34,7 +34,7 @@ function expense(patch: Partial<FinanceExpense> = {}): FinanceExpense {
     description: 'Default expense',
     category: null,
     amount_eur: 100,
-    paid_by: 'felix',
+    paid_by: 'Felix',
     legal_entity: 'private',
     scenario: 'exist',
     funding_pot: 'unclear',
@@ -116,11 +116,11 @@ describe('aggregateExist', () => {
   it('groups founder out-of-pocket broadly by private paid_by including unclear statuses', () => {
     const data = aggregateExist(
       [
-        expense({ amount_eur: 100, paid_by: 'felix', legal_entity: 'private', reimbursement_status: 'open' }),
-        expense({ amount_eur: 200, paid_by: 'felix', legal_entity: 'private', reimbursement_status: 'rejected' }),
-        expense({ amount_eur: 300, paid_by: 'paul', legal_entity: 'private', reimbursement_status: 'approved' }),
-        expense({ amount_eur: 400, paid_by: 'felix', legal_entity: 'private', reimbursement_status: 'n_a' }),
-        expense({ amount_eur: 500, paid_by: 'leon', legal_entity: 'private', reimbursement_status: 'reimbursed' }),
+        expense({ amount_eur: 100, paid_by: 'Felix', legal_entity: 'private', reimbursement_status: 'open' }),
+        expense({ amount_eur: 200, paid_by: 'Felix', legal_entity: 'private', reimbursement_status: 'rejected' }),
+        expense({ amount_eur: 300, paid_by: 'Paul', legal_entity: 'private', reimbursement_status: 'approved' }),
+        expense({ amount_eur: 400, paid_by: 'Felix', legal_entity: 'private', reimbursement_status: 'n_a' }),
+        expense({ amount_eur: 500, paid_by: 'Leon', legal_entity: 'private', reimbursement_status: 'reimbursed' }),
         expense({ amount_eur: 600, paid_by: 'GmbH', legal_entity: 'gmbh', reimbursement_status: 'open' }),
       ],
       budget,
@@ -128,8 +128,8 @@ describe('aggregateExist', () => {
     );
 
     expect(data.founder_out_of_pocket_by_person).toEqual([
-      { paid_by: 'felix', amount_eur: 300 },
-      { paid_by: 'paul', amount_eur: 300 },
+      { paid_by: 'Felix', amount_eur: 300 },
+      { paid_by: 'Paul', amount_eur: 300 },
     ]);
   });
 
@@ -224,8 +224,16 @@ describe('POST /api/expenses boundary validation', () => {
         vendor: 'OpenAI',
         description: 'API credits',
         amount_eur: 42,
-        paid_by: 'felix',
+        paid_by: 'Felix',
+        legal_entity: 'private',
+        scenario: 'exist',
         funding_pot: 'definitely-not-valid',
+        fundability: 'unclear',
+        reimbursable: 'unclear',
+        reimbursement_status: 'open',
+        receipt_status: 'available',
+        source: 'hermes',
+        note: 'Invalid funding pot test.',
       }),
     );
 
@@ -243,7 +251,16 @@ describe('POST /api/expenses boundary validation', () => {
         vendor: 'OpenAI',
         description: 'API credits',
         amount_eur: 42,
-        paid_by: 'felix',
+        paid_by: 'Felix',
+        legal_entity: 'private',
+        scenario: 'exist',
+        funding_pot: 'unclear',
+        fundability: 'unclear',
+        reimbursable: 'unclear',
+        reimbursement_status: 'open',
+        receipt_status: 'available',
+        source: 'hermes',
+        note: 'Duplicate idempotency test.',
         idempotency_key: 'unit-test-key',
       }),
     );

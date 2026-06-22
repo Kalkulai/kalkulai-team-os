@@ -23,6 +23,25 @@ export const APPROVAL_STATUSES = ['not_checked', 'checked', 'needs_clarification
 export const EXPENSE_SOURCES = ['hermes', 'manual_ui', 'import'] as const;
 
 type ValidationResult<T> = { ok: true; value: T } | { ok: false; error: string };
+type ExistExpenseCreateField =
+  | 'legal_entity'
+  | 'scenario'
+  | 'funding_pot'
+  | 'fundability'
+  | 'reimbursable'
+  | 'reimbursement_status'
+  | 'receipt_status'
+  | 'source';
+
+const UUID_IN_TEXT = /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/i;
+const PAYER_LABELS: Record<string, string> = {
+  leon: 'Leon',
+  felix: 'Felix',
+  paul: 'Paul',
+  gmbh: 'GmbH',
+  lehrstuhl: 'Lehrstuhl',
+  company: 'Company',
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -51,6 +70,17 @@ function enumValue<T extends readonly string[]>(
   return { ok: false, error: `${field} must be one of: ${allowed.join(', ')}` };
 }
 
+function requiredEnumValue<T extends readonly string[]>(
+  field: ExistExpenseCreateField,
+  value: unknown,
+  allowed: T,
+): ValidationResult<T[number]> {
+  if (value === undefined || value === null) {
+    return { ok: false, error: `${field} is required for EXIST expense creates` };
+  }
+  return enumValue(field, value, allowed);
+}
+
 function optionalNullableString(field: string, value: unknown): ValidationResult<string | null | undefined> {
   if (value === undefined) return { ok: true, value: undefined };
   if (value === null) return { ok: true, value: null };
@@ -63,6 +93,15 @@ function requiredTrimmedString(field: string, value: unknown): ValidationResult<
     return { ok: false, error: `${field} must be a non-empty string` };
   }
   return { ok: true, value: value.trim() };
+}
+
+function requiredPaidBy(value: unknown): ValidationResult<string> {
+  const paidBy = requiredTrimmedString('paid_by', value);
+  if (!paidBy.ok) return paidBy;
+  if (UUID_IN_TEXT.test(paidBy.value)) {
+    return { ok: false, error: 'paid_by must be a stable human-readable payer label, not a UUID' };
+  }
+  return { ok: true, value: PAYER_LABELS[paidBy.value.toLowerCase()] ?? paidBy.value };
 }
 
 function optionalDate(field: string, value: unknown): ValidationResult<string | undefined> {
@@ -89,38 +128,39 @@ export function validateCreateExpense(value: unknown): ValidationResult<NewFinan
   if (!vendor.ok) return vendor;
   const description = requiredTrimmedString('description', value.description);
   if (!description.ok) return description;
-  const paidBy = requiredTrimmedString('paid_by', value.paid_by);
+  const paidBy = requiredPaidBy(value.paid_by);
   if (!paidBy.ok) return paidBy;
   if (!isNum(value.amount_eur)) return { ok: false, error: 'amount_eur must be a finite number' };
 
-  const legalEntity = enumValue('legal_entity', value.legal_entity ?? 'private', LEGAL_ENTITIES);
+  const legalEntity = requiredEnumValue('legal_entity', value.legal_entity, LEGAL_ENTITIES);
   if (!legalEntity.ok) return legalEntity;
-  const scenario = enumValue('scenario', value.scenario ?? 'exist', EXPENSE_SCENARIOS);
+  const scenario = requiredEnumValue('scenario', value.scenario, EXPENSE_SCENARIOS);
   if (!scenario.ok) return scenario;
-  const fundingPot = enumValue('funding_pot', value.funding_pot ?? 'unclear', FUNDING_POTS);
+  if (scenario.value !== 'exist') return { ok: false, error: "scenario must be 'exist' for expense creates" };
+  const fundingPot = requiredEnumValue('funding_pot', value.funding_pot, FUNDING_POTS);
   if (!fundingPot.ok) return fundingPot;
-  const fundability = enumValue('fundability', value.fundability ?? 'unclear', FUNDABILITIES);
+  const fundability = requiredEnumValue('fundability', value.fundability, FUNDABILITIES);
   if (!fundability.ok) return fundability;
-  const reimbursable = enumValue('reimbursable', value.reimbursable ?? 'unclear', REIMBURSABLE_VALUES);
+  const reimbursable = requiredEnumValue('reimbursable', value.reimbursable, REIMBURSABLE_VALUES);
   if (!reimbursable.ok) return reimbursable;
-  const reimbursementStatus = enumValue(
+  const reimbursementStatus = requiredEnumValue(
     'reimbursement_status',
-    value.reimbursement_status ?? 'open',
+    value.reimbursement_status,
     REIMBURSEMENT_STATUSES,
   );
   if (!reimbursementStatus.ok) return reimbursementStatus;
-  const receiptStatus = enumValue('receipt_status', value.receipt_status ?? 'missing', RECEIPT_STATUSES);
+  const receiptStatus = requiredEnumValue('receipt_status', value.receipt_status, RECEIPT_STATUSES);
   if (!receiptStatus.ok) return receiptStatus;
   const approvalStatus = enumValue('approval_status', value.approval_status ?? 'not_checked', APPROVAL_STATUSES);
   if (!approvalStatus.ok) return approvalStatus;
-  const source = enumValue('source', value.source ?? 'manual_ui', EXPENSE_SOURCES);
+  const source = requiredEnumValue('source', value.source, EXPENSE_SOURCES);
   if (!source.ok) return source;
 
   const category = optionalNullableString('category', value.category);
   if (!category.ok) return category;
   const sourceMessage = optionalNullableString('source_message', value.source_message);
   if (!sourceMessage.ok) return sourceMessage;
-  const note = optionalNullableString('note', value.note);
+  const note = requiredTrimmedString('note', value.note);
   if (!note.ok) return note;
   const idempotencyKey = optionalNullableString('idempotency_key', value.idempotency_key);
   if (!idempotencyKey.ok) return idempotencyKey;
@@ -144,7 +184,7 @@ export function validateCreateExpense(value: unknown): ValidationResult<NewFinan
       approval_status: approvalStatus.value as ExpenseApprovalStatus,
       source: source.value as ExpenseSource,
       source_message: sourceMessage.value ?? null,
-      note: note.value ?? null,
+      note: note.value,
       idempotency_key: idempotencyKey.value ?? null,
     },
   };
@@ -165,7 +205,7 @@ export function validatePatchExpense(value: unknown): ValidationResult<FinanceEx
 
   for (const field of ['vendor', 'description', 'paid_by'] as const) {
     if (field in value) {
-      const result = requiredTrimmedString(field, value[field]);
+      const result = field === 'paid_by' ? requiredPaidBy(value[field]) : requiredTrimmedString(field, value[field]);
       if (!result.ok) return result;
       patch[field] = result.value;
     }
