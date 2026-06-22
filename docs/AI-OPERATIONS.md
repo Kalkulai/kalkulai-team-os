@@ -358,6 +358,56 @@ Content-Type: application/json
 - Append-only; Reads nehmen das neueste pro Szenario.
 - DB: team-os Supabase `jtakzjvaxctmnpzsszrf`, Migration `021_finance_snapshots.sql`.
 
+### 2.8 Finance Expenses (EXIST)
+
+Operativer EXIST-Ledger: Hermes/Import schreibt Roh-Ausgaben nach `finance_expenses`; das Cockpit liest daraus Live-Aggregate. Pre-EXIST bleibt weiter ueber `GET /api/finance` und `finance_snapshots`.
+
+```http
+POST /api/expenses
+Authorization: Bearer ${SECRET}
+Content-Type: application/json
+
+{
+  "expense_date": "2026-08-05",
+  "vendor": "OpenAI",
+  "description": "API credits",
+  "category": "AI infrastructure",
+  "amount_eur": 420,
+  "paid_by": "c9677ade-e42c-4593-81c6-7a2108b145fd",
+  "legal_entity": "private",
+  "scenario": "exist",
+  "funding_pot": "sachmittel",
+  "fundability": "fundable",
+  "reimbursable": "yes",
+  "reimbursement_status": "open",
+  "receipt_status": "available",
+  "approval_status": "checked",
+  "source": "hermes",
+  "source_message": "gmail:<message-id>",
+  "note": "optional",
+  "idempotency_key": "hermes:<stable-external-id-or-hash>"
+}
+```
+
+- Pflichtfelder: `expense_date`, `vendor`, `description`, `amount_eur`, `paid_by`.
+- Defaults: `scenario:'exist'`, `legal_entity:'private'`, `funding_pot:'unclear'`, `fundability:'unclear'`, `reimbursable:'unclear'`, `reimbursement_status:'open'`, `receipt_status:'missing'`, `approval_status:'not_checked'`, `source:'manual_ui'`.
+- Enums: `scenario` = `'exist'|'pre-exist'`; `funding_pot` = `'sachmittel'|'coaching'|'stipend'|'non_fundable'|'unclear'`; `fundability` = `'fundable'|'non_fundable'|'unclear'`; `reimbursable` = `'yes'|'no'|'unclear'`; `reimbursement_status` = `'open'|'submitted'|'approved'|'reimbursed'|'rejected'|'n_a'`.
+- `idempotency_key` ist nullable, aber Hermes/Import soll ihn immer setzen. Bei Duplikat: `200 { "created": false, "status": "duplicate_ignored" }`. Bei Erfolg: `200 { "created": true, "expense": <FinanceExpense> }`.
+
+```http
+GET /api/expenses[?scenario=exist]
+PATCH /api/expenses/{id}
+DELETE /api/expenses/{id}
+GET /api/finance/exist
+Authorization: Bearer ${SECRET}
+```
+
+- `GET /api/expenses`: Ledger-Liste, sortiert nach `expense_date desc`; `scenario` defaultet auf `exist`.
+- `PATCH /api/expenses/{id}`: nur gesetzte Felder senden; setzt `updated_at` serverseitig.
+- `DELETE /api/expenses/{id}`: idempotentes manuelles Aufraeumen/Dedup.
+- `GET /api/finance/exist`: liefert `ExistFinanceData` mit Budget, Topfverbrauch, offenen Erstattungen, Aging-Ampel, Founder-OOP, Non-Fundable und Unclear-Count.
+- DB: team-os Supabase `jtakzjvaxctmnpzsszrf`, Migration `031_finance_expenses.sql`.
+
 ---
 
 ## 3. Datenfluss-Übersicht (wo speichern, was lesen)
