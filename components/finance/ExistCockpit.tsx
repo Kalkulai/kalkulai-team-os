@@ -270,19 +270,6 @@ export function ExistCockpit() {
                 remaining={data.pots.coaching_remaining_eur}
                 total={data.budget.coaching_total_eur}
               />
-              <div className="rounded-[14px] border border-[var(--line-1)] bg-white/[0.03] p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="font-[var(--font)] text-[12.5px] font-semibold text-[var(--ink-1)]">
-                    Netzwerkpauschale
-                  </span>
-                  <span className="font-[var(--mono)] text-[12px] font-semibold text-[var(--ink-1)]">
-                    {formatEur(data.budget.network_support_total_eur)}
-                  </span>
-                </div>
-                <p className="mt-1 text-[11.5px] leading-4 text-[var(--ink-3)]">
-                  Sichtbar aus dem Förderbescheid, aber kein operativer Founder-Topf.
-                </p>
-              </div>
             </article>
 
             <article className="fin-card glass">
