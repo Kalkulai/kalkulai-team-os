@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef } from 'react';
 import { ImagePlus, X } from 'lucide-react';
+import { imageFilesFromClipboardItems, imageFilesFromFileList } from '@/lib/task-image-selection';
 
 interface Preview {
   file: File;
@@ -29,11 +30,18 @@ export function TaskImagePicker({
     };
   }, [previews]);
 
-  function addFiles(selected: FileList | null) {
-    if (!selected) return;
-    const images = Array.from(selected).filter((file) => file.type.startsWith('image/'));
+  function addFiles(selected: FileList | File[] | null) {
+    const images = imageFilesFromFileList(selected);
     if (images.length > 0) onChange([...files, ...images]);
     if (inputRef.current) inputRef.current.value = '';
+  }
+
+  function handlePaste(event: React.ClipboardEvent<HTMLDivElement>) {
+    if (disabled) return;
+    const images = imageFilesFromClipboardItems(event.clipboardData?.items ?? null);
+    if (images.length === 0) return;
+    event.preventDefault();
+    onChange([...files, ...images]);
   }
 
   function removeFile(index: number) {
@@ -41,7 +49,13 @@ export function TaskImagePicker({
   }
 
   return (
-    <div className="task-image-picker">
+    <div
+      className="task-image-picker"
+      onPaste={handlePaste}
+      tabIndex={disabled ? -1 : 0}
+      role="group"
+      aria-label="Task-Bilder hinzufügen oder einfügen"
+    >
       <input
         ref={inputRef}
         type="file"
@@ -60,6 +74,7 @@ export function TaskImagePicker({
         <ImagePlus size={13} aria-hidden />
         <span>Bild</span>
       </button>
+      <span className="task-image-paste-hint">Cmd+V</span>
       {previews.length > 0 && (
         <div className="task-image-drafts" aria-label="Ausgewählte Bilder">
           {previews.map((preview, index) => (
