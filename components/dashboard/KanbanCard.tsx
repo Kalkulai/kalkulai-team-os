@@ -32,6 +32,10 @@ const PRIORITY_PILL: Record<number, string> = {
   4: 'pill-mute',
 };
 
+function proxiedTaskImageSrc(url: string): string {
+  return `/api/tasks/image?url=${encodeURIComponent(url)}`;
+}
+
 export function KanbanCard({
   task,
   done = false,
@@ -59,6 +63,7 @@ export function KanbanCard({
     ? projects.find((p) => p.id === meta.projectId)?.name ?? null
     : null;
   const effort = effortLabel(meta?.effortMinutes ?? null);
+  const imageUrls = task.imageUrls ?? [];
 
   const [localSubtasks, setLocalSubtasks] = useState<TaskSubtask[]>(task.subtasks ?? []);
 
@@ -150,6 +155,25 @@ export function KanbanCard({
           </span>
         )}
       </div>
+      {imageUrls.length > 0 && (
+        <div className="kanban-card-image-strip" aria-label="Task-Bilder">
+          {imageUrls.slice(0, 3).map((url) => (
+            <a
+              key={url}
+              href={proxiedTaskImageSrc(url)}
+              target="_blank"
+              rel="noreferrer"
+              className="kanban-card-image"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <img src={proxiedTaskImageSrc(url)} alt="Task-Anhang" loading="lazy" />
+            </a>
+          ))}
+          {imageUrls.length > 3 && (
+            <span className="kanban-card-image-more">+{imageUrls.length - 3}</span>
+          )}
+        </div>
+      )}
       {localSubtasks.length > 0 && (
         <div className="kanban-subtask-list">
           {localSubtasks.map((sub) => (

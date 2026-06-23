@@ -9,7 +9,12 @@ import type { UnifiedTask } from '@/lib/unified-tasks';
 import type { TaskSubtask } from '@/types';
 import { EMPTY_TASK_META, quadrantToPriority, type TaskMeta } from '@/lib/task-meta';
 import { hasAssist, type TaskFollowup } from '@/lib/task-assist';
-import { TaskImages } from './TaskImages';
+import { uploadTaskImages } from '@/lib/task-images-client';
+import { TaskImagePicker } from './TaskImagePicker';
+
+function proxiedImageSrc(url: string): string {
+  return `/api/tasks/image?url=${encodeURIComponent(url)}`;
+}
 
 /** Click-to-edit modal for a Kanban card (Felix-only). Edits title, deadline and
  * planning metadata; shows Kai's suggestions (next step + follow-up tasks) with
@@ -27,13 +32,15 @@ export function TaskEditModal({
   projects: Array<{ id: string; name: string }>;
   userId: string | null;
   onClose: () => void;
-  onSaved: (patch: { title: string; dueDate: string | null; meta: TaskMeta; priority: number }) => void;
+  onSaved: (patch: { title: string; dueDate: string | null; meta: TaskMeta; priority: number; imageUrls: string[] }) => void;
   onDeleted: () => void;
   onFollowupAccepted: (created: UnifiedTask) => void;
 }) {
   const [title, setTitle] = useState(task.title);
   const [due, setDue] = useState<string | null>(task.dueDate ?? null);
   const [meta, setMeta] = useState<TaskMeta>(task.meta ?? EMPTY_TASK_META);
+  const [imageUrls, setImageUrls] = useState(task.imageUrls ?? []);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [followups, setFollowups] = useState<TaskFollowup[]>(
     task.assist?.suggestedFollowups ?? [],
   );
@@ -181,7 +188,14 @@ export function TaskEditModal({
         const txt = await res.text().catch(() => '');
         throw new Error(`HTTP ${res.status}: ${txt.slice(0, 200)}`);
       }
-      onSaved({ title: t, dueDate: due, meta, priority: quadrantToPriority(meta.important, meta.urgent) });
+      let nextImageUrls = imageUrls;
+      if (imageFiles.length > 0) {
+        const uploaded = await uploadTaskImages(task.id, imageFiles);
+        nextImageUrls = [...imageUrls, ...uploaded];
+        setImageUrls(nextImageUrls);
+        setImageFiles([]);
+      }
+      onSaved({ title: t, dueDate: due, meta, priority: quadrantToPriority(meta.important, meta.urgent), imageUrls: nextImageUrls });
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -243,7 +257,18 @@ export function TaskEditModal({
           </div>
           <div className="kanban-meta-group">
             <span className="kanban-meta-label">Bilder</span>
-            <TaskImages issueId={task.id} imageUrls={task.imageUrls ?? []} />
+            <div className="task-images">
+              {imageUrls.length > 0 && (
+                <div className="task-image-grid" aria-label="Task-Bilder">
+                  {imageUrls.map((url) => (
+                    <a key={url} href={proxiedImageSrc(url)} target="_blank" rel="noreferrer" className="task-image-thumb">
+                      <img src={proxiedImageSrc(url)} alt="Task-Anhang" loading="lazy" />
+                    </a>
+                  ))}
+                </div>
+              )}
+              <TaskImagePicker files={imageFiles} onChange={setImageFiles} disabled={busy || deleting} />
+            </div>
           </div>
           <TaskMetaFields value={meta} onChange={setMeta} projects={projects} />
 

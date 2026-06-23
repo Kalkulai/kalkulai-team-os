@@ -1624,6 +1624,26 @@ html.light .tl-row code { background: rgba(11, 11, 15, 0.05); }
 .kanban-card-project { display: block; font-size: 10px; color: var(--ink-3); margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kanban-card-title { font-size: 13px; color: var(--ink-1); line-height: 1.35; margin: 0 0 5px; }
 .kanban-card-meta { display: flex; flex-wrap: wrap; gap: 4px; }
+.kanban-card-image-strip {
+  display: flex; align-items: center; gap: 5px;
+  margin-top: 8px; min-width: 0;
+}
+.kanban-card-image {
+  width: 48px; height: 36px; flex: none; overflow: hidden;
+  border-radius: 7px; border: 1px solid var(--line-1);
+  background: rgba(255,255,255,0.04);
+}
+.kanban-card-image:hover { border-color: var(--line-3); }
+.kanban-card-image img {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+.kanban-card-image-more {
+  display: inline-flex; align-items: center; justify-content: center;
+  height: 22px; min-width: 26px; padding: 0 7px; border-radius: 999px;
+  border: 1px solid var(--line-1); color: var(--ink-3);
+  background: rgba(255,255,255,0.04);
+  font: 600 10.5px/1 var(--mono);
+}
 .horizon-preview { position: relative; flex: 1; min-height: 0; overflow: hidden; }
 .horizon-fade { position: absolute; left: 0; right: 0; bottom: 0; height: 72px; background: linear-gradient(to bottom, transparent, var(--glass-2)); pointer-events: none; z-index: 1; }
 
