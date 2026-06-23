@@ -537,7 +537,7 @@ export function KanbanBoard({
             setTasks((prev) =>
               prev.map((t) =>
                 t.id === editingTask.id
-                  ? { ...t, title: patch.title, dueDate: patch.dueDate, priority: patch.priority, meta: patch.meta }
+                  ? { ...t, title: patch.title, dueDate: patch.dueDate, priority: patch.priority, meta: patch.meta, imageUrls: patch.imageUrls }
                   : t,
               ),
             );
