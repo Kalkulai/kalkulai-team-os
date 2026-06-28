@@ -1,7 +1,7 @@
 import { revalidatePath } from 'next/cache';
 import { broadcastDashboardChange } from '@/lib/realtime';
 
-const DASHBOARD_PATHS = ['/dashboard', '/dashboard/board', '/dashboard/campaigns', '/dashboard/team'] as const;
+const DASHBOARD_PATHS = ['/dashboard', '/dashboard/board', '/dashboard/campaigns', '/dashboard/team', '/dashboard/plan'] as const;
 
 /** Revalidate all dashboard routes AND fire a realtime broadcast so connected
  * tabs (iPad web-clip, laptop browser, etc.) router.refresh() immediately
