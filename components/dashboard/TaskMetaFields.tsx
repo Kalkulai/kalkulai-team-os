@@ -1,7 +1,7 @@
 'use client';
 
-import type { TaskMeta } from '@/lib/task-meta';
-import { EFFORT_OPTIONS, quadrantBadge } from '@/lib/task-meta';
+import type { TaskBereich, TaskMeta } from '@/lib/task-meta';
+import { BEREICHE, EFFORT_OPTIONS, TOTAL_PHASES, quadrantBadge } from '@/lib/task-meta';
 
 /** Shared planning-metadata controls, used in the board add-form and the edit modal.
  * Felix-only feature; renders nothing special beyond the existing button styling. */
@@ -127,6 +127,34 @@ export function TaskMetaFields({
             📌 Fixer Termin
           </button>
         </div>
+      </div>
+
+      <div className="kanban-meta-group">
+        <span className="kanban-meta-label">Phase</span>
+        <select
+          className="kanban-meta-select"
+          value={value.phase ?? ''}
+          onChange={(e) => set({ phase: e.target.value ? Number(e.target.value) : null })}
+        >
+          <option value="">— keine Phase —</option>
+          {Array.from({ length: TOTAL_PHASES }, (_, i) => i + 1).map((n) => (
+            <option key={n} value={n}>P{n}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="kanban-meta-group">
+        <span className="kanban-meta-label">Bereich</span>
+        <select
+          className="kanban-meta-select"
+          value={value.bereich ?? ''}
+          onChange={(e) => set({ bereich: (e.target.value as TaskBereich) || null })}
+        >
+          <option value="">— kein Bereich —</option>
+          {BEREICHE.map((b) => (
+            <option key={b.id} value={b.id}>{b.label}</option>
+          ))}
+        </select>
       </div>
     </div>
   );

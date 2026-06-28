@@ -83,7 +83,7 @@ export function quadrantBadge(
 export function hasMeta(m: TaskMeta | null | undefined): boolean {
   if (!m) return false;
   return Boolean(
-    m.context || m.effortMinutes || m.important || m.urgent || m.energy || m.projectId || m.fixed,
+    m.context || m.effortMinutes || m.important || m.urgent || m.energy || m.projectId || m.fixed || m.phase || m.bereich,
   );
 }
 
