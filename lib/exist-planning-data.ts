@@ -175,19 +175,58 @@ function monthColumns(row: unknown[]): MonthColumn[] {
     .filter((column): column is MonthColumn => column !== null);
 }
 
+function parseBarMonth(value: unknown): number | null {
+  const text = normalize(cellText(value));
+  const num = GERMAN_MONTHS[text];
+  return num ? parseInt(num, 10) : null;
+}
+
 function findHeaderRow(rows: unknown[][]): { index: number; months: MonthColumn[] } {
+  // Pass 1: single-row header with full year-month per cell (standard format)
   for (const [index, row] of rows.entries()) {
     const months = monthColumns(row);
     if (months.length >= 3) {
       return { index, months };
     }
   }
+
+  // Pass 2: two-row header — year-groups in the row above, bare month names in this row
+  for (const [index, row] of rows.entries()) {
+    if (index === 0) continue;
+    const yearRow = rows[index - 1];
+    const months: MonthColumn[] = [];
+
+    for (let col = 0; col < row.length; col++) {
+      const monthNum = parseBarMonth(row[col]);
+      if (monthNum === null) continue;
+
+      let year: number | null = null;
+      for (let c = col; c >= 0; c--) {
+        const m = cellText(yearRow[c]).match(/\b(20\d{2})\b/);
+        if (m) { year = parseInt(m[1], 10); break; }
+      }
+      if (year === null) continue;
+
+      const month = `${year}-${String(monthNum).padStart(2, '0')}`;
+      if (isInFundingWindow(month)) {
+        months.push({ index: col, month });
+      }
+    }
+
+    if (months.length >= 3) {
+      return { index, months };
+    }
+  }
+
   throw new Error(`Planning-XLSX enthält keine Monats-Header für ${FUNDING_START} bis ${FUNDING_END}`);
 }
 
 function findHeaderColumn(header: unknown[], names: readonly string[]): number | null {
-  const normalizedNames = new Set(names.map(normalize));
-  const index = header.findIndex((cell) => normalizedNames.has(normalize(cell)));
+  const normalizedNames = names.map(normalize);
+  const index = header.findIndex((cell) => {
+    const cellNorm = normalize(cell);
+    return normalizedNames.some((n) => cellNorm === n || cellNorm.includes(n));
+  });
   return index === -1 ? null : index;
 }
 
