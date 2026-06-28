@@ -7,6 +7,10 @@ import { WeekHeatmap } from '@/components/analytics/WeekHeatmap';
 import { useHermes } from '@/components/hermes/HermesContext';
 import { FinanceSection } from '@/components/finance/FinanceSection';
 import { ExistCockpit } from '@/components/finance/ExistCockpit';
+import { ExistPlanningTimeline } from '@/components/finance/ExistPlanningTimeline';
+
+// ponytail: flip to true in same commit that adds real v12 data
+const PLANNING_ENABLED = false;
 import type { FinanceData } from '@/types/finance';
 
 const SECRET = process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? '';
@@ -87,7 +91,7 @@ interface CompanyData {
   pilot_activity: PilotActivity[];
 }
 
-type FinanceScenarioMode = 'pre-exist' | 'exist';
+type FinanceScenarioMode = 'pre-exist' | 'exist' | 'exist-planung';
 
 function formatEur(value: number): string {
   if (value >= 1000) return `${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k €`;
@@ -460,13 +464,29 @@ export default function CompanyPageClient() {
               >
                 EXIST-CFO
               </button>
+              {PLANNING_ENABLED && (
+                <button
+                  type="button"
+                  className={`rounded-[10px] px-3 py-2 font-[var(--mono)] text-[11px] font-semibold transition ${
+                    financeScenario === 'exist-planung'
+                      ? 'bg-[var(--glass-2)] text-[var(--ink-1)] shadow-[0_0_12px_-6px_var(--brand-2)]'
+                      : 'text-[var(--ink-3)] hover:text-[var(--ink-1)]'
+                  }`}
+                  aria-pressed={financeScenario === 'exist-planung'}
+                  onClick={() => setFinanceScenario('exist-planung')}
+                >
+                  EXIST-Planung
+                </button>
+              )}
             </div>
           </section>
 
           {financeScenario === 'pre-exist' ? (
             <FinanceSection data={finance} loading={financeLoading} error={financeError} />
-          ) : (
+          ) : financeScenario === 'exist' ? (
             <ExistCockpit />
+          ) : (
+            <ExistPlanningTimeline />
           )}
 
           <section className="company-section">
