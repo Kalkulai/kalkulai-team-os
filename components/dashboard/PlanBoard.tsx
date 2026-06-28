@@ -7,7 +7,7 @@ import type { UnifiedTask } from '@/lib/unified-tasks';
 import type { ClaudeSession } from '@/types';
 
 // ponytail: hardcoded current phase — update when phase advances
-const CURRENT_PHASE = 3;
+const CURRENT_PHASE = 1;
 
 const PHASES = Array.from({ length: TOTAL_PHASES }, (_, i) => i + 1);
 
@@ -28,23 +28,30 @@ export function PlanBoard({
 }) {
   // 0 = Alle
   const [selectedPhase, setSelectedPhase] = useState<number>(CURRENT_PHASE);
-  const [selectedBereich, setSelectedBereich] = useState<string>('');
+  const [selectedBereich, setSelectedBereich] = useState<string>('angebot');
 
-  const currentPhaseCount = allTasks.filter((t) => t.meta?.phase === CURRENT_PHASE).length;
+  // Only team-tagged tasks (phase must be set); personal tasks stay on the main board
+  const teamTasks = useMemo(
+    () => allTasks.filter((t) => t.meta?.phase != null),
+    [allTasks],
+  );
+  const teamDoneTasks = doneTasks.filter((t) => t.meta?.phase != null);
+
+  const currentPhaseCount = teamTasks.filter((t) => t.meta?.phase === CURRENT_PHASE).length;
 
   const maxCount = Math.max(
     1,
-    ...BEREICHE.map((b) => allTasks.filter((t) => t.meta?.bereich === b.id).length),
+    ...BEREICHE.map((b) => teamTasks.filter((t) => t.meta?.bereich === b.id).length),
   );
 
   const filteredTasks = useMemo(
     () =>
-      allTasks.filter((t) => {
+      teamTasks.filter((t) => {
         if (selectedPhase !== 0 && t.meta?.phase !== selectedPhase) return false;
         if (selectedBereich && t.meta?.bereich !== selectedBereich) return false;
         return true;
       }),
-    [allTasks, selectedPhase, selectedBereich],
+    [teamTasks, selectedPhase, selectedBereich],
   );
 
   function togglePhase(p: number) {
@@ -110,7 +117,7 @@ export function PlanBoard({
             </div>
             <div className="plan-heatmap">
               {BEREICHE.map((b) => {
-                const count = allTasks.filter((t) => t.meta?.bereich === b.id).length;
+                const count = teamTasks.filter((t) => t.meta?.bereich === b.id).length;
                 const intensity = count / maxCount;
                 const isSelected = selectedBereich === b.id;
                 return (
@@ -159,7 +166,7 @@ export function PlanBoard({
           Alle
         </button>
         {PHASES.map((p) => {
-          const count = allTasks.filter((t) => t.meta?.phase === p).length;
+          const count = teamTasks.filter((t) => t.meta?.phase === p).length;
           return (
             <button
               key={p}
@@ -185,7 +192,7 @@ export function PlanBoard({
       <KanbanBoard
         key={`${selectedPhase}-${selectedBereich}`}
         tasks={filteredTasks}
-        doneTasks={doneTasks}
+        doneTasks={teamDoneTasks}
         members={members}
         metaEnabled={metaEnabled}
         projects={projects}
