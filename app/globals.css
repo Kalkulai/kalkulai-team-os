@@ -5782,3 +5782,34 @@ html.light .agent-launch-error {
 .light .plan-heatmap-cell {
   background: color-mix(in srgb, var(--brand) calc(var(--plan-intensity, 0) * 14%), rgba(0,0,0,0.02));
 }
+
+/* ──────────────────────────────────────────────
+   Plan/Team page-level tabs (Plan | Team switcher)
+   ────────────────────────────────────────────── */
+
+.plan-page-tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--line-1);
+  padding-bottom: 0;
+}
+
+.plan-page-tab {
+  font: 500 13px/1 var(--font);
+  padding: 7px 14px 9px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  text-decoration: none;
+  display: inline-block;
+  margin-bottom: -1px;
+}
+.plan-page-tab:hover { color: var(--ink-1); }
+.plan-page-tab.is-active {
+  color: var(--ink-1);
+  border-bottom-color: var(--brand);
+}
