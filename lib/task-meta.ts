@@ -1,5 +1,12 @@
 export type TaskContext = 'business' | 'private';
 export type TaskEnergy = 'deep' | 'admin';
+export type TaskBereich =
+  | 'dashboard'
+  | 'angebot'
+  | 'planung'
+  | 'kommunikation'
+  | 'ma_mobil'
+  | 'allgemein';
 
 /** Felix-only task metadata (stored in Supabase `task_meta`, keyed by Linear issue id).
  * Pure/client-safe module — DB access lives in `lib/task-meta-db.ts`. */
@@ -11,6 +18,10 @@ export interface TaskMeta {
   energy: TaskEnergy | null;
   projectId: string | null;
   fixed: boolean;
+  /** Team planning: which phase (1–9) this ticket belongs to. */
+  phase: number | null;
+  /** Team planning: product area. */
+  bereich: TaskBereich | null;
 }
 
 export const EMPTY_TASK_META: TaskMeta = {
@@ -21,6 +32,8 @@ export const EMPTY_TASK_META: TaskMeta = {
   energy: null,
   projectId: null,
   fixed: false,
+  phase: null,
+  bereich: null,
 };
 
 export const EFFORT_OPTIONS: ReadonlyArray<{ minutes: number; label: string }> = [
@@ -31,6 +44,17 @@ export const EFFORT_OPTIONS: ReadonlyArray<{ minutes: number; label: string }> =
   { minutes: 240, label: '½ Tag' },
   { minutes: 480, label: '1 Tag' },
 ];
+
+export const BEREICHE: ReadonlyArray<{ id: TaskBereich; label: string }> = [
+  { id: 'dashboard',     label: 'Dashboard' },
+  { id: 'angebot',       label: 'Angebot / LV' },
+  { id: 'planung',       label: 'Planung' },
+  { id: 'kommunikation', label: 'Kommunikation' },
+  { id: 'ma_mobil',      label: 'MA / Mobil' },
+  { id: 'allgemein',     label: 'Allgemein' },
+];
+
+export const TOTAL_PHASES = 9;
 
 export function effortLabel(minutes: number | null): string | null {
   if (!minutes) return null;
@@ -75,6 +99,15 @@ export function parseTaskMeta(input: unknown): TaskMeta | null {
       ? Math.round(o.effortMinutes)
       : null;
   const projectId = typeof o.projectId === 'string' && o.projectId ? o.projectId : null;
+  const phase =
+    typeof o.phase === 'number' && o.phase >= 1 && o.phase <= TOTAL_PHASES
+      ? Math.round(o.phase)
+      : null;
+  const validBereiche: string[] = BEREICHE.map((b) => b.id);
+  const bereich =
+    typeof o.bereich === 'string' && validBereiche.includes(o.bereich)
+      ? (o.bereich as TaskBereich)
+      : null;
   return {
     context,
     effortMinutes,
@@ -83,5 +116,7 @@ export function parseTaskMeta(input: unknown): TaskMeta | null {
     energy,
     projectId,
     fixed: o.fixed === true,
+    phase,
+    bereich,
   };
 }
