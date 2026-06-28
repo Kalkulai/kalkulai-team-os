@@ -2,11 +2,11 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Calendar, Users, MessageCircle, Settings, ChevronDown, Check, Building2, Bot } from 'lucide-react';
+import { Calendar, Users, MessageCircle, Settings, ChevronDown, Check, Building2, Bot, Map } from 'lucide-react';
 import { useActiveMember } from '@/lib/active-member';
 import { isLeonMemberId } from '@/lib/agent-access';
 
-type Route = '/dashboard' | '/dashboard/team' | '/dashboard/chat' | '/dashboard/company' | '/dashboard/agents' | '/settings';
+type Route = '/dashboard' | '/dashboard/team' | '/dashboard/chat' | '/dashboard/company' | '/dashboard/agents' | '/dashboard/plan' | '/settings';
 
 interface PageDef {
   href: Route;
@@ -16,16 +16,18 @@ interface PageDef {
 
 const PAGES: PageDef[] = [
   { href: '/dashboard',         title: 'Mein Tag',     Icon: Calendar },
-  { href: '/dashboard/chat',    title: 'Chat',         Icon: MessageCircle },
-  { href: '/dashboard/team',    title: 'Team',         Icon: Users },
-  { href: '/dashboard/company', title: 'Firma',        Icon: Building2 },
-  { href: '/dashboard/agents',  title: 'Agents',       Icon: Bot },
+  { href: '/dashboard/plan',    title: 'Plan',          Icon: Map },
+  { href: '/dashboard/chat',    title: 'Chat',          Icon: MessageCircle },
+  { href: '/dashboard/team',    title: 'Team',          Icon: Users },
+  { href: '/dashboard/company', title: 'Firma',         Icon: Building2 },
+  { href: '/dashboard/agents',  title: 'Agents',        Icon: Bot },
   { href: '/settings',          title: 'Einstellungen', Icon: Settings },
 ];
 
 function activePageFor(pathname: string | null, pages: PageDef[]): PageDef {
   if (!pathname) return pages[0];
-  // sub-routes must win over /dashboard
+  const plan = pages.find((p) => p.href === '/dashboard/plan');
+  if (plan && pathname.startsWith('/dashboard/plan')) return plan;
   const team = pages.find((p) => p.href === '/dashboard/team');
   if (team && pathname.startsWith('/dashboard/team')) return team;
   const chat = pages.find((p) => p.href === '/dashboard/chat');

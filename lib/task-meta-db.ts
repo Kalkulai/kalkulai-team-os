@@ -1,5 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import type { TaskMeta, TaskContext, TaskEnergy } from '@/lib/task-meta';
+import type { TaskMeta, TaskContext, TaskEnergy, TaskBereich } from '@/lib/task-meta';
 
 interface TaskMetaRow {
   linear_issue_id: string;
@@ -10,10 +10,12 @@ interface TaskMetaRow {
   energy: TaskEnergy | null;
   project_id: string | null;
   fixed: boolean;
+  phase: number | null;
+  bereich: TaskBereich | null;
 }
 
 const SELECT_COLS =
-  'linear_issue_id, context, effort_minutes, important, urgent, energy, project_id, fixed';
+  'linear_issue_id, context, effort_minutes, important, urgent, energy, project_id, fixed, phase, bereich';
 
 function rowToMeta(r: TaskMetaRow): TaskMeta {
   return {
@@ -24,6 +26,8 @@ function rowToMeta(r: TaskMetaRow): TaskMeta {
     energy: r.energy,
     projectId: r.project_id,
     fixed: r.fixed,
+    phase: r.phase,
+    bereich: r.bereich,
   };
 }
 
@@ -59,6 +63,8 @@ export async function upsertTaskMeta(
       energy: meta.energy,
       project_id: meta.projectId,
       fixed: meta.fixed,
+      phase: meta.phase,
+      bereich: meta.bereich,
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'linear_issue_id' },
