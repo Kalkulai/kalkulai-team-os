@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { KanbanBoard } from './KanbanBoard';
 import { BEREICHE, TOTAL_PHASES } from '@/lib/task-meta';
 import type { UnifiedTask } from '@/lib/unified-tasks';
@@ -26,106 +26,164 @@ export function PlanBoard({
   projects?: Array<{ id: string; name: string }>;
   activeClaudeByIdentifier?: Record<string, ClaudeSession[]>;
 }) {
-  const [selectedPhase, setSelectedPhase] = useState<number | null>(null);
-  const [selectedBereich, setSelectedBereich] = useState<string | null>(null);
+  // 0 = Alle
+  const [selectedPhase, setSelectedPhase] = useState<number>(CURRENT_PHASE);
+  const [selectedBereich, setSelectedBereich] = useState<string>('');
 
-  const filteredTasks = allTasks.filter((t) => {
-    const phaseMatch = selectedPhase === null || t.meta?.phase === selectedPhase;
-    const bereichMatch = selectedBereich === null || t.meta?.bereich === selectedBereich;
-    return phaseMatch && bereichMatch;
-  });
+  const currentPhaseCount = allTasks.filter((t) => t.meta?.phase === CURRENT_PHASE).length;
 
-  // Count open tickets per bereich (all phases)
   const maxCount = Math.max(
     1,
     ...BEREICHE.map((b) => allTasks.filter((t) => t.meta?.bereich === b.id).length),
   );
 
+  const filteredTasks = useMemo(
+    () =>
+      allTasks.filter((t) => {
+        if (selectedPhase !== 0 && t.meta?.phase !== selectedPhase) return false;
+        if (selectedBereich && t.meta?.bereich !== selectedBereich) return false;
+        return true;
+      }),
+    [allTasks, selectedPhase, selectedBereich],
+  );
+
+  function togglePhase(p: number) {
+    setSelectedPhase((prev) => (prev === p ? 0 : p));
+  }
+
   return (
     <div className="plan-board">
-      {/* Management header */}
+      {/* ── Management Header ── */}
       <div className="plan-header glass">
-        {/* Phase rail */}
-        <div className="plan-section">
-          <div className="plan-section-label">
-            <span className="ovr">Phasen</span>
-            {selectedPhase !== null && (
-              <button
-                type="button"
-                className="plan-clear-btn"
-                onClick={() => setSelectedPhase(null)}
-              >
-                Alle
-              </button>
-            )}
+        <div className="plan-header-panels">
+          {/* Left: Phase Progress */}
+          <div className="plan-section">
+            <div className="plan-section-label">
+              <span className="ovr">Phasen</span>
+            </div>
+            <div className="plan-phase-trail">
+              {PHASES.map((p) => {
+                const isPast = p < CURRENT_PHASE;
+                const isCurrent = p === CURRENT_PHASE;
+                return (
+                  <div
+                    key={p}
+                    className={[
+                      'plan-trail-item',
+                      isPast ? 'is-past' : '',
+                      isCurrent ? 'is-current' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                    title={
+                      isCurrent ? 'Aktuelle Phase' : isPast ? 'Abgeschlossen' : `Phase ${p}`
+                    }
+                  >
+                    P{p}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="plan-phase-stat">
+              <span className="ovr">Aktuelle Phase: P{CURRENT_PHASE}</span>
+              {currentPhaseCount > 0 && (
+                <span className="plan-phase-stat-count mono">
+                  {currentPhaseCount} offen
+                </span>
+              )}
+            </div>
           </div>
-          <div className="plan-phase-pills">
-            {PHASES.map((p) => {
-              const isCurrent = p === CURRENT_PHASE;
-              const isPast = p < CURRENT_PHASE;
-              const isSelected = p === selectedPhase;
-              return (
+
+          {/* Right: Bereich Heatmap */}
+          <div className="plan-section plan-section-heatmap">
+            <div className="plan-section-label">
+              <span className="ovr">Bereiche</span>
+              {selectedBereich && (
                 <button
-                  key={p}
                   type="button"
-                  className={[
-                    'plan-phase-pill',
-                    isSelected ? 'is-selected' : '',
-                    isCurrent && !isSelected ? 'is-current' : '',
-                    isPast && !isSelected ? 'is-past' : '',
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                  onClick={() => setSelectedPhase(isSelected ? null : p)}
-                  title={isCurrent ? 'Aktuelle Phase' : isPast ? 'Vergangene Phase' : `Phase ${p}`}
+                  className="plan-clear-btn"
+                  onClick={() => setSelectedBereich('')}
                 >
-                  P{p}
+                  Alle
                 </button>
-              );
-            })}
+              )}
+            </div>
+            <div className="plan-heatmap">
+              {BEREICHE.map((b) => {
+                const count = allTasks.filter((t) => t.meta?.bereich === b.id).length;
+                const intensity = count / maxCount;
+                const isSelected = selectedBereich === b.id;
+                return (
+                  <button
+                    key={b.id}
+                    type="button"
+                    className={`plan-heatmap-cell${isSelected ? ' is-selected' : ''}`}
+                    style={{ '--plan-intensity': intensity } as React.CSSProperties}
+                    onClick={() => setSelectedBereich(isSelected ? '' : b.id)}
+                    title={`${b.label}: ${count} Tickets`}
+                  >
+                    <span className="plan-heatmap-label">{b.label}</span>
+                    <span className="plan-heatmap-count mono">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
 
-        {/* Bereich heatmap */}
-        <div className="plan-section plan-section-heatmap">
-          <div className="plan-section-label">
-            <span className="ovr">Bereiche</span>
-            {selectedBereich !== null && (
+        {/* Active filter chip */}
+        {selectedBereich && (
+          <div className="plan-filter-row">
+            <span className="plan-filter-chip">
+              {BEREICHE.find((b) => b.id === selectedBereich)?.label}
               <button
                 type="button"
-                className="plan-clear-btn"
-                onClick={() => setSelectedBereich(null)}
+                className="plan-filter-chip-clear"
+                onClick={() => setSelectedBereich('')}
+                aria-label="Filter entfernen"
               >
-                Alle
+                ×
               </button>
-            )}
+            </span>
           </div>
-          <div className="plan-heatmap">
-            {BEREICHE.map((b) => {
-              const count = allTasks.filter((t) => t.meta?.bereich === b.id).length;
-              const intensity = count / maxCount;
-              const isSelected = selectedBereich === b.id;
-              return (
-                <button
-                  key={b.id}
-                  type="button"
-                  className={`plan-heatmap-cell${isSelected ? ' is-selected' : ''}`}
-                  style={{ '--plan-intensity': intensity } as React.CSSProperties}
-                  onClick={() => setSelectedBereich(isSelected ? null : b.id)}
-                  title={`${b.label}: ${count} Tickets`}
-                >
-                  <span className="plan-heatmap-label">{b.label}</span>
-                  <span className="plan-heatmap-count mono">{count}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
+        )}
       </div>
 
-      {/* Kanban — key forces remount when filter changes */}
+      {/* ── Phase Tabs ── */}
+      <div className="plan-phase-tabs">
+        <button
+          type="button"
+          className={`plan-tab${selectedPhase === 0 ? ' is-active' : ''}`}
+          onClick={() => setSelectedPhase(0)}
+        >
+          Alle
+        </button>
+        {PHASES.map((p) => {
+          const count = allTasks.filter((t) => t.meta?.phase === p).length;
+          return (
+            <button
+              key={p}
+              type="button"
+              className={[
+                'plan-tab',
+                selectedPhase === p ? 'is-active' : '',
+                p === CURRENT_PHASE ? 'is-current-phase' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
+              onClick={() => togglePhase(p)}
+            >
+              P{p}
+              {p === CURRENT_PHASE && <span className="plan-tab-arrow">←</span>}
+              {count > 0 && <span className="plan-tab-count">{count}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* ── Kanban ── */}
       <KanbanBoard
-        key={`${selectedPhase ?? 'all'}-${selectedBereich ?? 'all'}`}
+        key={`${selectedPhase}-${selectedBereich}`}
         tasks={filteredTasks}
         doneTasks={doneTasks}
         members={members}

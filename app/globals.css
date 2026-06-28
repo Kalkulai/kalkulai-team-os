@@ -5608,38 +5608,123 @@ html.light .agent-launch-error {
 }
 .plan-clear-btn:hover { opacity: 0.7; }
 
-/* Phase pills */
-.plan-phase-pills {
+/* Phase trail (read-only progress indicator in management header) */
+.plan-header-panels {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.plan-phase-trail {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
 }
 
-.plan-phase-pill {
+.plan-trail-item {
+  font: 500 11px/1 var(--mono);
+  padding: 3px 7px;
+  border-radius: 5px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--line-1);
+  color: var(--ink-4);
+}
+.plan-trail-item.is-past {
+  opacity: 0.35;
+}
+.plan-trail-item.is-current {
+  border-color: var(--brand);
+  color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 12%, transparent);
+}
+
+.plan-phase-stat {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plan-phase-stat-count {
+  font-size: 11px;
+  color: var(--ink-3);
+}
+
+/* Active bereich filter chip */
+.plan-filter-row {
+  padding: 6px 16px 10px;
+  border-top: 1px solid var(--line-1);
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.plan-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: 400 11.5px/1 var(--font);
+  color: var(--brand);
+  border: 1px solid var(--brand);
+  border-radius: 5px;
+  padding: 2px 6px 2px 8px;
+  background: color-mix(in srgb, var(--brand) 10%, transparent);
+}
+.plan-filter-chip-clear {
+  font-size: 13px;
+  line-height: 1;
+  color: var(--brand);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 0 0 2px;
+  opacity: 0.7;
+}
+.plan-filter-chip-clear:hover { opacity: 1; }
+
+/* Phase tabs (below management header, drives kanban view) */
+.plan-phase-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 16px;
+}
+
+.plan-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font: 500 11.5px/1 var(--mono);
-  padding: 4px 9px;
-  border-radius: 6px;
-  background: rgba(255,255,255,0.04);
+  padding: 5px 10px;
+  border-radius: 7px;
+  background: rgba(255,255,255,0.03);
   border: 1px solid var(--line-1);
   color: var(--ink-3);
   cursor: pointer;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
-.plan-phase-pill:hover {
-  background: rgba(255,255,255,0.08);
+.plan-tab:hover {
+  background: rgba(255,255,255,0.07);
   color: var(--ink-2);
 }
-.plan-phase-pill.is-past {
-  opacity: 0.4;
+.plan-tab.is-current-phase {
+  border-color: color-mix(in srgb, var(--brand) 50%, var(--line-1));
 }
-.plan-phase-pill.is-current {
-  border-color: var(--brand);
-  color: var(--brand);
-}
-.plan-phase-pill.is-selected {
+.plan-tab.is-active {
   background: var(--brand);
   border-color: var(--brand);
   color: #fff;
+}
+.plan-tab-arrow {
+  font-size: 10px;
+  opacity: 0.7;
+}
+.plan-tab-count {
+  font: 600 10px/1 var(--mono);
+  background: rgba(255,255,255,0.12);
+  border-radius: 3px;
+  padding: 1px 4px;
+  min-width: 14px;
+  text-align: center;
+}
+.plan-tab.is-active .plan-tab-count {
+  background: rgba(255,255,255,0.22);
 }
 
 /* Bereich heatmap */
@@ -5685,10 +5770,13 @@ html.light .agent-launch-error {
 }
 
 /* Light mode adjustments */
-.light .plan-phase-pill {
+.light .plan-trail-item {
   background: rgba(0,0,0,0.03);
 }
-.light .plan-phase-pill:hover {
+.light .plan-tab {
+  background: rgba(0,0,0,0.03);
+}
+.light .plan-tab:hover {
   background: rgba(0,0,0,0.06);
 }
 .light .plan-heatmap-cell {
