@@ -151,7 +151,7 @@ const WIF_SUBJECT_TOKEN_TYPE = 'urn:ietf:params:oauth:token-type:jwt';
  * Hinweis: Bei OAuth2 bestimmen die beim Consent gewährten Scopes den Zugriff —
  * der `scope`-Parameter steuert nur JWT/WIF (Service-Account-Impersonation).
  */
-function buildAuth(scope: string): JWT | OAuth2Client | BaseExternalAccountClient {
+export function buildGoogleAuth(scope: string): JWT | OAuth2Client | BaseExternalAccountClient {
   // 1) OAuth2-Refresh-Token — bevorzugt, weil am einfachsten einzurichten.
   //    Eigene Finance-Client-Vars bevorzugt (entkoppelt vom Calendar-Client),
   //    Fallback auf die generischen GOOGLE_CLIENT_*.
@@ -236,7 +236,7 @@ export async function readNamedRange(
   sheetId: string,
   namedRange: string,
 ): Promise<string[][]> {
-  const auth = buildAuth(READONLY_SCOPE);
+  const auth = buildGoogleAuth(READONLY_SCOPE);
   const sheets = google.sheets({ version: 'v4', auth });
 
   const res = await sheets.spreadsheets.values.get({
@@ -261,7 +261,7 @@ export async function writeNamedRange(
   namedRange: string,
   value: (string | number)[][],
 ): Promise<void> {
-  const auth = buildAuth(WRITE_SCOPE);
+  const auth = buildGoogleAuth(WRITE_SCOPE);
   const sheets = google.sheets({ version: 'v4', auth });
 
   await sheets.spreadsheets.values.update({

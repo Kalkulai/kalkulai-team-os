@@ -1,5 +1,33 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+
+const planningData = vi.hoisted(() => ({
+  funding_start: '2026-08',
+  funding_end: '2027-07',
+  items: [
+    {
+      id: 'sachmittel-hardware',
+      name: 'Hardware',
+      category: 'sachmittel',
+      start: '2026-08',
+      end: '2026-08',
+      amount_eur_total: 30_000,
+    },
+    {
+      id: 'coaching-pitch',
+      name: 'Pitch-Coaching',
+      category: 'coaching',
+      start: '2026-10',
+      end: '2026-11',
+      amount_eur_total: 5_000,
+    },
+  ],
+}));
+
+vi.mock('@/lib/exist-planning-data', () => ({
+  loadPlanningData: () => Promise.resolve(planningData),
+}));
+
 import { GET } from '@/app/api/finance/planning/route';
 
 const SECRET = 'unit-test-secret';
