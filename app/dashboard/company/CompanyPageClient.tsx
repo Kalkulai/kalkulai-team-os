@@ -10,7 +10,7 @@ import { ExistCockpit } from '@/components/finance/ExistCockpit';
 import { ExistPlanningTimeline } from '@/components/finance/ExistPlanningTimeline';
 
 // ponytail: flip to true in same commit that adds real v12 data
-const PLANNING_ENABLED = false;
+const PLANNING_ENABLED = true;
 import type { FinanceData } from '@/types/finance';
 
 const SECRET = process.env.NEXT_PUBLIC_DASHBOARD_API_SECRET ?? '';
