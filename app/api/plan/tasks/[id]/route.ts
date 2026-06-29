@@ -84,6 +84,7 @@ export async function PATCH(
       fixed: cur?.fixed ?? false,
       phase: phase ?? cur?.phase ?? null,
       bereich: (bereich ?? cur?.bereich ?? null) as TaskBereich | null,
+      workerIds: [],
     });
   }
 

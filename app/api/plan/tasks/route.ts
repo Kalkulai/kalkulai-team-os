@@ -81,6 +81,7 @@ export async function GET(req: NextRequest) {
         dueDate: i.dueDate ?? null,
         phase: m?.phase ?? null,
         bereich: m?.bereich ?? null,
+        workerIds: [],
         owner: userId,
         source_kpi_id: null,  // reserved for future sync tracking
       };
@@ -151,6 +152,7 @@ export async function POST(req: NextRequest) {
       fixed: false,
       phase,
       bereich: bereich as TaskBereich,
+      workerIds: [],
     });
   } catch (err) {
     // Roll back the Linear issue to avoid orphaned tasks without plan metadata.

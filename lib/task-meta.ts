@@ -22,6 +22,8 @@ export interface TaskMeta {
   phase: number | null;
   /** Team planning: product area. */
   bereich: TaskBereich | null;
+  /** Who is actively working on this task (Supabase user IDs). */
+  workerIds: string[];
 }
 
 export const EMPTY_TASK_META: TaskMeta = {
@@ -34,6 +36,7 @@ export const EMPTY_TASK_META: TaskMeta = {
   fixed: false,
   phase: null,
   bereich: null,
+  workerIds: [],
 };
 
 export const EFFORT_OPTIONS: ReadonlyArray<{ minutes: number; label: string }> = [
@@ -83,7 +86,7 @@ export function quadrantBadge(
 export function hasMeta(m: TaskMeta | null | undefined): boolean {
   if (!m) return false;
   return Boolean(
-    m.context || m.effortMinutes || m.important || m.urgent || m.energy || m.projectId || m.fixed || m.phase || m.bereich,
+    m.context || m.effortMinutes || m.important || m.urgent || m.energy || m.projectId || m.fixed || m.phase || m.bereich || (m.workerIds?.length ?? 0) > 0,
   );
 }
 
@@ -108,6 +111,9 @@ export function parseTaskMeta(input: unknown): TaskMeta | null {
     typeof o.bereich === 'string' && validBereiche.includes(o.bereich)
       ? (o.bereich as TaskBereich)
       : null;
+  const workerIds = Array.isArray(o.workerIds)
+    ? (o.workerIds as unknown[]).filter((x): x is string => typeof x === 'string')
+    : [];
   return {
     context,
     effortMinutes,
@@ -118,5 +124,6 @@ export function parseTaskMeta(input: unknown): TaskMeta | null {
     fixed: o.fixed === true,
     phase,
     bereich,
+    workerIds,
   };
 }

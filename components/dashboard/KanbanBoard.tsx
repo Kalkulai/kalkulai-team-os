@@ -80,6 +80,7 @@ function DroppableColumn({
   metaEnabled,
   projects,
   onOpenCard,
+  membersList = [],
 }: {
   colId: string;
   label: string;
@@ -93,6 +94,7 @@ function DroppableColumn({
   metaEnabled?: boolean;
   projects?: Array<{ id: string; name: string }>;
   onOpenCard?: (task: UnifiedTask) => void;
+  membersList?: Array<{ id: string; name: string }>;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: colId });
   const [title, setTitle] = useState('');
@@ -188,7 +190,7 @@ function DroppableColumn({
                 disabled={busy}
               />
               {metaEnabled && (
-                <TaskMetaFields value={meta} onChange={setMeta} projects={projects ?? []} />
+                <TaskMetaFields value={meta} onChange={setMeta} projects={projects ?? []} members={membersList} />
               )}
               <TaskImagePicker files={images} onChange={setImages} disabled={busy} />
               <div className="kanban-add-row">
@@ -510,6 +512,7 @@ export function KanbanBoard({
             metaEnabled={metaEnabled}
             projects={projects}
             onOpenCard={metaEnabled ? setEditingTask : undefined}
+            membersList={members}
           />
         ))}
         <DroppableColumn
@@ -531,6 +534,7 @@ export function KanbanBoard({
         <TaskEditModal
           task={editingTask}
           projects={projects}
+          members={members}
           userId={memberId}
           onClose={() => setEditingTask(null)}
           onSaved={(patch) => {
