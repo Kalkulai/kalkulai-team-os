@@ -139,12 +139,11 @@ export function KanbanCard({
             🤖 live
           </span>
         )}
-        {!planView && showMeta && q ? (
+        {!planView && showMeta && q && (
           <span className={`pill ${q.cls} text-[10px]`} title="Eisenhower-Quadrant">{q.label}</span>
-        ) : (
-          !planView && prio > 0 && (
-            <span className={`pill ${PRIORITY_PILL[prio]} text-[10px]`}>{PRIORITY_LABEL[prio]}</span>
-          )
+        )}
+        {!planView && !(showMeta && q) && prio > 0 && (
+          <span className={`pill ${PRIORITY_PILL[prio]} text-[10px]`}>{PRIORITY_LABEL[prio]}</span>
         )}
         {!planView && meta?.context && (
           <span className={`pill ${meta.context === 'business' ? 'pill-blue' : 'pill-amber'} text-[10px]`}>
