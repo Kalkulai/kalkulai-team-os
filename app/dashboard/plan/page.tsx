@@ -216,7 +216,10 @@ export default async function PlanPage({
       <PlanBoard
         allTasks={tasksWithSubtasks}
         doneTasks={doneTasks}
-        ideaTasks={tasksWithSubtasks.filter((t) => !t.meta?.phase)}
+        ideaTasks={tasksWithSubtasks.filter(
+          // Only plan-tagged tasks without a phase — excludes private/general tasks with no meta.
+          (t) => !t.meta?.phase && (t.meta?.bereich != null || t.meta?.projectId != null),
+        )}
         members={members}
         metaEnabled={metaEnabled}
         projects={projectOptions}
