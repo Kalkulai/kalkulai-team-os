@@ -42,6 +42,7 @@ function DraggableCard({
   activeClaude,
   onOpen,
   projects,
+  planView,
 }: {
   task: UnifiedTask;
   done?: boolean;
@@ -49,6 +50,7 @@ function DraggableCard({
   activeClaude?: ClaudeSession[];
   onOpen?: () => void;
   projects?: Array<{ id: string; name: string }>;
+  planView?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: task.id,
@@ -62,7 +64,7 @@ function DraggableCard({
       {...attributes}
       className={`kanban-draggable${isDragging ? ' is-dragging' : ''}`}
     >
-      <KanbanCard task={task} done={done} members={members} activeClaude={activeClaude} onOpen={onOpen} projects={projects} />
+      <KanbanCard task={task} done={done} members={members} activeClaude={activeClaude} onOpen={onOpen} projects={projects} planView={planView} />
     </div>
   );
 }
@@ -82,6 +84,7 @@ function DroppableColumn({
   onOpenCard,
   membersList = [],
   defaultCollapsed,
+  planView,
 }: {
   colId: string;
   label: string;
@@ -97,6 +100,7 @@ function DroppableColumn({
   onOpenCard?: (task: UnifiedTask) => void;
   membersList?: Array<{ id: string; name: string }>;
   defaultCollapsed?: boolean;
+  planView?: boolean;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: colId });
   const [collapsed, setCollapsed] = useState(defaultCollapsed ?? false);
@@ -187,6 +191,7 @@ function DroppableColumn({
                   activeClaude={task.identifier ? activeClaudeByIdentifier?.[task.identifier] : undefined}
                   onOpen={onOpenCard && !done && task.kind === 'linear' ? () => onOpenCard(task) : undefined}
                   projects={projects}
+                  planView={planView}
                 />
               ))}
               {addOpen && onSubmitAdd && (
@@ -256,6 +261,7 @@ export function KanbanBoard({
   activeClaudeByIdentifier,
   metaEnabled = false,
   projects = [],
+  planView = false,
 }: {
   tasks: UnifiedTask[];
   doneTasks?: UnifiedTask[];
@@ -269,6 +275,7 @@ export function KanbanBoard({
   metaEnabled?: boolean;
   /** User's dashboard projects, for the meta project dropdown + card label. */
   projects?: Array<{ id: string; name: string }>;
+  planView?: boolean;
 }) {
   const router = useRouter();
   const { activeId: memberId } = useActiveMember();
@@ -528,6 +535,7 @@ export function KanbanBoard({
             onOpenCard={metaEnabled ? setEditingTask : undefined}
             membersList={members}
             defaultCollapsed={col.id === 'todo' ? true : undefined}
+            planView={planView}
           />
         ))}
         <DroppableColumn
@@ -536,12 +544,13 @@ export function KanbanBoard({
           cards={doneTasks}
           members={members}
           done
+          planView={planView}
         />
       </div>
       <DragOverlay dropAnimation={null}>
         {activeTask ? (
           <div className="kanban-drag-overlay">
-            <KanbanCard task={activeTask} members={members} />
+            <KanbanCard task={activeTask} members={members} planView={planView} />
           </div>
         ) : null}
       </DragOverlay>
