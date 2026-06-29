@@ -32,7 +32,7 @@ export async function PATCH(
 
   const { id: issueId } = await params;
   const body = await req.json().catch(() => ({}));
-  const { phase, bereich, title, status, priority, dueDate, userId } = body as {
+  const { phase, bereich, title, status, priority, dueDate, userId, workerIds } = body as {
     phase?: number;
     bereich?: string;
     title?: string;
@@ -40,6 +40,7 @@ export async function PATCH(
     priority?: number;
     dueDate?: string | null;
     userId?: string;
+    workerIds?: string[];
   };
 
   if (phase !== undefined && (typeof phase !== 'number' || phase < 1 || phase > 9)) {
@@ -70,8 +71,8 @@ export async function PATCH(
     await setIssueStatus(issueId, stateId);
   }
 
-  // Update task_meta for phase/bereich
-  if ((phase !== undefined || bereich !== undefined) && ownerId) {
+  // Update task_meta for phase/bereich/workerIds
+  if ((phase !== undefined || bereich !== undefined || workerIds !== undefined) && ownerId) {
     const existing = await getTaskMetaByIssueIds([issueId]);
     const cur = existing[issueId];
     await upsertTaskMeta(issueId, ownerId, {
@@ -84,7 +85,7 @@ export async function PATCH(
       fixed: cur?.fixed ?? false,
       phase: phase ?? cur?.phase ?? null,
       bereich: (bereich ?? cur?.bereich ?? null) as TaskBereich | null,
-      workerIds: [],
+      workerIds: workerIds ?? cur?.workerIds ?? [],
     });
   }
 
