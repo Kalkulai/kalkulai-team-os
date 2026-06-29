@@ -32,6 +32,7 @@ export function PlanBoard({
   const [selectedPhase, setSelectedPhase] = useState<number>(CURRENT_PHASE);
   const [selectedBereich, setSelectedBereich] = useState<string>('angebot');
   const [ideaOpen, setIdeaOpen] = useState(false);
+  const [selectedWorkerIds, setSelectedWorkerIds] = useState<string[]>([]);
 
   // Only team-tagged tasks (phase must be set); personal tasks stay on the main board
   const teamTasks = useMemo(
@@ -52,13 +53,23 @@ export function PlanBoard({
       teamTasks.filter((t) => {
         if (selectedPhase !== 0 && t.meta?.phase !== selectedPhase) return false;
         if (selectedBereich && t.meta?.bereich !== selectedBereich) return false;
+        if (selectedWorkerIds.length > 0) {
+          const workers = t.meta?.workerIds ?? [];
+          if (!selectedWorkerIds.some((id) => workers.includes(id))) return false;
+        }
         return true;
       }),
-    [teamTasks, selectedPhase, selectedBereich],
+    [teamTasks, selectedPhase, selectedBereich, selectedWorkerIds],
   );
 
   function togglePhase(p: number) {
     setSelectedPhase((prev) => (prev === p ? 0 : p));
+  }
+
+  function toggleWorker(id: string) {
+    setSelectedWorkerIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
   }
 
   return (
@@ -103,6 +114,46 @@ export function PlanBoard({
               )}
             </div>
           </div>
+
+          {/* Wer arbeitet */}
+          {members.length > 0 && (
+            <div className="plan-section">
+              <div className="plan-section-label">
+                <span className="ovr">Wer arbeitet</span>
+                {selectedWorkerIds.length > 0 && (
+                  <button
+                    type="button"
+                    className="plan-clear-btn"
+                    onClick={() => setSelectedWorkerIds([])}
+                  >
+                    Alle
+                  </button>
+                )}
+              </div>
+              <div className="plan-worker-filter">
+                {members.map((m) => {
+                  const isSelected = selectedWorkerIds.includes(m.id);
+                  const initials = m.name
+                    .split(' ')
+                    .map((w: string) => w[0])
+                    .join('')
+                    .slice(0, 2)
+                    .toUpperCase();
+                  return (
+                    <button
+                      key={m.id}
+                      type="button"
+                      className={`plan-worker-chip${isSelected ? ' is-selected' : ''}`}
+                      onClick={() => toggleWorker(m.id)}
+                      title={m.name}
+                    >
+                      {initials}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Right: Bereich Heatmap */}
           <div className="plan-section plan-section-heatmap">
@@ -200,7 +251,7 @@ export function PlanBoard({
             onClick={() => setIdeaOpen((v) => !v)}
             aria-expanded={ideaOpen}
           >
-            <span className="kanban-col-title">To Do</span>
+            <span className="kanban-col-title">Ideen / nicht eingeplant</span>
             <span className="kanban-col-count mono">{ideaTasks.length}</span>
             <span className="kanban-backlog-chevron">{ideaOpen ? '▾' : '▸'}</span>
           </button>
@@ -212,6 +263,7 @@ export function PlanBoard({
               metaEnabled={metaEnabled}
               projects={projects}
               activeClaudeByIdentifier={activeClaudeByIdentifier}
+              planView
             />
           )}
         </div>
@@ -226,6 +278,7 @@ export function PlanBoard({
         metaEnabled={metaEnabled}
         projects={projects}
         activeClaudeByIdentifier={activeClaudeByIdentifier}
+        planView
       />
     </div>
   );

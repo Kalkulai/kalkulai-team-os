@@ -42,6 +42,7 @@ function DraggableCard({
   activeClaude,
   onOpen,
   projects,
+  planView,
 }: {
   task: UnifiedTask;
   done?: boolean;
@@ -49,6 +50,7 @@ function DraggableCard({
   activeClaude?: ClaudeSession[];
   onOpen?: () => void;
   projects?: Array<{ id: string; name: string }>;
+  planView?: boolean;
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: task.id,
@@ -62,7 +64,7 @@ function DraggableCard({
       {...attributes}
       className={`kanban-draggable${isDragging ? ' is-dragging' : ''}`}
     >
-      <KanbanCard task={task} done={done} members={members} activeClaude={activeClaude} onOpen={onOpen} projects={projects} />
+      <KanbanCard task={task} done={done} members={members} activeClaude={activeClaude} onOpen={onOpen} projects={projects} planView={planView} />
     </div>
   );
 }
@@ -81,6 +83,8 @@ function DroppableColumn({
   projects,
   onOpenCard,
   membersList = [],
+  defaultCollapsed,
+  planView,
 }: {
   colId: string;
   label: string;
@@ -95,8 +99,11 @@ function DroppableColumn({
   projects?: Array<{ id: string; name: string }>;
   onOpenCard?: (task: UnifiedTask) => void;
   membersList?: Array<{ id: string; name: string }>;
+  defaultCollapsed?: boolean;
+  planView?: boolean;
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: colId });
+  const [collapsed, setCollapsed] = useState(defaultCollapsed ?? false);
   const [title, setTitle] = useState('');
   const [due, setDue] = useState<string | null>(null);
   const [priority, setPriority] = useState<number>(0);
@@ -141,17 +148,24 @@ function DroppableColumn({
       className={`kanban-col${done ? ' kanban-col-done' : ''}${isOver && !done ? ' kanban-col-over' : ''}`}
       data-col={colId}
     >
-      <div className="kanban-col-header">
+      <div
+        className="kanban-col-header"
+        style={defaultCollapsed !== undefined ? { cursor: 'pointer' } : undefined}
+        onClick={defaultCollapsed !== undefined ? () => setCollapsed((v) => !v) : undefined}
+      >
         <span className="kanban-col-title">{label}</span>
         <span className="kanban-col-header-actions">
           {cards.length > 0 && (
             <span className="kanban-col-count mono">{cards.length}</span>
           )}
-          {onToggleAdd && (
+          {defaultCollapsed !== undefined && (
+            <span className="kanban-backlog-chevron">{collapsed ? '▸' : '▾'}</span>
+          )}
+          {!collapsed && onToggleAdd && (
             <button
               type="button"
               className="kanban-add-btn"
-              onClick={onToggleAdd}
+              onClick={(e) => { e.stopPropagation(); onToggleAdd(); }}
               aria-label={addOpen ? 'Add-Form schließen' : 'Task hinzufügen'}
               title={addOpen ? 'Schließen' : 'Neuer Task'}
             >
@@ -160,74 +174,79 @@ function DroppableColumn({
           )}
         </span>
       </div>
-      {cards.length === 0 && !addOpen ? (
-        <p className="kanban-empty">
-          {done ? 'Nichts diese Woche' : 'Keine Tasks'}
-        </p>
-      ) : (
-        <div className="kanban-cards">
-          {cards.map((task) => (
-            <DraggableCard
-              key={task.id}
-              task={task}
-              done={done}
-              members={members}
-              activeClaude={task.identifier ? activeClaudeByIdentifier?.[task.identifier] : undefined}
-              onOpen={onOpenCard && !done && task.kind === 'linear' ? () => onOpenCard(task) : undefined}
-              projects={projects}
-            />
-          ))}
-          {addOpen && onSubmitAdd && (
-            <form className="kanban-add-form" onSubmit={submit}>
-              <textarea
-                autoFocus
-                rows={2}
-                className="kanban-add-input"
-                placeholder="Neuer Task — Enter zum Speichern, Esc zum Abbrechen"
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                onKeyDown={onKey}
-                disabled={busy}
-              />
-              {metaEnabled && (
-                <TaskMetaFields value={meta} onChange={setMeta} projects={projects ?? []} members={membersList} />
-              )}
-              <TaskImagePicker files={images} onChange={setImages} disabled={busy} />
-              <div className="kanban-add-row">
-                <DatePicker value={due} onChange={setDue} placeholder="Datum optional" />
-                {!metaEnabled && (
-                  <div className="kanban-add-prio">
-                    {[
-                      { p: 1, label: 'urgent' },
-                      { p: 2, label: 'high' },
-                      { p: 3, label: 'medium' },
-                      { p: 4, label: 'low' },
-                    ].map((x) => (
-                      <button
-                        key={x.p}
-                        type="button"
-                        className={priority === x.p ? 'is-on' : ''}
-                        onClick={() => setPriority(priority === x.p ? 0 : x.p)}
-                      >
-                        {x.label}
-                      </button>
-                    ))}
+      {!collapsed && (
+        <>
+          {cards.length === 0 && !addOpen ? (
+            <p className="kanban-empty">
+              {done ? 'Nichts diese Woche' : 'Keine Tasks'}
+            </p>
+          ) : (
+            <div className="kanban-cards">
+              {cards.map((task) => (
+                <DraggableCard
+                  key={task.id}
+                  task={task}
+                  done={done}
+                  members={members}
+                  activeClaude={task.identifier ? activeClaudeByIdentifier?.[task.identifier] : undefined}
+                  onOpen={onOpenCard && !done && task.kind === 'linear' ? () => onOpenCard(task) : undefined}
+                  projects={projects}
+                  planView={planView}
+                />
+              ))}
+              {addOpen && onSubmitAdd && (
+                <form className="kanban-add-form" onSubmit={submit}>
+                  <textarea
+                    autoFocus
+                    rows={2}
+                    className="kanban-add-input"
+                    placeholder="Neuer Task — Enter zum Speichern, Esc zum Abbrechen"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    onKeyDown={onKey}
+                    disabled={busy}
+                  />
+                  {metaEnabled && (
+                    <TaskMetaFields value={meta} onChange={setMeta} projects={projects ?? []} members={membersList} />
+                  )}
+                  <TaskImagePicker files={images} onChange={setImages} disabled={busy} />
+                  <div className="kanban-add-row">
+                    <DatePicker value={due} onChange={setDue} placeholder="Datum optional" />
+                    {!metaEnabled && (
+                      <div className="kanban-add-prio">
+                        {[
+                          { p: 1, label: 'urgent' },
+                          { p: 2, label: 'high' },
+                          { p: 3, label: 'medium' },
+                          { p: 4, label: 'low' },
+                        ].map((x) => (
+                          <button
+                            key={x.p}
+                            type="button"
+                            className={priority === x.p ? 'is-on' : ''}
+                            onClick={() => setPriority(priority === x.p ? 0 : x.p)}
+                          >
+                            {x.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    <div className="kanban-add-spacer" />
+                    <button
+                      type="submit"
+                      className="kanban-add-submit"
+                      disabled={!title.trim() || busy}
+                      aria-label="Speichern"
+                    >
+                      <ArrowUp size={13} aria-hidden />
+                    </button>
                   </div>
-                )}
-                <div className="kanban-add-spacer" />
-                <button
-                  type="submit"
-                  className="kanban-add-submit"
-                  disabled={!title.trim() || busy}
-                  aria-label="Speichern"
-                >
-                  <ArrowUp size={13} aria-hidden />
-                </button>
-              </div>
-              {error && <p className="task-image-error">{error}</p>}
-            </form>
+                  {error && <p className="task-image-error">{error}</p>}
+                </form>
+              )}
+            </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );
@@ -242,6 +261,7 @@ export function KanbanBoard({
   activeClaudeByIdentifier,
   metaEnabled = false,
   projects = [],
+  planView = false,
 }: {
   tasks: UnifiedTask[];
   doneTasks?: UnifiedTask[];
@@ -255,6 +275,7 @@ export function KanbanBoard({
   metaEnabled?: boolean;
   /** User's dashboard projects, for the meta project dropdown + card label. */
   projects?: Array<{ id: string; name: string }>;
+  planView?: boolean;
 }) {
   const router = useRouter();
   const { activeId: memberId } = useActiveMember();
@@ -513,6 +534,8 @@ export function KanbanBoard({
             projects={projects}
             onOpenCard={metaEnabled ? setEditingTask : undefined}
             membersList={members}
+            defaultCollapsed={col.id === 'todo' ? true : undefined}
+            planView={planView}
           />
         ))}
         <DroppableColumn
@@ -521,12 +544,13 @@ export function KanbanBoard({
           cards={doneTasks}
           members={members}
           done
+          planView={planView}
         />
       </div>
       <DragOverlay dropAnimation={null}>
         {activeTask ? (
           <div className="kanban-drag-overlay">
-            <KanbanCard task={activeTask} members={members} />
+            <KanbanCard task={activeTask} members={members} planView={planView} />
           </div>
         ) : null}
       </DragOverlay>

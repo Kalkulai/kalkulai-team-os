@@ -43,6 +43,7 @@ export function KanbanCard({
   activeClaude = [],
   onOpen,
   projects = [],
+  planView = false,
 }: {
   task: UnifiedTask;
   done?: boolean;
@@ -53,6 +54,7 @@ export function KanbanCard({
   onOpen?: () => void;
   /** For resolving a meta.projectId → project name on the badge. */
   projects?: Array<{ id: string; name: string }>;
+  planView?: boolean;
 }) {
   const due = duePill(task.dueDate);
   const prio = task.priority ?? 0;
@@ -115,7 +117,7 @@ export function KanbanCard({
         )}
       </div>
       <div className="kanban-card-meta">
-        {task.identifier && (
+        {!planView && task.identifier && (
           <span className="pill pill-mute mono text-[10px]">{task.identifier}</span>
         )}
         {meta?.phase && (
@@ -137,14 +139,13 @@ export function KanbanCard({
             🤖 live
           </span>
         )}
-        {showMeta && q ? (
+        {!planView && showMeta && q && (
           <span className={`pill ${q.cls} text-[10px]`} title="Eisenhower-Quadrant">{q.label}</span>
-        ) : (
-          prio > 0 && (
-            <span className={`pill ${PRIORITY_PILL[prio]} text-[10px]`}>{PRIORITY_LABEL[prio]}</span>
-          )
         )}
-        {meta?.context && (
+        {!planView && !(showMeta && q) && prio > 0 && (
+          <span className={`pill ${PRIORITY_PILL[prio]} text-[10px]`}>{PRIORITY_LABEL[prio]}</span>
+        )}
+        {!planView && meta?.context && (
           <span className={`pill ${meta.context === 'business' ? 'pill-blue' : 'pill-amber'} text-[10px]`}>
             {meta.context === 'business' ? 'Geschäftlich' : 'Privat'}
           </span>
