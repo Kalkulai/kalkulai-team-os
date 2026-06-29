@@ -200,7 +200,7 @@ export function PlanBoard({
             onClick={() => setIdeaOpen((v) => !v)}
             aria-expanded={ideaOpen}
           >
-            <span className="kanban-col-title">Ideen / nicht eingeplant</span>
+            <span className="kanban-col-title">To Do</span>
             <span className="kanban-col-count mono">{ideaTasks.length}</span>
             <span className="kanban-backlog-chevron">{ideaOpen ? '▾' : '▸'}</span>
           </button>
