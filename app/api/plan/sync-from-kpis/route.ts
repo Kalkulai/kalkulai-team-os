@@ -48,6 +48,10 @@ export async function POST(req: NextRequest) {
   if (!userId || typeof userId !== 'string') {
     return NextResponse.json({ error: 'userId required' }, { status: 400 });
   }
+  // Tenant isolation: members can only sync their own plan.
+  if (actor.type === 'member' && actor.memberId !== userId) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
   if (typeof phase !== 'number' || phase < 1 || phase > 9) {
     return NextResponse.json({ error: 'phase required (1–9)' }, { status: 400 });
   }
@@ -121,14 +125,15 @@ export async function POST(req: NextRequest) {
         continue;
       }
       // Tag the existing issue (avoid duplicate; repair orphan from failed prior sync).
+      // Merge into existing meta so we don't wipe user-set fields (important, effortMinutes…).
       await upsertTaskMeta(existingIssue.id, userId, {
-        context: 'business',
-        effortMinutes: null,
-        important: false,
-        urgent: false,
-        energy: null,
-        projectId: null,
-        fixed: false,
+        context: existingIssueMeta?.context ?? 'business',
+        effortMinutes: existingIssueMeta?.effortMinutes ?? null,
+        important: existingIssueMeta?.important ?? false,
+        urgent: existingIssueMeta?.urgent ?? false,
+        energy: existingIssueMeta?.energy ?? null,
+        projectId: existingIssueMeta?.projectId ?? null,
+        fixed: existingIssueMeta?.fixed ?? false,
         phase,
         bereich: bereich as TaskBereich,
       });
