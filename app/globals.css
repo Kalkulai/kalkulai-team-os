@@ -5769,6 +5769,40 @@ html.light .agent-launch-error {
   color: var(--ink-2);
 }
 
+.plan-worker-filter {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.plan-worker-chip {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.plan-worker-chip:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--ink-1);
+}
+
+.plan-worker-chip.is-selected {
+  border-color: var(--accent);
+  background: rgba(99, 102, 241, 0.2);
+  color: var(--ink-1);
+}
+
 /* Light mode adjustments */
 .light .plan-trail-item {
   background: rgba(0,0,0,0.03);
