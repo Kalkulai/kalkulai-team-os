@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
         dueDate: i.dueDate ?? null,
         phase: m?.phase ?? null,
         bereich: m?.bereich ?? null,
-        workerIds: [],
+        workerIds: m?.workerIds ?? [],
         owner: userId,
         source_kpi_id: null,  // reserved for future sync tracking
       };

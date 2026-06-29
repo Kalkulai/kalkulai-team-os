@@ -17,9 +17,10 @@ vi.mock('@/lib/linear', () => ({
   updateIssue: vi.fn(),
 }));
 
+const upsertTaskMetaMock = vi.fn();
 vi.mock('@/lib/task-meta-db', () => ({
   getTaskMetaByIssueIds: (...a: unknown[]) => getTaskMetaByIssueIdsMock(...a),
-  upsertTaskMeta: vi.fn(),
+  upsertTaskMeta: (...a: unknown[]) => upsertTaskMetaMock(...a),
   deleteTaskMeta: vi.fn(),
 }));
 
@@ -39,6 +40,7 @@ vi.mock('@/lib/supabase', () => ({
 vi.mock('@/lib/revalidate', () => ({ revalidateDashboard: vi.fn() }));
 
 import { GET } from '@/app/api/plan/tasks/route';
+import { PATCH } from '@/app/api/plan/tasks/[id]/route';
 
 const AUTH_SECRET = 'test-auth-secret-with-enough-bytes';
 const FELIX_ID = 'c9677ade-e42c-4593-81c6-7a2108b145fd';
@@ -138,5 +140,151 @@ describe('GET /api/plan/tasks', () => {
     expect(res.status).toBe(403);
     process.env.DASHBOARD_API_SECRET = AUTH_SECRET;
     delete process.env.TEAM_OS_AUTH_SECRET;
+  });
+});
+
+describe('PATCH /api/plan/tasks/:id', () => {
+  const ISSUE_ID = 'issue-abc';
+  const FELIX_ID = 'c9677ade-e42c-4593-81c6-7a2108b145fd';
+  const AUTH_SECRET = 'test-auth-secret-with-enough-bytes';
+
+  function patchReq(id: string, body: unknown): import('next/server').NextRequest {
+    const { NextRequest } = require('next/server');
+    return new NextRequest(`http://localhost/api/plan/tasks/${id}`, {
+      method: 'PATCH',
+      headers: { authorization: `Bearer ${AUTH_SECRET}`, 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  beforeEach(() => {
+    process.env.DASHBOARD_API_SECRET = AUTH_SECRET;
+    getTaskMetaByIssueIdsMock.mockResolvedValue({
+      [ISSUE_ID]: {
+        phase: 1, bereich: 'angebot', context: null, effortMinutes: null,
+        important: false, urgent: false, energy: null, projectId: null, fixed: false,
+        workerIds: [],
+      },
+    });
+    upsertTaskMetaMock.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    delete process.env.DASHBOARD_API_SECRET;
+    vi.clearAllMocks();
+  });
+
+  it('PATCH with only workerIds persists them', async () => {
+    const req = patchReq(ISSUE_ID, { workerIds: [FELIX_ID], userId: FELIX_ID });
+    const res = await PATCH(req, { params: Promise.resolve({ id: ISSUE_ID }) });
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.ok).toBe(true);
+
+    expect(upsertTaskMetaMock).toHaveBeenCalledOnce();
+    const [, , meta] = upsertTaskMetaMock.mock.calls[0];
+    expect(meta.workerIds).toEqual([FELIX_ID]);
+  });
+
+  it('PATCH with phase + bereich + workerIds together all persist', async () => {
+    const req = patchReq(ISSUE_ID, { phase: 2, bereich: 'planung', workerIds: [FELIX_ID], userId: FELIX_ID });
+    const res = await PATCH(req, { params: Promise.resolve({ id: ISSUE_ID }) });
+    expect(res.status).toBe(200);
+
+    expect(upsertTaskMetaMock).toHaveBeenCalledOnce();
+    const [, , meta] = upsertTaskMetaMock.mock.calls[0];
+    expect(meta.phase).toBe(2);
+    expect(meta.bereich).toBe('planung');
+    expect(meta.workerIds).toEqual([FELIX_ID]);
+  });
+
+  it('PATCH with empty workerIds removes workers', async () => {
+    getTaskMetaByIssueIdsMock.mockResolvedValue({
+      [ISSUE_ID]: {
+        phase: 1, bereich: 'angebot', context: null, effortMinutes: null,
+        important: false, urgent: false, energy: null, projectId: null, fixed: false,
+        workerIds: [FELIX_ID],
+      },
+    });
+
+    const req = patchReq(ISSUE_ID, { workerIds: [], userId: FELIX_ID });
+    const res = await PATCH(req, { params: Promise.resolve({ id: ISSUE_ID }) });
+    expect(res.status).toBe(200);
+
+    const [, , meta] = upsertTaskMetaMock.mock.calls[0];
+    expect(meta.workerIds).toEqual([]);
+  });
+
+  it('PATCH without workerIds preserves existing ones (no regression)', async () => {
+    getTaskMetaByIssueIdsMock.mockResolvedValue({
+      [ISSUE_ID]: {
+        phase: 1, bereich: 'angebot', context: null, effortMinutes: null,
+        important: false, urgent: false, energy: null, projectId: null, fixed: false,
+        workerIds: [FELIX_ID],
+      },
+    });
+
+    const req = patchReq(ISSUE_ID, { phase: 3, userId: FELIX_ID });
+    const res = await PATCH(req, { params: Promise.resolve({ id: ISSUE_ID }) });
+    expect(res.status).toBe(200);
+
+    const [, , meta] = upsertTaskMetaMock.mock.calls[0];
+    expect(meta.phase).toBe(3);
+    expect(meta.workerIds).toEqual([FELIX_ID]);
+  });
+});
+
+describe('GET /api/plan/tasks — workerIds serialized', () => {
+  const AUTH_SECRET = 'test-auth-secret-with-enough-bytes';
+  const FELIX_ID = 'c9677ade-e42c-4593-81c6-7a2108b145fd';
+  const LINEAR_USER_ID = 'linear-user-felix';
+
+  function req(url: string): import('next/server').NextRequest {
+    const { NextRequest } = require('next/server');
+    return new NextRequest(url, { headers: { authorization: `Bearer ${AUTH_SECRET}` } });
+  }
+
+  beforeEach(() => {
+    process.env.DASHBOARD_API_SECRET = AUTH_SECRET;
+    supabaseSingle.mockResolvedValue({
+      data: { id: FELIX_ID, linear_user_id: LINEAR_USER_ID },
+      error: null,
+    });
+    getIssuesForUserMock.mockResolvedValue([
+      { id: 'i-w1', title: 'Task with worker', identifier: 'KAL-20', priority: 2, dueDate: null,
+        state: { name: 'Todo', type: 'unstarted' } },
+    ]);
+    getTaskMetaByIssueIdsMock.mockResolvedValue({
+      'i-w1': {
+        phase: 1, bereich: 'angebot', context: null, effortMinutes: null,
+        important: false, urgent: false, energy: null, projectId: null, fixed: false,
+        workerIds: [FELIX_ID],
+      },
+    });
+  });
+
+  afterEach(() => {
+    delete process.env.DASHBOARD_API_SECRET;
+    vi.clearAllMocks();
+  });
+
+  it('GET returns workerIds from meta', async () => {
+    const res = await GET(req(`http://localhost/api/plan/tasks?userId=${FELIX_ID}`));
+    const json = await res.json();
+    expect(res.status).toBe(200);
+    expect(json.tasks[0].workerIds).toEqual([FELIX_ID]);
+  });
+
+  it('GET returns empty workerIds when not set', async () => {
+    getTaskMetaByIssueIdsMock.mockResolvedValue({
+      'i-w1': {
+        phase: 1, bereich: 'angebot', context: null, effortMinutes: null,
+        important: false, urgent: false, energy: null, projectId: null, fixed: false,
+        workerIds: [],
+      },
+    });
+    const res = await GET(req(`http://localhost/api/plan/tasks?userId=${FELIX_ID}`));
+    const json = await res.json();
+    expect(json.tasks[0].workerIds).toEqual([]);
   });
 });
