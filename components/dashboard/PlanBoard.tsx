@@ -57,6 +57,17 @@ export function PlanBoard({
     [teamTasks, selectedPhase, selectedBereich],
   );
 
+  // ideaTasks filtered by the active bereich (and phase=0=all):
+  // ensures only project-specific tasks (e.g. angebot) appear in the collapsed To-Do section.
+  const filteredIdeaTasks = useMemo(
+    () =>
+      ideaTasks.filter((t) => {
+        if (selectedBereich && t.meta?.bereich !== selectedBereich) return false;
+        return true;
+      }),
+    [ideaTasks, selectedBereich],
+  );
+
   function togglePhase(p: number) {
     setSelectedPhase((prev) => (prev === p ? 0 : p));
   }
@@ -191,8 +202,8 @@ export function PlanBoard({
         })}
       </div>
 
-      {/* ── Ideen-Sektion (collapsed by default) ── */}
-      {ideaTasks.length > 0 && (
+      {/* ── Projekt-To-Do-Sektion (collapsed by default, bereich-filtered) ── */}
+      {filteredIdeaTasks.length > 0 && (
         <div className="kanban-backlog">
           <button
             type="button"
@@ -201,13 +212,13 @@ export function PlanBoard({
             aria-expanded={ideaOpen}
           >
             <span className="kanban-col-title">To Do</span>
-            <span className="kanban-col-count mono">{ideaTasks.length}</span>
+            <span className="kanban-col-count mono">{filteredIdeaTasks.length}</span>
             <span className="kanban-backlog-chevron">{ideaOpen ? '▾' : '▸'}</span>
           </button>
           {ideaOpen && (
             <KanbanBoard
-              tasks={ideaTasks.filter((t) => t.status !== 'done')}
-              doneTasks={ideaTasks.filter((t) => t.status === 'done')}
+              tasks={filteredIdeaTasks.filter((t) => t.status !== 'done')}
+              doneTasks={filteredIdeaTasks.filter((t) => t.status === 'done')}
               members={members}
               metaEnabled={metaEnabled}
               projects={projects}
