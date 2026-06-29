@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireActor } from '@/lib/auth-context';
-import { createIssue, getIssuesForUser, getLinearTeamId, setIssueStatus } from '@/lib/linear';
+import { createIssue, archiveIssue, getIssuesForUser, getLinearTeamId, setIssueStatus } from '@/lib/linear';
 import { supabaseAdmin, currentWeekStart } from '@/lib/supabase';
 import { listUserKpis } from '@/lib/kpis';
 import { getTaskMetaByIssueIds, upsertTaskMeta } from '@/lib/task-meta-db';
@@ -86,11 +86,10 @@ export async function POST(req: NextRequest) {
   // Load existing Linear issues to detect duplicates (match by title)
   const existing = await getIssuesForUser(member.linear_user_id);
   const existingMeta = await getTaskMetaByIssueIds(existing.map((i) => i.id));
-  const existingPlanTitles = new Set(
-    existing
-      .filter((i) => existingMeta[i.id]?.phase !== undefined && existingMeta[i.id]?.phase !== null)
-      .map((i) => i.title.trim().toLowerCase()),
-  );
+  // Dedup against ALL existing issues by title (not just plan-tagged ones) to avoid
+  // creating duplicates when a prior sync failed after Linear-issue creation.
+  const existingByTitle = new Map(existing.map((i) => [i.title.trim().toLowerCase(), i]));
+  const existingPlanTitles = new Set(existingByTitle.keys());
 
   if (dryRun) {
     const toCreate = steps.filter((s) => !existingPlanTitles.has(s.name.trim().toLowerCase()));
@@ -113,8 +112,27 @@ export async function POST(req: NextRequest) {
 
   for (const step of steps) {
     const titleKey = step.name.trim().toLowerCase();
-    if (existingPlanTitles.has(titleKey)) {
-      skipped.push(step.name);
+    const existingIssue = existingByTitle.get(titleKey);
+    if (existingIssue) {
+      // Issue exists — tag it with phase/bereich if it doesn't have them yet.
+      const existingIssueMeta = existingMeta[existingIssue.id];
+      if (existingIssueMeta?.phase !== undefined && existingIssueMeta?.phase !== null) {
+        skipped.push(step.name);
+        continue;
+      }
+      // Tag the existing issue (avoid duplicate; repair orphan from failed prior sync).
+      await upsertTaskMeta(existingIssue.id, userId, {
+        context: 'business',
+        effortMinutes: null,
+        important: false,
+        urgent: false,
+        energy: null,
+        projectId: null,
+        fixed: false,
+        phase,
+        bereich: bereich as TaskBereich,
+      });
+      created.push({ id: existingIssue.id, identifier: existingIssue.identifier ?? null, title: existingIssue.title, source_kpi_id: step.id });
       continue;
     }
 
@@ -136,20 +154,25 @@ export async function POST(req: NextRequest) {
     );
     if (stateId) await setIssueStatus(issue.id, stateId);
 
-    await upsertTaskMeta(issue.id, userId, {
-      context: 'business',
-      effortMinutes: null,
-      important: false,
-      urgent: false,
-      energy: null,
-      projectId: null,
-      fixed: false,
-      phase,
-      bereich: bereich as TaskBereich,
-    });
+    try {
+      await upsertTaskMeta(issue.id, userId, {
+        context: 'business',
+        effortMinutes: null,
+        important: false,
+        urgent: false,
+        energy: null,
+        projectId: null,
+        fixed: false,
+        phase,
+        bereich: bereich as TaskBereich,
+      });
+    } catch (err) {
+      await archiveIssue(issue.id).catch(() => {});
+      throw err;
+    }
 
     created.push({ id: issue.id, identifier: issue.identifier ?? null, title: issue.title, source_kpi_id: step.id });
-    existingPlanTitles.add(titleKey); // prevent duplicate within same sync run
+    existingByTitle.set(titleKey, issue); // prevent duplicate within same sync run
   }
 
   revalidateDashboard();

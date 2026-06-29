@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireActor } from '@/lib/auth-context';
-import { getIssuesForUser, createIssue, getLinearTeamId, setIssueStatus } from '@/lib/linear';
+import { getIssuesForUser, createIssue, getLinearTeamId, setIssueStatus, archiveIssue } from '@/lib/linear';
 import { supabaseAdmin } from '@/lib/supabase';
 import { getTaskMetaByIssueIds, upsertTaskMeta } from '@/lib/task-meta-db';
 import { revalidateDashboard } from '@/lib/revalidate';
@@ -96,6 +96,7 @@ export async function GET(req: NextRequest) {
  *
  * Create a plan task: a Linear issue with phase + bereich set in task_meta.
  * Auth: Bearer (DASHBOARD_API_SECRET) or member cookie.
+ * ponytail: on meta-write failure the Linear issue is archived to avoid orphans.
  */
 export async function POST(req: NextRequest) {
   const actor = await requireActor(req, { allowMember: true, scopes: ['tasks:write'] });
@@ -139,17 +140,23 @@ export async function POST(req: NextRequest) {
   );
   if (stateId) await setIssueStatus(issue.id, stateId);
 
-  await upsertTaskMeta(issue.id, userId, {
-    context: 'business',
-    effortMinutes: null,
-    important: false,
-    urgent: false,
-    energy: null,
-    projectId: null,
-    fixed: false,
-    phase,
-    bereich: bereich as TaskBereich,
-  });
+  try {
+    await upsertTaskMeta(issue.id, userId, {
+      context: 'business',
+      effortMinutes: null,
+      important: false,
+      urgent: false,
+      energy: null,
+      projectId: null,
+      fixed: false,
+      phase,
+      bereich: bereich as TaskBereich,
+    });
+  } catch (err) {
+    // Roll back the Linear issue to avoid orphaned tasks without plan metadata.
+    await archiveIssue(issue.id).catch(() => {});
+    throw err;
+  }
 
   revalidateDashboard();
 
