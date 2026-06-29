@@ -22,6 +22,7 @@ function proxiedImageSrc(url: string): string {
 export function TaskEditModal({
   task,
   projects,
+  members = [],
   userId,
   onClose,
   onSaved,
@@ -30,6 +31,7 @@ export function TaskEditModal({
 }: {
   task: UnifiedTask;
   projects: Array<{ id: string; name: string }>;
+  members?: Array<{ id: string; name: string }>;
   userId: string | null;
   onClose: () => void;
   onSaved: (patch: { title: string; dueDate: string | null; meta: TaskMeta; priority: number; imageUrls: string[] }) => void;
@@ -270,7 +272,7 @@ export function TaskEditModal({
               <TaskImagePicker files={imageFiles} onChange={setImageFiles} disabled={busy || deleting} />
             </div>
           </div>
-          <TaskMetaFields value={meta} onChange={setMeta} projects={projects} />
+          <TaskMetaFields value={meta} onChange={setMeta} projects={projects} members={members} />
 
 
           <div className="kanban-meta-group">

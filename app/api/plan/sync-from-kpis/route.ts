@@ -136,6 +136,7 @@ export async function POST(req: NextRequest) {
         fixed: existingIssueMeta?.fixed ?? false,
         phase,
         bereich: bereich as TaskBereich,
+        workerIds: [],
       });
       created.push({ id: existingIssue.id, identifier: existingIssue.identifier ?? null, title: existingIssue.title, source_kpi_id: step.id });
       continue;
@@ -170,6 +171,7 @@ export async function POST(req: NextRequest) {
         fixed: false,
         phase,
         bereich: bereich as TaskBereich,
+        workerIds: [],
       });
     } catch (err) {
       await archiveIssue(issue.id).catch(() => {});

@@ -110,6 +110,9 @@ export function KanbanCard({
         {task.teamTask && (
           <AvatarStack assigneeUserIds={task.teamTask.assigneeUserIds} members={members} />
         )}
+        {!task.teamTask && (meta?.workerIds ?? []).length > 0 && (
+          <AvatarStack assigneeUserIds={meta!.workerIds} members={members} />
+        )}
       </div>
       <div className="kanban-card-meta">
         {task.identifier && (

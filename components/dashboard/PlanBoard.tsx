@@ -17,10 +17,12 @@ export function PlanBoard({
   members = [],
   metaEnabled = false,
   projects = [],
+  ideaTasks = [],
   activeClaudeByIdentifier,
 }: {
   allTasks: UnifiedTask[];
   doneTasks?: UnifiedTask[];
+  ideaTasks?: UnifiedTask[];
   members?: Array<{ id: string; name: string }>;
   metaEnabled?: boolean;
   projects?: Array<{ id: string; name: string }>;
@@ -29,6 +31,7 @@ export function PlanBoard({
   // 0 = Alle
   const [selectedPhase, setSelectedPhase] = useState<number>(CURRENT_PHASE);
   const [selectedBereich, setSelectedBereich] = useState<string>('angebot');
+  const [ideaOpen, setIdeaOpen] = useState(false);
 
   // Only team-tagged tasks (phase must be set); personal tasks stay on the main board
   const teamTasks = useMemo(
@@ -187,6 +190,32 @@ export function PlanBoard({
           );
         })}
       </div>
+
+      {/* ── Ideen-Sektion (collapsed by default) ── */}
+      {ideaTasks.length > 0 && (
+        <div className="kanban-backlog">
+          <button
+            type="button"
+            className="kanban-backlog-toggle"
+            onClick={() => setIdeaOpen((v) => !v)}
+            aria-expanded={ideaOpen}
+          >
+            <span className="kanban-col-title">Ideen / nicht eingeplant</span>
+            <span className="kanban-col-count mono">{ideaTasks.length}</span>
+            <span className="kanban-backlog-chevron">{ideaOpen ? '▾' : '▸'}</span>
+          </button>
+          {ideaOpen && (
+            <KanbanBoard
+              tasks={ideaTasks.filter((t) => t.status !== 'done')}
+              doneTasks={ideaTasks.filter((t) => t.status === 'done')}
+              members={members}
+              metaEnabled={metaEnabled}
+              projects={projects}
+              activeClaudeByIdentifier={activeClaudeByIdentifier}
+            />
+          )}
+        </div>
+      )}
 
       {/* ── Kanban ── */}
       <KanbanBoard

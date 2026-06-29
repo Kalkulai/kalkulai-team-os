@@ -216,6 +216,7 @@ export default async function PlanPage({
       <PlanBoard
         allTasks={tasksWithSubtasks}
         doneTasks={doneTasks}
+        ideaTasks={tasksWithSubtasks.filter((t) => !t.meta?.phase)}
         members={members}
         metaEnabled={metaEnabled}
         projects={projectOptions}

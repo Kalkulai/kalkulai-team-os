@@ -9,10 +9,12 @@ export function TaskMetaFields({
   value,
   onChange,
   projects,
+  members = [],
 }: {
   value: TaskMeta;
   onChange: (next: TaskMeta) => void;
   projects: Array<{ id: string; name: string }>;
+  members?: Array<{ id: string; name: string }>;
 }) {
   const set = (patch: Partial<TaskMeta>) => onChange({ ...value, ...patch });
   const q = quadrantBadge(value.important, value.urgent);
@@ -156,6 +158,32 @@ export function TaskMetaFields({
           ))}
         </select>
       </div>
+      {members.length > 0 && (
+        <div className="kanban-meta-group">
+          <span className="kanban-meta-label">Wer arbeitet daran</span>
+          <div className="kanban-add-prio" style={{ flexWrap: 'wrap' }}>
+            {members.map((m) => {
+              const active = (value.workerIds ?? []).includes(m.id);
+              return (
+                <button
+                  key={m.id}
+                  type="button"
+                  className={active ? 'is-on' : ''}
+                  onClick={() =>
+                    set({
+                      workerIds: active
+                        ? (value.workerIds ?? []).filter((id) => id !== m.id)
+                        : [...(value.workerIds ?? []), m.id],
+                    })
+                  }
+                >
+                  {m.name.split(' ')[0]}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -12,10 +12,11 @@ interface TaskMetaRow {
   fixed: boolean;
   phase: number | null;
   bereich: TaskBereich | null;
+  worker_ids: string[];
 }
 
 const SELECT_COLS =
-  'linear_issue_id, context, effort_minutes, important, urgent, energy, project_id, fixed, phase, bereich';
+  'linear_issue_id, context, effort_minutes, important, urgent, energy, project_id, fixed, phase, bereich, worker_ids';
 
 function rowToMeta(r: TaskMetaRow): TaskMeta {
   return {
@@ -28,6 +29,7 @@ function rowToMeta(r: TaskMetaRow): TaskMeta {
     fixed: r.fixed,
     phase: r.phase,
     bereich: r.bereich,
+    workerIds: r.worker_ids ?? [],
   };
 }
 
@@ -65,6 +67,7 @@ export async function upsertTaskMeta(
       fixed: meta.fixed,
       phase: meta.phase,
       bereich: meta.bereich,
+      worker_ids: meta.workerIds ?? [],
       updated_at: new Date().toISOString(),
     },
     { onConflict: 'linear_issue_id' },
