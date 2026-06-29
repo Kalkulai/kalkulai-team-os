@@ -164,16 +164,16 @@ export default async function PlanPage({
   const metaEnabled = isFelixMemberId(me.id);
   let metaByIssueId: Record<string, TaskMeta> = {};
   let assistByIssueId: Record<string, TaskAssist> = {};
-  if (metaEnabled) {
-    try {
-      const ids = issues.map((i) => i.id);
-      [metaByIssueId, assistByIssueId] = await Promise.all([
-        getTaskMetaByIssueIds(ids),
-        getTaskAssistByIssueIds(ids),
-      ]);
-    } catch (err) {
-      console.warn('[plan] task_meta/assist lookup failed:', err);
-    }
+  // Always load task_meta for the plan board — phase/bereich filter needs it for all members.
+  // assistByIssueId is Felix-only (task suggestions).
+  try {
+    const ids = issues.map((i) => i.id);
+    [metaByIssueId, assistByIssueId] = await Promise.all([
+      getTaskMetaByIssueIds(ids),
+      metaEnabled ? getTaskAssistByIssueIds(ids) : Promise.resolve({}),
+    ]);
+  } catch (err) {
+    console.warn('[plan] task_meta/assist lookup failed:', err);
   }
 
   const tasks = mergeTasks(issues, steps, projects, metaByIssueId, assistByIssueId);
