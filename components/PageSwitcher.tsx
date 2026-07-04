@@ -2,11 +2,19 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Calendar, MessageCircle, Settings, ChevronDown, Check, Building2, Bot, Map } from 'lucide-react';
+import { Calendar, MessageCircle, Settings, ChevronDown, Check, Building2, Bot, Map, TrendingUp } from 'lucide-react';
 import { useActiveMember } from '@/lib/active-member';
 import { isLeonMemberId } from '@/lib/agent-access';
+import { salesOsEnabledForMember } from '@/lib/sales-access';
 
-type Route = '/dashboard' | '/dashboard/chat' | '/dashboard/company' | '/dashboard/agents' | '/dashboard/plan' | '/settings';
+type Route =
+  | '/dashboard'
+  | '/dashboard/chat'
+  | '/dashboard/company'
+  | '/dashboard/agents'
+  | '/dashboard/plan'
+  | '/dashboard/sales'
+  | '/settings';
 
 interface PageDef {
   href: Route;
@@ -19,6 +27,7 @@ const PAGES: PageDef[] = [
   { href: '/dashboard/plan',    title: 'Plan',          Icon: Map },
   { href: '/dashboard/chat',    title: 'Chat',          Icon: MessageCircle },
   { href: '/dashboard/company', title: 'Firma',         Icon: Building2 },
+  { href: '/dashboard/sales',   title: 'Sales',         Icon: TrendingUp },
   { href: '/dashboard/agents',  title: 'Agents',        Icon: Bot },
   { href: '/settings',          title: 'Einstellungen', Icon: Settings },
 ];
@@ -31,6 +40,8 @@ function activePageFor(pathname: string | null, pages: PageDef[]): PageDef {
   if (chat && pathname.startsWith('/dashboard/chat')) return chat;
   const company = pages.find((p) => p.href === '/dashboard/company');
   if (company && pathname.startsWith('/dashboard/company')) return company;
+  const sales = pages.find((p) => p.href === '/dashboard/sales');
+  if (sales && pathname.startsWith('/dashboard/sales')) return sales;
   const agents = pages.find((p) => p.href === '/dashboard/agents');
   if (agents && pathname.startsWith('/dashboard/agents')) return agents;
   const settings = pages.find((p) => p.href === '/settings');
@@ -41,9 +52,11 @@ function activePageFor(pathname: string | null, pages: PageDef[]): PageDef {
 export function PageSwitcher() {
   const pathname = usePathname();
   const { activeId } = useActiveMember();
-  const pages = isLeonMemberId(activeId)
-    ? PAGES
-    : PAGES.filter((p) => p.href !== '/dashboard/agents');
+  const pages = PAGES.filter((p) => {
+    if (p.href === '/dashboard/agents') return isLeonMemberId(activeId);
+    if (p.href === '/dashboard/sales') return salesOsEnabledForMember(activeId);
+    return true;
+  });
   const active = activePageFor(pathname, pages);
 
   const [open, setOpen] = useState(false);
