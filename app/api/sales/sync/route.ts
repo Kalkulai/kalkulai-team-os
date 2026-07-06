@@ -76,39 +76,45 @@ export async function POST(req: NextRequest) {
   const actor = await requireActor(req, { allowMember: true, scopes: ['sales:write'] });
   if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const stats = { companies: 0, contacts: 0, endpoints: 0, activities: 0 };
-  for (const hsCompany of await fetchAllCompanies()) {
-    const companyId = await upsertCompanyFromHubspot(mapHubspotCompany(hsCompany, PAUL_MEMBER_ID));
+  try {
+    const stats = { companies: 0, contacts: 0, endpoints: 0, activities: 0 };
+    for (const hsCompany of await fetchAllCompanies()) {
+      const companyId = await upsertCompanyFromHubspot(mapHubspotCompany(hsCompany, PAUL_MEMBER_ID));
 
-    const contactIds = await fetchAssociatedIds(hsCompany.id, 'contacts');
-    const hsContacts = contactIds.length ? await batchRead('contacts', contactIds, CONTACT_PROPS) : [];
-    const contactIdByHubspotId = new Map<string, string>();
-    for (const hsContact of hsContacts) {
-      const contactId = await upsertContactFromHubspot(companyId, mapHubspotContact(hsContact));
-      contactIdByHubspotId.set(hsContact.id, contactId);
-      stats.contacts += 1;
-    }
-
-    for (const draft of extractEndpoints(hsCompany, hsContacts)) {
-      await upsertEndpoint(companyId,
-        draft.contactHubspotId ? contactIdByHubspotId.get(draft.contactHubspotId) ?? null : null,
-        { channel: draft.channel, value: draft.value, endpoint_type: draft.endpoint_type });
-      stats.endpoints += 1;
-    }
-
-    // Protokolle: alle Engagement-Typen als Timeline-Activities (Entscheidung 1)
-    for (const kind of ENGAGEMENT_KINDS) {
-      const engagementIds = await fetchAssociatedIds(hsCompany.id, kind);
-      if (engagementIds.length === 0) continue;
-      const engagements = await batchRead(kind, engagementIds, ENGAGEMENT_PROPS[kind]);
-      for (const engagement of engagements) {
-        await upsertActivity(companyId, null, mapHubspotEngagement(kind, engagement));
-        stats.activities += 1;
+      const contactIds = await fetchAssociatedIds(hsCompany.id, 'contacts');
+      const hsContacts = contactIds.length ? await batchRead('contacts', contactIds, CONTACT_PROPS) : [];
+      const contactIdByHubspotId = new Map<string, string>();
+      for (const hsContact of hsContacts) {
+        const contactId = await upsertContactFromHubspot(companyId, mapHubspotContact(hsContact));
+        contactIdByHubspotId.set(hsContact.id, contactId);
+        stats.contacts += 1;
       }
-    }
 
-    await logSyncActivity(companyId, hsCompany.id);
-    stats.companies += 1;
+      for (const draft of extractEndpoints(hsCompany, hsContacts)) {
+        await upsertEndpoint(companyId,
+          draft.contactHubspotId ? contactIdByHubspotId.get(draft.contactHubspotId) ?? null : null,
+          { channel: draft.channel, value: draft.value, endpoint_type: draft.endpoint_type });
+        stats.endpoints += 1;
+      }
+
+      // Protokolle: alle Engagement-Typen als Timeline-Activities (Entscheidung 1)
+      for (const kind of ENGAGEMENT_KINDS) {
+        const engagementIds = await fetchAssociatedIds(hsCompany.id, kind);
+        if (engagementIds.length === 0) continue;
+        const engagements = await batchRead(kind, engagementIds, ENGAGEMENT_PROPS[kind]);
+        for (const engagement of engagements) {
+          await upsertActivity(companyId, null, mapHubspotEngagement(kind, engagement));
+          stats.activities += 1;
+        }
+      }
+
+      await logSyncActivity(companyId, hsCompany.id);
+      stats.companies += 1;
+    }
+    return NextResponse.json({ ok: true, stats });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[sales/sync] error:', message);
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, stats });
 }
