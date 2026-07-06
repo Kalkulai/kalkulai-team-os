@@ -53,4 +53,15 @@ describe('requireActor', () => {
       id: 'hermes',
     });
   });
+
+  it('grants members the sales:read scope', async () => {
+    const cookie = await signAuthCookie(undefined, Math.floor(Date.now() / 1000), 'member-1');
+    const actor = await requireActor(request({
+      headers: { cookie: `${AUTH_COOKIE_NAME}=${cookie}` },
+    }), { scopes: ['sales:read'] });
+
+    expect(actor).toMatchObject({
+      type: 'member',
+    });
+  });
 });

@@ -18,6 +18,7 @@ export type ActorScope =
   | 'metrics:write'
   | 'posthog:read'
   | 'recap:write'
+  | 'sales:read'
   | 'sales:write'
   | 'tasks:write'
   | 'vault:read'
@@ -42,6 +43,7 @@ const MEMBER_SCOPES: ActorScope[] = [
   'kpis:read',
   'kpis:write',
   'metrics:read',
+  'sales:read',
   'sales:write',
   'tasks:write',
   'vault:read',

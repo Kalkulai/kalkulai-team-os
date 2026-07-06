@@ -1575,6 +1575,70 @@ html.light .tl-row code { background: rgba(11, 11, 15, 0.05); }
   .campaign-card-metrics, .campaign-kpi-grid { grid-template-columns: 1fr; }
 }
 
+.sales-shell { display: flex; flex-direction: column; gap: 16px; color: var(--ink-1); }
+.sales-shell h1 { margin: 0 0 4px; font: 700 22px/1.2 var(--font); }
+.sales-grid { display: grid; grid-template-columns: 300px 1fr; gap: 16px; align-items: start; }
+.sales-search {
+  width: 100%; border-radius: 8px; border: 1px solid var(--line-1); background: rgba(255,255,255,0.03);
+  padding: 8px 11px; font: 500 13px/1.3 var(--font); color: var(--ink-1);
+}
+.sales-search::placeholder { color: var(--ink-3); }
+.sales-list { display: flex; flex-direction: column; gap: 8px; }
+.sales-lead-card {
+  display: block; border-radius: 10px; border: 1px solid var(--line-1); padding: 11px 13px;
+  background: rgba(255,255,255,0.02); transition: background-color 0.15s, border-color 0.15s;
+}
+.sales-lead-card:hover { background: rgba(255,255,255,0.05); }
+.sales-lead-card.is-active { border-color: var(--brand); }
+.sales-lead-card strong { display: block; color: var(--ink-1); font: 650 13.5px/1.25 var(--font); }
+.sales-lead-card span { color: var(--ink-3); font: 500 12px/1.3 var(--font); }
+.sales-muted { color: var(--ink-3); font: 500 12.5px/1.4 var(--font); }
+.sales-detail { display: flex; flex-direction: column; gap: 20px; }
+.sales-detail-header h2 { margin: 0; color: var(--ink-1); font: 700 18px/1.25 var(--font); }
+.sales-detail-header p { margin: 2px 0 0; color: var(--ink-3); font: 500 12.5px/1.35 var(--font); }
+.sales-section h3 { margin: 0 0 8px; }
+.sales-section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.sales-section-head h3 { margin: 0; }
+.sales-row { display: flex; gap: 8px; }
+.sales-input {
+  border-radius: 8px; border: 1px solid var(--line-1); background: rgba(255,255,255,0.03);
+  padding: 8px 11px; font: 500 13px/1.3 var(--font); color: var(--ink-1); width: 100%;
+}
+.sales-btn {
+  border-radius: 8px; border: 1px solid var(--line-1); background: rgba(255,255,255,0.03);
+  padding: 8px 13px; font: 600 12.5px/1 var(--font); color: var(--ink-1); cursor: pointer;
+  transition: background-color 0.15s;
+}
+.sales-btn:hover { background: rgba(255,255,255,0.07); }
+.sales-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.sales-btn-sm { padding: 5px 9px; font-size: 11.5px; }
+.sales-contact-form {
+  display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line-1); border-radius: 10px;
+  padding: 12px; margin-bottom: 10px; background: rgba(255,255,255,0.02);
+}
+.sales-contact-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.sales-contact { margin-bottom: 4px; font: 500 13px/1.4 var(--font); color: var(--ink-1); }
+.sales-contact .role { color: var(--ink-3); }
+.sales-badge {
+  display: inline-block; border-radius: 999px; border: 1px solid var(--line-1); padding: 1px 8px;
+  font: 600 10.5px/1.6 var(--font); margin-left: 6px;
+}
+.sales-badge.tone-warn { color: var(--warn); background: rgba(255,199,92,0.09); border-color: rgba(255,199,92,0.25); }
+.sales-badge.tone-danger { color: var(--danger); background: rgba(255,107,92,0.09); border-color: rgba(255,107,92,0.24); }
+.sales-badge.tone-neutral { color: var(--ink-3); background: rgba(255,255,255,0.04); }
+.sales-endpoint-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font: 500 13px/1.3 var(--font); color: var(--ink-1); }
+.sales-endpoint-row .meta { color: var(--ink-3); font-size: 11.5px; }
+.sales-timeline { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.sales-timeline li { border-top: 1px solid rgba(255,255,255,0.04); padding-top: 8px; }
+.sales-timeline li:first-child { border-top: 0; padding-top: 0; }
+.sales-timeline .meta { color: var(--ink-3); font: 500 11.5px/1.3 var(--font); }
+.sales-timeline .title { color: var(--ink-1); font: 650 13px/1.3 var(--font); }
+.sales-timeline .summary { margin: 3px 0 0 14px; color: var(--ink-2); font: 500 12.5px/1.4 var(--font); }
+
+@media (max-width: 900px) {
+  .sales-grid { grid-template-columns: 1fr; }
+}
+
 /* ─── Card-rise animation ─── */
 @keyframes card-rise { from { opacity: 0; transform: translateY(10px) scale(0.99); } to { opacity: 1; transform: none; } }
 .card-rise { animation: card-rise 0.42s cubic-bezier(0.22, 0.61, 0.36, 1) both; transition: transform 0.25s ease, box-shadow 0.25s ease; }
