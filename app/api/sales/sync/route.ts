@@ -82,38 +82,56 @@ async function batchRead(objectType: string, ids: string[], properties: string[]
   return results;
 }
 
+const CONCURRENCY = 10;
+
+async function syncOneCompany(
+  hsCompany: HubspotObject,
+  stats: { companies: number; contacts: number; endpoints: number; activities: number },
+): Promise<void> {
+  const companyId = await upsertCompanyFromHubspot(mapHubspotCompany(hsCompany, PAUL_MEMBER_ID));
+
+  const [contactIds, engagements] = await Promise.all([
+    fetchAssociatedIds(hsCompany.id, 'contacts'),
+    fetchEngagementsV1(hsCompany.id),
+  ]);
+
+  const hsContacts = contactIds.length ? await batchRead('contacts', contactIds, CONTACT_PROPS) : [];
+  const contactIdByHubspotId = new Map<string, string>();
+  for (const hsContact of hsContacts) {
+    const contactId = await upsertContactFromHubspot(companyId, mapHubspotContact(hsContact));
+    contactIdByHubspotId.set(hsContact.id, contactId);
+    stats.contacts += 1;
+  }
+
+  const endpointDrafts = extractEndpoints(hsCompany, hsContacts);
+  await Promise.all([
+    ...endpointDrafts.map(async (draft) => {
+      await upsertEndpoint(
+        companyId,
+        draft.contactHubspotId ? contactIdByHubspotId.get(draft.contactHubspotId) ?? null : null,
+        { channel: draft.channel, value: draft.value, endpoint_type: draft.endpoint_type },
+      );
+      stats.endpoints += 1;
+    }),
+    ...engagements.map(async (engagement) => {
+      await upsertActivity(companyId, null, mapHubspotEngagementV1(engagement as Parameters<typeof mapHubspotEngagementV1>[0]));
+      stats.activities += 1;
+    }),
+  ]);
+
+  await logSyncActivity(companyId, hsCompany.id);
+  stats.companies += 1;
+}
+
 export async function POST(req: NextRequest) {
   const actor = await requireActor(req, { allowMember: true, scopes: ['sales:write'] });
   if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
     const stats = { companies: 0, contacts: 0, endpoints: 0, activities: 0 };
-    for (const hsCompany of await fetchAllCompanies()) {
-      const companyId = await upsertCompanyFromHubspot(mapHubspotCompany(hsCompany, PAUL_MEMBER_ID));
-
-      const contactIds = await fetchAssociatedIds(hsCompany.id, 'contacts');
-      const hsContacts = contactIds.length ? await batchRead('contacts', contactIds, CONTACT_PROPS) : [];
-      const contactIdByHubspotId = new Map<string, string>();
-      for (const hsContact of hsContacts) {
-        const contactId = await upsertContactFromHubspot(companyId, mapHubspotContact(hsContact));
-        contactIdByHubspotId.set(hsContact.id, contactId);
-        stats.contacts += 1;
-      }
-
-      for (const draft of extractEndpoints(hsCompany, hsContacts)) {
-        await upsertEndpoint(companyId,
-          draft.contactHubspotId ? contactIdByHubspotId.get(draft.contactHubspotId) ?? null : null,
-          { channel: draft.channel, value: draft.value, endpoint_type: draft.endpoint_type });
-        stats.endpoints += 1;
-      }
-
-      for (const engagement of await fetchEngagementsV1(hsCompany.id)) {
-        await upsertActivity(companyId, null, mapHubspotEngagementV1(engagement as Parameters<typeof mapHubspotEngagementV1>[0]));
-        stats.activities += 1;
-      }
-
-      await logSyncActivity(companyId, hsCompany.id);
-      stats.companies += 1;
+    const companies = await fetchAllCompanies();
+    for (let i = 0; i < companies.length; i += CONCURRENCY) {
+      await Promise.all(companies.slice(i, i + CONCURRENCY).map((c) => syncOneCompany(c, stats)));
     }
     return NextResponse.json({ ok: true, stats });
   } catch (err) {
