@@ -25,9 +25,7 @@ function authHeaders(): Record<string, string> {
 }
 
 async function hsGet(path: string, params: Record<string, string>) {
-  const url = new URL(`${BASE}${path}`);
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  const res = await fetch(url, { headers: authHeaders() });
+  const res = await hsGetWithRetry(path, params);
   if (!res.ok) throw new Error(`HubSpot ${path} failed: ${res.status}`);
   return res.json();
 }
@@ -55,10 +53,7 @@ async function fetchEngagementsV1(companyId: string): Promise<unknown[]> {
   let offset = 0;
   let hasMore = true;
   while (hasMore) {
-    const url = new URL(`${BASE}/engagements/v1/engagements/associated/COMPANY/${companyId}/paged`);
-    url.searchParams.set('limit', '100');
-    if (offset) url.searchParams.set('offset', String(offset));
-    const res = await fetch(url, { headers: authHeaders() });
+    const res = await hsGetWithRetry(`/engagements/v1/engagements/associated/COMPANY/${companyId}/paged`, offset ? { limit: '100', offset: String(offset) } : { limit: '100' });
     if (!res.ok) throw new Error(`HubSpot engagements v1 failed: ${res.status}`);
     const data = await res.json();
     all.push(...(data.results ?? []));
@@ -82,7 +77,19 @@ async function batchRead(objectType: string, ids: string[], properties: string[]
   return results;
 }
 
-const CONCURRENCY = 10;
+const CONCURRENCY = 3;
+
+async function hsGetWithRetry(path: string, params: Record<string, string>, attempt = 0): Promise<Response> {
+  const url = new URL(`${BASE}${path}`);
+  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+  const res = await fetch(url, { headers: authHeaders() });
+  if (res.status === 429 && attempt < 4) {
+    const retryAfter = parseInt(res.headers.get('Retry-After') ?? '2', 10);
+    await new Promise((r) => setTimeout(r, retryAfter * 1000));
+    return hsGetWithRetry(path, params, attempt + 1);
+  }
+  return res;
+}
 
 async function syncOneCompany(
   hsCompany: HubspotObject,
