@@ -32,21 +32,20 @@ async function hsPost(path: string, body: unknown): Promise<unknown> {
   return res.json();
 }
 
-async function fetchAllCompanies(): Promise<HubspotObject[]> {
-  const all: HubspotObject[] = [];
-  let after: string | undefined;
-  do {
-    const url = new URL(`${BASE}/crm/v3/objects/companies`);
-    url.searchParams.set('limit', '100');
-    url.searchParams.set('properties', COMPANY_PROPS);
-    if (after) url.searchParams.set('after', after);
-    const res = await fetch(url, { headers: authHeaders() });
-    if (!res.ok) throw new Error(`HubSpot companies failed: ${res.status}`);
-    const data = await res.json();
-    all.push(...(data.results ?? []));
-    after = data.paging?.next?.after;
-  } while (after);
-  return all;
+const PAGE_SIZE = 25;
+
+async function fetchCompaniesPage(after?: string): Promise<{ companies: HubspotObject[]; nextAfter: string | null }> {
+  const url = new URL(`${BASE}/crm/v3/objects/companies`);
+  url.searchParams.set('limit', String(PAGE_SIZE));
+  url.searchParams.set('properties', COMPANY_PROPS);
+  if (after) url.searchParams.set('after', after);
+  const res = await fetch(url, { headers: authHeaders() });
+  if (!res.ok) throw new Error(`HubSpot companies failed: ${res.status}`);
+  const data = await res.json();
+  return {
+    companies: data.results ?? [],
+    nextAfter: data.paging?.next?.after ?? null,
+  };
 }
 
 // Batch associations API: 2 calls for 152 companies instead of 152 individual calls
@@ -104,11 +103,14 @@ export async function POST(req: NextRequest) {
 
   try {
     const stats = { companies: 0, contacts: 0, endpoints: 0, activities: 0 };
+    const body = await req.json().catch(() => ({}));
+    const after = typeof body?.after === 'string' ? body.after : undefined;
 
-    // Phase 1: fetch all companies (2 API calls)
-    const companies = await fetchAllCompanies();
+    // Phase 1: fetch ONE page of companies (chunked — Vercel Hobby kills at 60s,
+    // so callers loop over pages via the returned nextAfter cursor)
+    const { companies, nextAfter } = await fetchCompaniesPage(after);
 
-    // Phase 2: batch fetch ALL contact associations (2 API calls total)
+    // Phase 2: batch fetch contact associations for this page (1 API call)
     const contactAssocMap = await fetchAllContactAssociations(companies.map((c) => c.id));
 
     // Phase 3: batch fetch ALL unique contacts (2 API calls total)
@@ -155,7 +157,7 @@ export async function POST(req: NextRequest) {
       await logSyncActivity(companyId, hsCompany.id);
     }
 
-    return NextResponse.json({ ok: true, stats });
+    return NextResponse.json({ ok: true, stats, nextAfter });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[sales/sync] error:', message);
