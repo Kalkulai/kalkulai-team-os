@@ -99,8 +99,19 @@ export function mapHubspotEngagement(kind: EngagementKind, engagement: HubspotOb
   };
 }
 
-const V1_TYPE_TO_KIND: Record<string, EngagementKind> = {
-  NOTE: 'notes', CALL: 'calls', EMAIL: 'emails', TASK: 'tasks', MEETING: 'meetings',
+// Direct v1 engagement type → activity_type mapping. Unknown types fall back to
+// 'note' but keep the original type in the title so nothing is silently mislabeled.
+const V1_TYPE_MAP: Record<string, { activity: string; title: string; direction?: string }> = {
+  NOTE: { activity: 'note', title: 'Notiz (HubSpot)' },
+  CALL: { activity: 'call', title: 'Call (HubSpot)' },
+  EMAIL: { activity: 'email', title: 'E-Mail (HubSpot)', direction: 'outbound' },
+  INCOMING_EMAIL: { activity: 'email', title: 'E-Mail eingehend (HubSpot)', direction: 'inbound' },
+  FORWARDED_EMAIL: { activity: 'email', title: 'E-Mail weitergeleitet (HubSpot)' },
+  TASK: { activity: 'task', title: 'Task (HubSpot)' },
+  MEETING: { activity: 'meeting', title: 'Meeting (HubSpot)' },
+  WHATS_APP: { activity: 'whatsapp', title: 'WhatsApp (HubSpot)' },
+  SMS: { activity: 'whatsapp', title: 'SMS (HubSpot)' },
+  LINKEDIN_MESSAGE: { activity: 'note', title: 'LinkedIn-Nachricht (HubSpot)' },
 };
 
 export function mapHubspotEngagementV1(raw: {
@@ -109,17 +120,18 @@ export function mapHubspotEngagementV1(raw: {
 }) {
   const e = raw.engagement;
   const m = raw.metadata ?? {};
-  const kind: EngagementKind = V1_TYPE_TO_KIND[e.type] ?? 'notes';
+  const mapped = V1_TYPE_MAP[e.type] ?? { activity: 'note', title: `${e.type} (HubSpot)` };
   const body = m.body || m.text || m.html || '';
-  const title = m.title || m.subject || ENGAGEMENT_TITLE[kind];
+  const title = m.title || m.subject || mapped.title;
+  const rawDir = m.direction?.toLowerCase() ?? mapped.direction ?? null;
   return {
-    activity_type: ENGAGEMENT_ACTIVITY[kind],
-    direction: (() => { const d = m.direction?.toLowerCase() ?? null; return d && ['inbound','outbound','internal'].includes(d) ? d : null; })(),
+    activity_type: mapped.activity,
+    direction: rawDir && ['inbound', 'outbound', 'internal'].includes(rawDir) ? rawDir : null,
     occurred_at: e.timestamp ? new Date(e.timestamp).toISOString() : new Date().toISOString(),
     source_system: 'hubspot',
-    provider_event_id: `hubspot-${kind}-${e.id}`,
+    provider_event_id: `hubspot-${e.type.toLowerCase()}-${e.id}`,
     title,
     summary: body ? stripHtml(body).slice(0, 4000) : null,
-    meta: {},
+    meta: { hubspot_engagement_type: e.type },
   };
 }
