@@ -114,7 +114,7 @@ export function mapHubspotEngagementV1(raw: {
   const title = m.title || m.subject || ENGAGEMENT_TITLE[kind];
   return {
     activity_type: ENGAGEMENT_ACTIVITY[kind],
-    direction: (m.direction ?? null) as string | null,
+    direction: (() => { const d = m.direction?.toLowerCase() ?? null; return d && ['inbound','outbound','internal'].includes(d) ? d : null; })(),
     occurred_at: e.timestamp ? new Date(e.timestamp).toISOString() : new Date().toISOString(),
     source_system: 'hubspot',
     provider_event_id: `hubspot-${kind}-${e.id}`,
