@@ -24,9 +24,11 @@ function authHeaders(): Record<string, string> {
   };
 }
 
-async function hsGet(path: string, params: Record<string, string>) {
-  const res = await hsGetWithRetry(path, params);
-  if (!res.ok) throw new Error(`HubSpot ${path} failed: ${res.status}`);
+async function hsPost(path: string, body: unknown): Promise<unknown> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: 'POST', headers: authHeaders(), body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`HubSpot POST ${path} failed: ${res.status}`);
   return res.json();
 }
 
@@ -34,18 +36,43 @@ async function fetchAllCompanies(): Promise<HubspotObject[]> {
   const all: HubspotObject[] = [];
   let after: string | undefined;
   do {
-    const data = await hsGet('/crm/v3/objects/companies', {
-      limit: '100', properties: COMPANY_PROPS, ...(after ? { after } : {}),
-    });
+    const url = new URL(`${BASE}/crm/v3/objects/companies`);
+    url.searchParams.set('limit', '100');
+    url.searchParams.set('properties', COMPANY_PROPS);
+    if (after) url.searchParams.set('after', after);
+    const res = await fetch(url, { headers: authHeaders() });
+    if (!res.ok) throw new Error(`HubSpot companies failed: ${res.status}`);
+    const data = await res.json();
     all.push(...(data.results ?? []));
     after = data.paging?.next?.after;
   } while (after);
   return all;
 }
 
-async function fetchAssociatedIds(companyId: string, toObject: string): Promise<string[]> {
-  const data = await hsGet(`/crm/v3/objects/companies/${companyId}/associations/${toObject}`, {});
-  return (data.results ?? []).map((a: { id: string }) => a.id);
+// Batch associations API: 2 calls for 152 companies instead of 152 individual calls
+async function fetchAllContactAssociations(companyIds: string[]): Promise<Map<string, string[]>> {
+  const result = new Map<string, string[]>();
+  for (let i = 0; i < companyIds.length; i += 100) {
+    const data = await hsPost('/crm/v4/associations/companies/contacts/batch/read', {
+      inputs: companyIds.slice(i, i + 100).map((id) => ({ id })),
+    }) as { results?: Array<{ from: { id: string }; to: Array<{ toObjectId: number }> }> };
+    for (const item of data.results ?? []) {
+      result.set(String(item.from.id), (item.to ?? []).map((t) => String(t.toObjectId)));
+    }
+  }
+  return result;
+}
+
+async function batchReadContacts(ids: string[]): Promise<HubspotObject[]> {
+  const results: HubspotObject[] = [];
+  for (let i = 0; i < ids.length; i += 100) {
+    const data = await hsPost('/crm/v3/objects/contacts/batch/read', {
+      properties: CONTACT_PROPS,
+      inputs: ids.slice(i, i + 100).map((id) => ({ id })),
+    }) as { results?: HubspotObject[] };
+    results.push(...(data.results ?? []));
+  }
+  return results;
 }
 
 async function fetchEngagementsV1(companyId: string): Promise<unknown[]> {
@@ -53,7 +80,15 @@ async function fetchEngagementsV1(companyId: string): Promise<unknown[]> {
   let offset = 0;
   let hasMore = true;
   while (hasMore) {
-    const res = await hsGetWithRetry(`/engagements/v1/engagements/associated/COMPANY/${companyId}/paged`, offset ? { limit: '100', offset: String(offset) } : { limit: '100' });
+    const url = new URL(`${BASE}/engagements/v1/engagements/associated/COMPANY/${companyId}/paged`);
+    url.searchParams.set('limit', '100');
+    if (offset) url.searchParams.set('offset', String(offset));
+    const res = await fetch(url, { headers: authHeaders() });
+    if (res.status === 429) {
+      const wait = parseInt(res.headers.get('Retry-After') ?? '5', 10);
+      await new Promise((r) => setTimeout(r, wait * 1000));
+      continue;
+    }
     if (!res.ok) throw new Error(`HubSpot engagements v1 failed: ${res.status}`);
     const data = await res.json();
     all.push(...(data.results ?? []));
@@ -63,83 +98,63 @@ async function fetchEngagementsV1(companyId: string): Promise<unknown[]> {
   return all;
 }
 
-async function batchRead(objectType: string, ids: string[], properties: string[]): Promise<HubspotObject[]> {
-  const results: HubspotObject[] = [];
-  for (let i = 0; i < ids.length; i += 100) {
-    const res = await fetch(`${BASE}/crm/v3/objects/${objectType}/batch/read`, {
-      method: 'POST',
-      headers: authHeaders(),
-      body: JSON.stringify({ properties, inputs: ids.slice(i, i + 100).map((id) => ({ id })) }),
-    });
-    if (!res.ok) throw new Error(`HubSpot batch read ${objectType} failed: ${res.status}`);
-    results.push(...((await res.json()).results ?? []));
-  }
-  return results;
-}
-
-const CONCURRENCY = 3;
-
-async function hsGetWithRetry(path: string, params: Record<string, string>, attempt = 0): Promise<Response> {
-  const url = new URL(`${BASE}${path}`);
-  Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-  const res = await fetch(url, { headers: authHeaders() });
-  if (res.status === 429 && attempt < 4) {
-    const retryAfter = parseInt(res.headers.get('Retry-After') ?? '2', 10);
-    await new Promise((r) => setTimeout(r, retryAfter * 1000));
-    return hsGetWithRetry(path, params, attempt + 1);
-  }
-  return res;
-}
-
-async function syncOneCompany(
-  hsCompany: HubspotObject,
-  stats: { companies: number; contacts: number; endpoints: number; activities: number },
-): Promise<void> {
-  const companyId = await upsertCompanyFromHubspot(mapHubspotCompany(hsCompany, PAUL_MEMBER_ID));
-
-  const [contactIds, engagements] = await Promise.all([
-    fetchAssociatedIds(hsCompany.id, 'contacts'),
-    fetchEngagementsV1(hsCompany.id),
-  ]);
-
-  const hsContacts = contactIds.length ? await batchRead('contacts', contactIds, CONTACT_PROPS) : [];
-  const contactIdByHubspotId = new Map<string, string>();
-  for (const hsContact of hsContacts) {
-    const contactId = await upsertContactFromHubspot(companyId, mapHubspotContact(hsContact));
-    contactIdByHubspotId.set(hsContact.id, contactId);
-    stats.contacts += 1;
-  }
-
-  const endpointDrafts = extractEndpoints(hsCompany, hsContacts);
-  await Promise.all([
-    ...endpointDrafts.map(async (draft) => {
-      await upsertEndpoint(
-        companyId,
-        draft.contactHubspotId ? contactIdByHubspotId.get(draft.contactHubspotId) ?? null : null,
-        { channel: draft.channel, value: draft.value, endpoint_type: draft.endpoint_type },
-      );
-      stats.endpoints += 1;
-    }),
-    ...engagements.map(async (engagement) => {
-      await upsertActivity(companyId, null, mapHubspotEngagementV1(engagement as Parameters<typeof mapHubspotEngagementV1>[0]));
-      stats.activities += 1;
-    }),
-  ]);
-
-  await logSyncActivity(companyId, hsCompany.id);
-  stats.companies += 1;
-}
-
 export async function POST(req: NextRequest) {
   const actor = await requireActor(req, { allowMember: true, scopes: ['sales:write'] });
   if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
     const stats = { companies: 0, contacts: 0, endpoints: 0, activities: 0 };
+
+    // Phase 1: fetch all companies (2 API calls)
     const companies = await fetchAllCompanies();
-    for (let i = 0; i < companies.length; i += CONCURRENCY) {
-      await Promise.all(companies.slice(i, i + CONCURRENCY).map((c) => syncOneCompany(c, stats)));
+
+    // Phase 2: batch fetch ALL contact associations (2 API calls total)
+    const contactAssocMap = await fetchAllContactAssociations(companies.map((c) => c.id));
+
+    // Phase 3: batch fetch ALL unique contacts (2 API calls total)
+    const allContactIds = [...new Set([...contactAssocMap.values()].flat())];
+    const allContacts = allContactIds.length ? await batchReadContacts(allContactIds) : [];
+    const contactById = new Map(allContacts.map((c) => [c.id, c]));
+
+    // Phase 4: write companies + contacts + endpoints to DB (no HubSpot calls)
+    const companyDbIdMap = new Map<string, string>();
+    for (const hsCompany of companies) {
+      const companyId = await upsertCompanyFromHubspot(mapHubspotCompany(hsCompany, PAUL_MEMBER_ID));
+      companyDbIdMap.set(hsCompany.id, companyId);
+
+      const contactIds = contactAssocMap.get(hsCompany.id) ?? [];
+      const hsContacts = contactIds.map((id) => contactById.get(id)).filter(Boolean) as HubspotObject[];
+      const contactIdByHubspotId = new Map<string, string>();
+
+      for (const hsContact of hsContacts) {
+        const contactId = await upsertContactFromHubspot(companyId, mapHubspotContact(hsContact));
+        contactIdByHubspotId.set(hsContact.id, contactId);
+        stats.contacts += 1;
+      }
+      for (const draft of extractEndpoints(hsCompany, hsContacts)) {
+        await upsertEndpoint(
+          companyId,
+          draft.contactHubspotId ? contactIdByHubspotId.get(draft.contactHubspotId) ?? null : null,
+          { channel: draft.channel, value: draft.value, endpoint_type: draft.endpoint_type },
+        );
+        stats.endpoints += 1;
+      }
+      stats.companies += 1;
     }
+
+    // Phase 5: fetch engagements per company sequentially (1 call/company, retry on 429)
+    for (const hsCompany of companies) {
+      const companyId = companyDbIdMap.get(hsCompany.id)!;
+      const engagements = await fetchEngagementsV1(hsCompany.id);
+      for (const engagement of engagements) {
+        await upsertActivity(companyId, null, mapHubspotEngagementV1(
+          engagement as Parameters<typeof mapHubspotEngagementV1>[0],
+        ));
+        stats.activities += 1;
+      }
+      await logSyncActivity(companyId, hsCompany.id);
+    }
+
     return NextResponse.json({ ok: true, stats });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
