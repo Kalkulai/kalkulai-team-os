@@ -98,3 +98,28 @@ export function mapHubspotEngagement(kind: EngagementKind, engagement: HubspotOb
     meta: {},
   };
 }
+
+const V1_TYPE_TO_KIND: Record<string, EngagementKind> = {
+  NOTE: 'notes', CALL: 'calls', EMAIL: 'emails', TASK: 'tasks', MEETING: 'meetings',
+};
+
+export function mapHubspotEngagementV1(raw: {
+  engagement: { id: number; type: string; timestamp?: number };
+  metadata?: Record<string, string | undefined>;
+}) {
+  const e = raw.engagement;
+  const m = raw.metadata ?? {};
+  const kind: EngagementKind = V1_TYPE_TO_KIND[e.type] ?? 'notes';
+  const body = m.body || m.text || m.html || '';
+  const title = m.title || m.subject || ENGAGEMENT_TITLE[kind];
+  return {
+    activity_type: ENGAGEMENT_ACTIVITY[kind],
+    direction: (m.direction ?? null) as string | null,
+    occurred_at: e.timestamp ? new Date(e.timestamp).toISOString() : new Date().toISOString(),
+    source_system: 'hubspot',
+    provider_event_id: `hubspot-${kind}-${e.id}`,
+    title,
+    summary: body ? stripHtml(body).slice(0, 4000) : null,
+    meta: {},
+  };
+}
