@@ -49,7 +49,7 @@ async function fetchAllCompanies(): Promise<HubspotObject[]> {
   return all;
 }
 
-// Batch associations API: one call per 100 companies → 2 calls for 152 companies
+// Batch associations API: 2 calls for 152 companies instead of 152 individual calls
 async function fetchAllContactAssociations(companyIds: string[]): Promise<Map<string, string[]>> {
   const result = new Map<string, string[]>();
   for (let i = 0; i < companyIds.length; i += 100) {
@@ -105,13 +105,13 @@ export async function POST(req: NextRequest) {
   try {
     const stats = { companies: 0, contacts: 0, endpoints: 0, activities: 0 };
 
-    // Phase 1: fetch all companies (2 API calls for 152 companies)
+    // Phase 1: fetch all companies (2 API calls)
     const companies = await fetchAllCompanies();
 
     // Phase 2: batch fetch ALL contact associations (2 API calls total)
     const contactAssocMap = await fetchAllContactAssociations(companies.map((c) => c.id));
 
-    // Phase 3: collect all unique contact IDs and batch-fetch them (2 API calls total)
+    // Phase 3: batch fetch ALL unique contacts (2 API calls total)
     const allContactIds = [...new Set([...contactAssocMap.values()].flat())];
     const allContacts = allContactIds.length ? await batchReadContacts(allContactIds) : [];
     const contactById = new Map(allContacts.map((c) => [c.id, c]));
@@ -142,7 +142,7 @@ export async function POST(req: NextRequest) {
       stats.companies += 1;
     }
 
-    // Phase 5: fetch engagements per company sequentially (1 call/company, no parallel)
+    // Phase 5: fetch engagements per company sequentially (1 call/company, retry on 429)
     for (const hsCompany of companies) {
       const companyId = companyDbIdMap.get(hsCompany.id)!;
       const engagements = await fetchEngagementsV1(hsCompany.id);
