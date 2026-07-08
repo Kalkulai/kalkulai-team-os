@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireActor } from '@/lib/auth-context';
 import {
-  mapHubspotCompany, mapHubspotContact, extractEndpoints, mapHubspotEngagement,
-  HubspotObject, EngagementKind,
+  mapHubspotCompany, mapHubspotContact, extractEndpoints, mapHubspotEngagementV1,
+  HubspotObject,
 } from '@/lib/sales-hubspot-map';
 import {
   upsertCompanyFromHubspot, upsertContactFromHubspot, upsertEndpoint,
@@ -16,14 +16,6 @@ export const maxDuration = 240;
 const BASE = 'https://api.hubapi.com';
 const COMPANY_PROPS = 'name,domain,industry,lifecyclestage,phone';
 const CONTACT_PROPS = ['firstname', 'lastname', 'jobtitle', 'email', 'phone', 'mobilephone'];
-const ENGAGEMENT_KINDS: EngagementKind[] = ['notes', 'calls', 'emails', 'tasks', 'meetings'];
-const ENGAGEMENT_PROPS: Record<EngagementKind, string[]> = {
-  notes: ['hs_note_body', 'hs_timestamp'],
-  calls: ['hs_call_title', 'hs_call_body', 'hs_timestamp'],
-  emails: ['hs_email_subject', 'hs_email_text', 'hs_timestamp'],
-  tasks: ['hs_task_subject', 'hs_task_body', 'hs_timestamp'],
-  meetings: ['hs_meeting_title', 'hs_meeting_body', 'hs_timestamp'],
-};
 
 function authHeaders(): Record<string, string> {
   return {
@@ -56,6 +48,24 @@ async function fetchAllCompanies(): Promise<HubspotObject[]> {
 async function fetchAssociatedIds(companyId: string, toObject: string): Promise<string[]> {
   const data = await hsGet(`/crm/v3/objects/companies/${companyId}/associations/${toObject}`, {});
   return (data.results ?? []).map((a: { id: string }) => a.id);
+}
+
+async function fetchEngagementsV1(companyId: string): Promise<unknown[]> {
+  const all: unknown[] = [];
+  let offset = 0;
+  let hasMore = true;
+  while (hasMore) {
+    const url = new URL(`${BASE}/engagements/v1/engagements/associated/COMPANY/${companyId}/paged`);
+    url.searchParams.set('limit', '100');
+    if (offset) url.searchParams.set('offset', String(offset));
+    const res = await fetch(url, { headers: authHeaders() });
+    if (!res.ok) throw new Error(`HubSpot engagements v1 failed: ${res.status}`);
+    const data = await res.json();
+    all.push(...(data.results ?? []));
+    hasMore = data.hasMore ?? false;
+    offset = data.offset ?? 0;
+  }
+  return all;
 }
 
 async function batchRead(objectType: string, ids: string[], properties: string[]): Promise<HubspotObject[]> {
@@ -97,15 +107,9 @@ export async function POST(req: NextRequest) {
         stats.endpoints += 1;
       }
 
-      // Protokolle: alle Engagement-Typen als Timeline-Activities (Entscheidung 1)
-      for (const kind of ENGAGEMENT_KINDS) {
-        const engagementIds = await fetchAssociatedIds(hsCompany.id, kind);
-        if (engagementIds.length === 0) continue;
-        const engagements = await batchRead(kind, engagementIds, ENGAGEMENT_PROPS[kind]);
-        for (const engagement of engagements) {
-          await upsertActivity(companyId, null, mapHubspotEngagement(kind, engagement));
-          stats.activities += 1;
-        }
+      for (const engagement of await fetchEngagementsV1(hsCompany.id)) {
+        await upsertActivity(companyId, null, mapHubspotEngagementV1(engagement as Parameters<typeof mapHubspotEngagementV1>[0]));
+        stats.activities += 1;
       }
 
       await logSyncActivity(companyId, hsCompany.id);
