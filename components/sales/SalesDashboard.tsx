@@ -3,8 +3,20 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { SalesCompany, SalesCompanyDetail } from '@/types/sales';
+import type { SalesCompanyListItem, SalesCompanyDetail } from '@/types/sales';
 import { ContactForm } from '@/components/sales/ContactForm';
+
+const ACTIVITY_LABEL: Record<string, string> = {
+  call: 'Call', email: 'E-Mail', note: 'Notiz', task: 'Task',
+  meeting: 'Meeting', whatsapp: 'WhatsApp', transcript: 'Transkript',
+};
+
+function daysAgo(iso: string): string {
+  const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (days === 0) return 'heute';
+  if (days === 1) return 'gestern';
+  return `vor ${days}d`;
+}
 
 export function SalesDashboard({
   memberId,
@@ -12,7 +24,7 @@ export function SalesDashboard({
   selected,
 }: {
   memberId: string;
-  companies: SalesCompany[];
+  companies: SalesCompanyListItem[];
   selected: SalesCompanyDetail | null;
 }) {
   const router = useRouter();
@@ -63,7 +75,14 @@ export function SalesDashboard({
               <span>
                 {c.status}
                 {c.industry ? ` · ${c.industry}` : ''}
+                {c.contact_count > 0 ? ` · ${c.contact_count} Kontakt${c.contact_count > 1 ? 'e' : ''}` : ''}
               </span>
+              {c.last_activity_at && (
+                <span className="meta">
+                  {ACTIVITY_LABEL[c.last_activity_type ?? ''] ?? c.last_activity_type} {daysAgo(c.last_activity_at)}
+                </span>
+              )}
+              {c.next_step && <span className="meta next-step">→ {c.next_step}</span>}
             </Link>
           ))}
         </div>

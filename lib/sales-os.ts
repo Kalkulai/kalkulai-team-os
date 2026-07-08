@@ -1,14 +1,43 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import type { SalesCompany, SalesCompanyDetail, SalesContact } from '@/types/sales';
+import type { SalesCompany, SalesCompanyDetail, SalesCompanyListItem, SalesContact } from '@/types/sales';
 
-export async function listCompaniesForMember(memberId: string): Promise<SalesCompany[]> {
+export async function listCompaniesForMember(memberId: string): Promise<SalesCompanyListItem[]> {
   const { data, error } = await supabaseAdmin
     .from('sales_companies')
     .select('*')
     .eq('owner_member_id', memberId)
     .order('updated_at', { ascending: false });
   if (error) throw new Error(`sales_companies list failed: ${error.message}`);
-  return (data ?? []) as SalesCompany[];
+  const companies = (data ?? []) as SalesCompany[];
+  if (companies.length === 0) return [];
+
+  const ids = companies.map((c) => c.id);
+  const [contactsRes, activitiesRes] = await Promise.all([
+    supabaseAdmin.from('sales_contacts').select('company_id').in('company_id', ids),
+    supabaseAdmin.from('sales_activities').select('company_id, occurred_at, activity_type')
+      .in('company_id', ids).neq('activity_type', 'sync')
+      .order('occurred_at', { ascending: false }),
+  ]);
+  if (contactsRes.error) throw new Error(`sales_contacts count failed: ${contactsRes.error.message}`);
+  if (activitiesRes.error) throw new Error(`sales_activities list failed: ${activitiesRes.error.message}`);
+
+  const contactCount = new Map<string, number>();
+  for (const row of contactsRes.data ?? []) {
+    contactCount.set(row.company_id, (contactCount.get(row.company_id) ?? 0) + 1);
+  }
+  const lastActivity = new Map<string, { occurred_at: string; activity_type: string }>();
+  for (const row of activitiesRes.data ?? []) {
+    if (!lastActivity.has(row.company_id)) {
+      lastActivity.set(row.company_id, { occurred_at: row.occurred_at, activity_type: row.activity_type });
+    }
+  }
+
+  return companies.map((c) => ({
+    ...c,
+    contact_count: contactCount.get(c.id) ?? 0,
+    last_activity_at: lastActivity.get(c.id)?.occurred_at ?? null,
+    last_activity_type: lastActivity.get(c.id)?.activity_type ?? null,
+  }));
 }
 
 export async function getCompanyDetail(companyId: string, memberId: string): Promise<SalesCompanyDetail | null> {

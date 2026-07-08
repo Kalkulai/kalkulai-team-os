@@ -54,6 +54,12 @@ export interface SalesActivity {
   meta: Record<string, unknown>;
 }
 
+export interface SalesCompanyListItem extends SalesCompany {
+  contact_count: number;
+  last_activity_at: string | null;
+  last_activity_type: string | null;
+}
+
 export interface SalesCompanyDetail extends SalesCompany {
   contacts: SalesContact[];
   endpoints: SalesEndpoint[];
