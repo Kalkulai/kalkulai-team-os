@@ -58,6 +58,8 @@ export interface SalesCompanyListItem extends SalesCompany {
   contact_count: number;
   last_activity_at: string | null;
   last_activity_type: string | null;
+  days_since_contact: number | null;
+  priority_score: number;
 }
 
 export interface SalesCompanyDetail extends SalesCompany {

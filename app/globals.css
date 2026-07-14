@@ -1616,6 +1616,16 @@ html.light .tl-row code { background: rgba(11, 11, 15, 0.05); }
 .sales-btn-sm { padding: 5px 9px; font-size: 11.5px; }
 .sales-call-btn { border-color: #2d6a3f; color: #4ade80; background: rgba(74,222,128,0.06); margin-left: auto; }
 .sales-call-btn:hover { background: rgba(74,222,128,0.12); }
+.sales-detail-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.sales-log-call-toggle { white-space: nowrap; }
+.sales-lead-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.sales-lead-card.is-urgent { border-color: rgba(250,170,50,0.45); }
+.sales-days-badge { font: 600 11px/1 var(--font); padding: 2px 6px; border-radius: 99px; background: rgba(255,255,255,0.06); color: var(--ink-3); flex-shrink: 0; }
+.sales-days-badge.tone-warn { background: rgba(250,170,50,0.12); color: #faaa32; }
+.sales-log-call-form { border: 1px solid var(--line-1); border-radius: 10px; padding: 14px; background: rgba(255,255,255,0.02); }
+.sales-log-call-grid { display: grid; grid-template-columns: 1fr auto; gap: 8px; margin-bottom: 8px; }
+.sales-input-duration { width: 7rem; }
+.sales-textarea { resize: vertical; min-height: 64px; font-family: inherit; margin-bottom: 8px; }
 .sales-contact-form {
   display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line-1); border-radius: 10px;
   padding: 12px; margin-bottom: 10px; background: rgba(255,255,255,0.02);

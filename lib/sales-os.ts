@@ -32,12 +32,27 @@ export async function listCompaniesForMember(memberId: string): Promise<SalesCom
     }
   }
 
-  return companies.map((c) => ({
-    ...c,
-    contact_count: contactCount.get(c.id) ?? 0,
-    last_activity_at: lastActivity.get(c.id)?.occurred_at ?? null,
-    last_activity_type: lastActivity.get(c.id)?.activity_type ?? null,
-  }));
+  const now = Date.now();
+  return companies.map((c) => {
+    const lastAt = lastActivity.get(c.id)?.occurred_at ?? null;
+    const daysSince = lastAt ? Math.floor((now - new Date(lastAt).getTime()) / 86400000) : null;
+
+    let priority = 0;
+    if (c.next_step) priority += 3;
+    if (daysSince === null) priority += 2;
+    else if (daysSince >= 14) priority += 2;
+    else if (daysSince >= 7) priority += 1;
+    else if (daysSince < 2) priority -= 1;
+
+    return {
+      ...c,
+      contact_count: contactCount.get(c.id) ?? 0,
+      last_activity_at: lastAt,
+      last_activity_type: lastActivity.get(c.id)?.activity_type ?? null,
+      days_since_contact: daysSince,
+      priority_score: priority,
+    };
+  }).sort((a, b) => b.priority_score - a.priority_score || a.name.localeCompare(b.name, 'de'));
 }
 
 export async function getCompanyDetail(companyId: string, memberId: string): Promise<SalesCompanyDetail | null> {

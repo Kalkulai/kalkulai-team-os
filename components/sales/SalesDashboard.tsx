@@ -33,6 +33,43 @@ export function SalesDashboard({
   const [showContactForm, setShowContactForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [calling, setCalling] = useState<string | null>(null);
+  const [showLogCall, setShowLogCall] = useState(false);
+  const [callNotes, setCallNotes] = useState('');
+  const [callOutcome, setCallOutcome] = useState('reached');
+  const [callDurationMin, setCallDurationMin] = useState('');
+  const [callNextStep, setCallNextStep] = useState('');
+  const [loggingCall, setLoggingCall] = useState(false);
+
+  async function logCall() {
+    if (!selected || loggingCall) return;
+    setLoggingCall(true);
+    try {
+      const ns = callNextStep.trim() ||
+        (callOutcome === 'voicemail' || callOutcome === 'no_answer' ? 'Nochmal anrufen' : undefined);
+      const res = await fetch('/api/sales/activities/log-call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId: selected.id,
+          notes: callNotes || undefined,
+          outcome: callOutcome,
+          duration_min: callDurationMin ? Number(callDurationMin) : undefined,
+          next_step: ns,
+        }),
+      });
+      const data = await res.json();
+      if (!data.ok) { alert(`Fehler: ${data.error}`); return; }
+      setCallNotes('');
+      setCallDurationMin('');
+      setCallNextStep('');
+      setCallOutcome('reached');
+      setShowLogCall(false);
+      if (ns) setNextStep(ns);
+      router.refresh();
+    } finally {
+      setLoggingCall(false);
+    }
+  }
 
   async function initiateCall(ep: SalesEndpoint) {
     if (!selected || calling) return;
@@ -87,9 +124,16 @@ export function SalesDashboard({
             <Link
               key={c.id}
               href={`/dashboard/sales?member=${memberId}&company=${c.id}`}
-              className={`sales-lead-card${selected?.id === c.id ? ' is-active' : ''}`}
+              className={`sales-lead-card${selected?.id === c.id ? ' is-active' : ''}${c.priority_score >= 4 ? ' is-urgent' : ''}`}
             >
-              <strong>{c.name}</strong>
+              <div className="sales-lead-top">
+                <strong>{c.name}</strong>
+                {c.days_since_contact !== null && (
+                  <span className={`sales-days-badge${c.days_since_contact >= 14 ? ' tone-warn' : ''}`}>
+                    {c.days_since_contact === 0 ? 'heute' : `${c.days_since_contact}d`}
+                  </span>
+                )}
+              </div>
               <span>
                 {c.status}
                 {c.industry ? ` · ${c.industry}` : ''}
@@ -111,19 +155,83 @@ export function SalesDashboard({
           ) : (
             <div className="sales-detail">
               <div className="sales-detail-header">
-                <h2>{selected.name}</h2>
-                <p>
-                  {selected.status}
-                  {selected.website ? (
-                    <>
-                      {' · '}
-                      <a href={selected.website} target="_blank" rel="noreferrer">
-                        {selected.website}
-                      </a>
-                    </>
-                  ) : null}
-                </p>
+                <div>
+                  <h2>{selected.name}</h2>
+                  <p>
+                    {selected.status}
+                    {selected.website ? (
+                      <>
+                        {' · '}
+                        <a href={selected.website} target="_blank" rel="noreferrer">
+                          {selected.website}
+                        </a>
+                      </>
+                    ) : null}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="sales-btn sales-log-call-toggle"
+                  onClick={() => setShowLogCall((v) => !v)}
+                >
+                  {showLogCall ? 'Abbrechen' : 'Call loggen'}
+                </button>
               </div>
+              {showLogCall && (
+                <section className="sales-section sales-log-call-form">
+                  <h3 className="ovr">Call loggen</h3>
+                  <div className="sales-log-call-grid">
+                    <select
+                      className="sales-input"
+                      value={callOutcome}
+                      onChange={(e) => {
+                        setCallOutcome(e.target.value);
+                        if (e.target.value === 'voicemail' || e.target.value === 'no_answer') {
+                          if (!callNextStep) setCallNextStep('Nochmal anrufen');
+                        } else if (callNextStep === 'Nochmal anrufen') {
+                          setCallNextStep('');
+                        }
+                      }}
+                    >
+                      <option value="reached">Erreicht</option>
+                      <option value="voicemail">Voicemail</option>
+                      <option value="no_answer">Kein Anschluss</option>
+                      <option value="busy">Besetzt</option>
+                    </select>
+                    <input
+                      type="number"
+                      className="sales-input sales-input-duration"
+                      placeholder="Dauer (Min)"
+                      value={callDurationMin}
+                      onChange={(e) => setCallDurationMin(e.target.value)}
+                      min={1}
+                    />
+                  </div>
+                  <textarea
+                    className="sales-input sales-textarea"
+                    placeholder="Notizen…"
+                    value={callNotes}
+                    onChange={(e) => setCallNotes(e.target.value)}
+                    rows={3}
+                  />
+                  <div className="sales-row">
+                    <input
+                      className="sales-input"
+                      placeholder="Nächster Schritt (optional)"
+                      value={callNextStep}
+                      onChange={(e) => setCallNextStep(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="sales-btn"
+                      onClick={logCall}
+                      disabled={loggingCall}
+                    >
+                      {loggingCall ? 'Speichert…' : 'Speichern'}
+                    </button>
+                  </div>
+                </section>
+              )}
 
               <section className="sales-section">
                 <h3 className="ovr">Nächster Schritt</h3>
