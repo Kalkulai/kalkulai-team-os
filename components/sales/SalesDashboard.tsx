@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { SalesCompanyListItem, SalesCompanyDetail } from '@/types/sales';
+import type { SalesCompanyListItem, SalesCompanyDetail, SalesEndpoint } from '@/types/sales';
 import { ContactForm } from '@/components/sales/ContactForm';
 
 const ACTIVITY_LABEL: Record<string, string> = {
@@ -32,6 +32,24 @@ export function SalesDashboard({
   const [nextStep, setNextStep] = useState(selected?.next_step ?? '');
   const [showContactForm, setShowContactForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [calling, setCalling] = useState<string | null>(null);
+
+  async function initiateCall(ep: SalesEndpoint) {
+    if (!selected || calling) return;
+    setCalling(ep.id);
+    try {
+      const res = await fetch('/api/sales/telephony/call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpointId: ep.id, companyId: selected.id }),
+      });
+      const data = await res.json();
+      if (!data.ok) alert(`Call fehlgeschlagen: ${data.error}`);
+      else router.refresh();
+    } finally {
+      setCalling(null);
+    }
+  }
 
   const filtered = query
     ? companies.filter((c) => c.name.toLowerCase().includes(query.toLowerCase()))
@@ -167,6 +185,16 @@ export function SalesDashboard({
                       {ep.endpoint_type} · {ep.validity_status}
                     </span>
                     {ep.do_not_call && <span className="sales-badge tone-danger">do not call</span>}
+                    {(ep.channel === 'phone' || ep.channel === 'mobile') && !ep.do_not_call && (
+                      <button
+                        type="button"
+                        className="sales-btn sales-btn-sm sales-call-btn"
+                        onClick={() => initiateCall(ep)}
+                        disabled={calling !== null}
+                      >
+                        {calling === ep.id ? 'Verbinde…' : '📞 Anrufen'}
+                      </button>
+                    )}
                   </div>
                 ))}
                 {selected.endpoints.length === 0 && <p className="sales-muted">—</p>}

@@ -1614,6 +1614,8 @@ html.light .tl-row code { background: rgba(11, 11, 15, 0.05); }
 .sales-btn:hover { background: rgba(255,255,255,0.07); }
 .sales-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .sales-btn-sm { padding: 5px 9px; font-size: 11.5px; }
+.sales-call-btn { border-color: #2d6a3f; color: #4ade80; background: rgba(74,222,128,0.06); margin-left: auto; }
+.sales-call-btn:hover { background: rgba(74,222,128,0.12); }
 .sales-contact-form {
   display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line-1); border-radius: 10px;
   padding: 12px; margin-bottom: 10px; background: rgba(255,255,255,0.02);
