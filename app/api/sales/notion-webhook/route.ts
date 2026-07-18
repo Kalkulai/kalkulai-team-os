@@ -136,6 +136,7 @@ export async function POST(req: NextRequest) {
   let payload: {
     type?: string;
     challenge?: string;
+    verification_token?: string;
     entity?: { id: string; type: string };
     data?: { parent?: { id?: string; type?: string }; updated_properties?: string[] };
   };
@@ -145,7 +146,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  // Notion sends this once during webhook registration to verify the URL
+  // Notion sends a verification token when the webhook is first registered.
+  // Token appears in Vercel logs — copy it into the Notion developer console.
+  if (payload.verification_token) {
+    console.log('[notion-webhook] VERIFICATION TOKEN:', payload.verification_token);
+    return NextResponse.json({ ok: true });
+  }
+
+  // Legacy challenge format (Slack-style, just in case)
   if (payload.type === 'url_verification') {
     return NextResponse.json({ challenge: payload.challenge });
   }
