@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireApiAuth } from '@/lib/api-auth';
+import { requireActor } from '@/lib/auth-context';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendToHermes } from '@/lib/hermes-chat';
 
@@ -23,9 +23,8 @@ Gewünschtes JSON-Format:
 }
 
 export async function POST(req: NextRequest) {
-  if (!requireApiAuth(req)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  const actor = await requireActor(req, { allowMember: true, scopes: ['sales:write'] });
+  if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const { force, companyId } = await req.json().catch(() => ({})) as { force?: boolean; companyId?: string };
 
