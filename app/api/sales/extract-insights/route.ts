@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireActor } from '@/lib/auth-context';
+import { requireActor, hasValidServiceBearer } from '@/lib/auth-context';
 import { supabaseAdmin } from '@/lib/supabase';
 import { sendToHermes } from '@/lib/hermes-chat';
 
@@ -22,31 +22,35 @@ Gewünschtes JSON-Format:
 }`;
 }
 
-export async function POST(req: NextRequest) {
-  const actor = await requireActor(req, { allowMember: true, scopes: ['sales:write'] });
-  if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+function isStale(insightsJson: Record<string, unknown> | null, latestTxAt: string): boolean {
+  if (!insightsJson) return true;
+  const analyzedAt = insightsJson.last_analyzed_at as string | null;
+  if (!analyzedAt) return true;
+  return new Date(latestTxAt) > new Date(analyzedAt);
+}
 
-  const { force, companyId } = await req.json().catch(() => ({})) as { force?: boolean; companyId?: string };
+async function runExtraction(opts: { force?: boolean; companyId?: string }) {
+  const { force = false, companyId } = opts;
 
-  // Get transcripts
-  let txQuery = supabaseAdmin
+  const { data: transcripts, error: txError } = await supabaseAdmin
     .from('sales_activities')
     .select('company_id,title,summary,occurred_at,meta')
     .eq('activity_type', 'transcript')
     .order('occurred_at', { ascending: true })
     .limit(2000);
-
-  const { data: transcripts, error: txError } = await txQuery;
   if (txError) return NextResponse.json({ error: txError.message }, { status: 500 });
 
   const byCompany = new Map<string, typeof transcripts>();
+  const latestTxAt = new Map<string, string>();
   for (const t of transcripts ?? []) {
     if (companyId && t.company_id !== companyId) continue;
     if (!byCompany.has(t.company_id)) byCompany.set(t.company_id, []);
     byCompany.get(t.company_id)!.push(t);
+    if (!latestTxAt.has(t.company_id) || t.occurred_at > latestTxAt.get(t.company_id)!) {
+      latestTxAt.set(t.company_id, t.occurred_at);
+    }
   }
 
-  // Get company info
   const ids = [...byCompany.keys()];
   const { data: companies } = await supabaseAdmin
     .from('sales_companies')
@@ -54,14 +58,16 @@ export async function POST(req: NextRequest) {
     .in('id', ids);
 
   const companyName = new Map((companies ?? []).map((c) => [c.id, c.name as string]));
-  const hasInsights = new Map((companies ?? []).map((c) => [c.id, !!c.insights_json]));
+  const companyInsights = new Map((companies ?? []).map((c) => [c.id, c.insights_json as Record<string, unknown> | null]));
 
   const results: { name: string; status: 'updated' | 'skipped' | 'failed'; error?: string }[] = [];
 
   for (const [cid, txList] of byCompany) {
     const name = companyName.get(cid) ?? 'Unbekannt';
+    const insights = companyInsights.get(cid) ?? null;
+    const newest = latestTxAt.get(cid) ?? '';
 
-    if (hasInsights.get(cid) && !force) {
+    if (!force && !isStale(insights, newest)) {
       results.push({ name, status: 'skipped' });
       continue;
     }
@@ -82,20 +88,20 @@ export async function POST(req: NextRequest) {
     try {
       const reply = await sendToHermes({ message: buildPrompt(name, summaries) });
 
-      let insights: Record<string, unknown>;
+      let newInsights: Record<string, unknown>;
       try {
-        insights = JSON.parse(reply);
+        newInsights = JSON.parse(reply);
       } catch {
         const match = reply.match(/\{[\s\S]*\}/);
         if (!match) throw new Error(`No JSON: ${reply.slice(0, 100)}`);
-        insights = JSON.parse(match[0]);
+        newInsights = JSON.parse(match[0]);
       }
 
-      insights.last_analyzed_at = new Date().toISOString();
+      newInsights.last_analyzed_at = new Date().toISOString();
 
       await supabaseAdmin
         .from('sales_companies')
-        .update({ insights_json: insights })
+        .update({ insights_json: newInsights })
         .eq('id', cid);
 
       results.push({ name, status: 'updated' });
@@ -107,4 +113,20 @@ export async function POST(req: NextRequest) {
   const updated = results.filter((r) => r.status === 'updated').length;
   const failed = results.filter((r) => r.status === 'failed').length;
   return NextResponse.json({ updated, skipped: results.length - updated - failed, failed, results });
+}
+
+// Vercel Cron sends GET — only Bearer auth (CRON_SECRET), runs stale-only by default
+export async function GET(req: NextRequest) {
+  if (!hasValidServiceBearer(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  return runExtraction({ force: false });
+}
+
+// Manual trigger from browser (session) or service (Bearer)
+export async function POST(req: NextRequest) {
+  const sessionActor = await requireActor(req, { allowMember: true, scopes: ['sales:write'] });
+  if (!sessionActor && !hasValidServiceBearer(req)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  const { force, companyId } = await req.json().catch(() => ({})) as { force?: boolean; companyId?: string };
+  return runExtraction({ force, companyId });
 }
