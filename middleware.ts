@@ -34,6 +34,7 @@ const PUBLIC_PREFIXES = [
   '/api/auth/',            // Login/Logout
   '/api/oauth/google/',    // Calendar-OAuth-Flow (Browser-Redirect von Google)
   '/api/webhooks/',        // GitHub-Webhooks (HMAC-secured)
+  '/api/sales/notion-webhook', // Notion-Webhooks (Notion-Signature-verified im Handler)
   '/api/members',          // Vom Client-Bundle vor Auth gebraucht (Member-Dropdown)
 ];
 
