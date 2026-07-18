@@ -30,7 +30,7 @@ export function mapHubspotCompany(company: HubspotObject, ownerMemberId: string)
   return {
     hubspot_company_id: company.id,
     owner_member_id: ownerMemberId,
-    name: p.name || `Unbenannt ${company.id}`,
+    name: (p.name || `Unbenannt ${company.id}`).replace(/ \(https:\/\/www\.notion\.so\/[^)]+\)/g, '').trim(),
     website: p.domain ? `https://${p.domain}` : null,
     industry: p.industry || null,
     status: p.lifecyclestage || 'lead',
