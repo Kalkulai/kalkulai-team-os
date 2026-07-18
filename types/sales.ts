@@ -3,6 +3,16 @@ export type EndpointChannel = 'phone' | 'mobile' | 'whatsapp' | 'email' | 'linke
 export type EndpointType = 'direct' | 'mobile' | 'switchboard' | 'assistant' | 'location' | 'generic';
 export type ActivityType = 'call' | 'email' | 'whatsapp' | 'meeting' | 'task' | 'note' | 'transcript' | 'sync';
 
+export interface SalesCompanyInsights {
+  employee_count: number | null;
+  software_used: string[];
+  interests: string[];
+  buying_signal: 'hot' | 'warm' | 'cold' | 'unknown';
+  pain_points: string[];
+  notes: string | null;
+  last_analyzed_at: string | null;
+}
+
 export interface SalesCompany {
   id: string;
   owner_member_id: string;
@@ -12,6 +22,7 @@ export interface SalesCompany {
   industry: string | null;
   status: SalesCompanyStatus;
   next_step: string | null;
+  insights_json: SalesCompanyInsights | null;
   created_at: string;
   updated_at: string;
 }
@@ -60,6 +71,7 @@ export interface SalesCompanyListItem extends SalesCompany {
   last_activity_type: string | null;
   days_since_contact: number | null;
   priority_score: number;
+  transcript_count: number;
 }
 
 export interface SalesCompanyDetail extends SalesCompany {

@@ -25,8 +25,12 @@ export async function listCompaniesForMember(memberId: string): Promise<SalesCom
   for (const row of contactsRes.data ?? []) {
     contactCount.set(row.company_id, (contactCount.get(row.company_id) ?? 0) + 1);
   }
+  const transcriptCount = new Map<string, number>();
   const lastActivity = new Map<string, { occurred_at: string; activity_type: string }>();
   for (const row of activitiesRes.data ?? []) {
+    if (row.activity_type === 'transcript') {
+      transcriptCount.set(row.company_id, (transcriptCount.get(row.company_id) ?? 0) + 1);
+    }
     if (!lastActivity.has(row.company_id)) {
       lastActivity.set(row.company_id, { occurred_at: row.occurred_at, activity_type: row.activity_type });
     }
@@ -36,10 +40,12 @@ export async function listCompaniesForMember(memberId: string): Promise<SalesCom
   return companies.map((c) => {
     const lastAt = lastActivity.get(c.id)?.occurred_at ?? null;
     const daysSince = lastAt ? Math.floor((now - new Date(lastAt).getTime()) / 86400000) : null;
+    const txCount = transcriptCount.get(c.id) ?? 0;
 
     let priority = 0;
     if (c.next_step) priority += 3;
-    if (daysSince === null) priority += 2;
+    if (txCount > 0) priority += 2;
+    if (daysSince === null) priority -= 1;
     else if (daysSince >= 14) priority += 2;
     else if (daysSince >= 7) priority += 1;
     else if (daysSince < 2) priority -= 1;
@@ -51,6 +57,7 @@ export async function listCompaniesForMember(memberId: string): Promise<SalesCom
       last_activity_type: lastActivity.get(c.id)?.activity_type ?? null,
       days_since_contact: daysSince,
       priority_score: priority,
+      transcript_count: txCount,
     };
   }).sort((a, b) => b.priority_score - a.priority_score || a.name.localeCompare(b.name, 'de'));
 }

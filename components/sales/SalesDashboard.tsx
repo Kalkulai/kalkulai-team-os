@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { SalesCompanyListItem, SalesCompanyDetail, SalesEndpoint } from '@/types/sales';
+import type { SalesCompanyListItem, SalesCompanyDetail, SalesEndpoint, SalesCompanyInsights } from '@/types/sales';
 import { ContactForm } from '@/components/sales/ContactForm';
 
 const ACTIVITY_LABEL: Record<string, string> = {
@@ -11,11 +11,77 @@ const ACTIVITY_LABEL: Record<string, string> = {
   meeting: 'Meeting', whatsapp: 'WhatsApp', transcript: 'Transkript',
 };
 
+const SIGNAL_LABEL: Record<string, string> = {
+  hot: '🔥 Hot', warm: '🌡 Warm', cold: '❄️ Kalt', unknown: '?',
+};
+
 function daysAgo(iso: string): string {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
   if (days === 0) return 'heute';
   if (days === 1) return 'gestern';
   return `vor ${days}d`;
+}
+
+function InsightsPanel({ insights }: { insights: SalesCompanyInsights | null }) {
+  if (!insights) {
+    return (
+      <div className="sales-insights-empty">
+        <span className="sales-muted">Noch keine KI-Auswertung verfügbar.</span>
+      </div>
+    );
+  }
+  return (
+    <div className="sales-insights-grid">
+      {insights.employee_count != null && (
+        <div className="sales-insight-item">
+          <span className="ovr">Mitarbeiter</span>
+          <strong>{insights.employee_count}</strong>
+        </div>
+      )}
+      {insights.buying_signal && insights.buying_signal !== 'unknown' && (
+        <div className="sales-insight-item">
+          <span className="ovr">Kaufinteresse</span>
+          <strong>{SIGNAL_LABEL[insights.buying_signal] ?? insights.buying_signal}</strong>
+        </div>
+      )}
+      {insights.software_used?.length > 0 && (
+        <div className="sales-insight-item sales-insight-wide">
+          <span className="ovr">Software</span>
+          <div className="sales-tag-row">
+            {insights.software_used.map((s) => (
+              <span key={s} className="sales-badge tone-neutral">{s}</span>
+            ))}
+          </div>
+        </div>
+      )}
+      {insights.interests?.length > 0 && (
+        <div className="sales-insight-item sales-insight-wide">
+          <span className="ovr">Interessen</span>
+          <div className="sales-tag-row">
+            {insights.interests.map((s) => (
+              <span key={s} className="sales-badge tone-brand">{s}</span>
+            ))}
+          </div>
+        </div>
+      )}
+      {insights.pain_points?.length > 0 && (
+        <div className="sales-insight-item sales-insight-wide">
+          <span className="ovr">Pain Points</span>
+          <div className="sales-tag-row">
+            {insights.pain_points.map((s) => (
+              <span key={s} className="sales-badge tone-warn">{s}</span>
+            ))}
+          </div>
+        </div>
+      )}
+      {insights.notes && (
+        <div className="sales-insight-item sales-insight-wide">
+          <span className="ovr">Notiz</span>
+          <p className="sales-insights-notes">{insights.notes}</p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function SalesDashboard({
@@ -39,6 +105,7 @@ export function SalesDashboard({
   const [callDurationMin, setCallDurationMin] = useState('');
   const [callNextStep, setCallNextStep] = useState('');
   const [loggingCall, setLoggingCall] = useState(false);
+  const [expandedActivity, setExpandedActivity] = useState<string | null>(null);
 
   async function logCall() {
     if (!selected || loggingCall) return;
@@ -104,6 +171,9 @@ export function SalesDashboard({
     router.refresh();
   }
 
+  const transcripts = selected?.activities.filter((a) => a.activity_type === 'transcript') ?? [];
+  const otherActivities = selected?.activities.filter((a) => a.activity_type !== 'transcript') ?? [];
+
   return (
     <section className="sales-shell">
       <header>
@@ -128,17 +198,29 @@ export function SalesDashboard({
             >
               <div className="sales-lead-top">
                 <strong>{c.name}</strong>
-                {c.days_since_contact !== null && (
-                  <span className={`sales-days-badge${c.days_since_contact >= 14 ? ' tone-warn' : ''}`}>
-                    {c.days_since_contact === 0 ? 'heute' : `${c.days_since_contact}d`}
-                  </span>
-                )}
+                <div className="sales-lead-badges">
+                  {c.transcript_count > 0 && (
+                    <span className="sales-tx-badge" title={`${c.transcript_count} Transkript${c.transcript_count > 1 ? 'e' : ''}`}>
+                      {c.transcript_count} TX
+                    </span>
+                  )}
+                  {c.days_since_contact !== null && (
+                    <span className={`sales-days-badge${c.days_since_contact >= 14 ? ' tone-warn' : ''}`}>
+                      {c.days_since_contact === 0 ? 'heute' : `${c.days_since_contact}d`}
+                    </span>
+                  )}
+                </div>
               </div>
-              <span>
+              <span className="sales-lead-meta">
                 {c.status}
                 {c.industry ? ` · ${c.industry}` : ''}
                 {c.contact_count > 0 ? ` · ${c.contact_count} Kontakt${c.contact_count > 1 ? 'e' : ''}` : ''}
               </span>
+              {c.insights_json?.buying_signal && c.insights_json.buying_signal !== 'unknown' && (
+                <span className={`sales-signal-badge signal-${c.insights_json.buying_signal}`}>
+                  {SIGNAL_LABEL[c.insights_json.buying_signal]}
+                </span>
+              )}
               {c.last_activity_at && (
                 <span className="meta">
                   {ACTIVITY_LABEL[c.last_activity_type ?? ''] ?? c.last_activity_type} {daysAgo(c.last_activity_at)}
@@ -177,6 +259,7 @@ export function SalesDashboard({
                   {showLogCall ? 'Abbrechen' : 'Call loggen'}
                 </button>
               </div>
+
               {showLogCall && (
                 <section className="sales-section sales-log-call-form">
                   <h3 className="ovr">Call loggen</h3>
@@ -230,6 +313,14 @@ export function SalesDashboard({
                       {loggingCall ? 'Speichert…' : 'Speichern'}
                     </button>
                   </div>
+                </section>
+              )}
+
+              {/* Kundenprofil — structured insights */}
+              {transcripts.length > 0 && (
+                <section className="sales-section sales-insights-section">
+                  <h3 className="ovr">Kundenprofil</h3>
+                  <InsightsPanel insights={selected.insights_json ?? null} />
                 </section>
               )}
 
@@ -308,19 +399,48 @@ export function SalesDashboard({
                 {selected.endpoints.length === 0 && <p className="sales-muted">—</p>}
               </section>
 
+              {/* Transcripts section — full summaries with key takeaways */}
+              {transcripts.length > 0 && (
+                <section className="sales-section">
+                  <h3 className="ovr">Gespräche ({transcripts.length})</h3>
+                  <ol className="sales-timeline">
+                    {transcripts.map((a) => {
+                      const isExpanded = expandedActivity === a.id;
+                      const kt = (a.meta as Record<string, string>)?.key_takeaways;
+                      return (
+                        <li key={a.id} className="sales-transcript-entry">
+                          <div className="sales-tx-header" onClick={() => setExpandedActivity(isExpanded ? null : a.id)}>
+                            <div className="meta">{a.occurred_at.slice(0, 10)}</div>
+                            <div className="title">{a.title}</div>
+                            <span className="sales-tx-toggle">{isExpanded ? '▲' : '▼'}</span>
+                          </div>
+                          {a.summary && <p className="summary">{a.summary}</p>}
+                          {isExpanded && kt && (
+                            <div className="sales-tx-kt">
+                              <span className="ovr">Key Takeaways</span>
+                              <pre className="sales-tx-pre">{kt}</pre>
+                            </div>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ol>
+                </section>
+              )}
+
               <section className="sales-section">
-                <h3 className="ovr">Timeline</h3>
+                <h3 className="ovr">Aktivitäten{otherActivities.length > 0 ? ` (${otherActivities.length})` : ''}</h3>
                 <ol className="sales-timeline">
-                  {selected.activities.map((a) => (
+                  {otherActivities.map((a) => (
                     <li key={a.id}>
                       <div className="meta">
-                        {a.occurred_at.slice(0, 10)} · {a.activity_type}
+                        {a.occurred_at.slice(0, 10)} · {ACTIVITY_LABEL[a.activity_type] ?? a.activity_type}
                       </div>
                       <div className="title">{a.title}</div>
                       {a.summary && <p className="summary">{a.summary}</p>}
                     </li>
                   ))}
-                  {selected.activities.length === 0 && <p className="sales-muted">—</p>}
+                  {otherActivities.length === 0 && <p className="sales-muted">—</p>}
                 </ol>
               </section>
             </div>
