@@ -11,11 +11,17 @@ export async function listCompaniesForMember(memberId: string): Promise<SalesCom
   const companies = (data ?? []) as SalesCompany[];
   if (companies.length === 0) return [];
 
-  const ids = companies.map((c) => c.id);
+  // Join-based queries to avoid .in() URL-length limit with many company IDs
   const [contactsRes, activitiesRes] = await Promise.all([
-    supabaseAdmin.from('sales_contacts').select('company_id').in('company_id', ids),
-    supabaseAdmin.from('sales_activities').select('company_id, occurred_at, activity_type')
-      .in('company_id', ids).neq('activity_type', 'sync')
+    supabaseAdmin
+      .from('sales_contacts')
+      .select('company_id, sales_companies!inner(owner_member_id)')
+      .eq('sales_companies.owner_member_id', memberId),
+    supabaseAdmin
+      .from('sales_activities')
+      .select('company_id, occurred_at, activity_type, sales_companies!inner(owner_member_id)')
+      .eq('sales_companies.owner_member_id', memberId)
+      .neq('activity_type', 'sync')
       .order('occurred_at', { ascending: false }),
   ]);
   if (contactsRes.error) throw new Error(`sales_contacts count failed: ${contactsRes.error.message}`);
