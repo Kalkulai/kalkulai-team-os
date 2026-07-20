@@ -168,13 +168,9 @@ export async function POST(req: NextRequest) {
 
   const pageId = payload.entity.id;
 
-  // Fast-path: if updated_properties is present and doesn't include our checkbox, skip early
-  const updatedProps = payload.data?.updated_properties;
-  console.log('[notion-webhook] pageId:', pageId, 'updated_properties:', updatedProps);
-  if (updatedProps && !updatedProps.includes(CHECKBOX_PROP)) {
-    console.log('[notion-webhook] skipped: checkbox not in updated_properties:', updatedProps);
-    return NextResponse.json({ ok: true, skipped: 'checkbox not in updated_properties' });
-  }
+  // Note: updated_properties contains property IDs not names, so we skip the fast-path
+  // and always fetch the full page to check the checkbox state by name.
+  console.log('[notion-webhook] pageId:', pageId, 'updated_properties:', payload.data?.updated_properties);
 
   try {
     const page = await notionGet<NotionPage>(`/pages/${pageId}`);
