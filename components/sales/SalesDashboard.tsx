@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { SalesCompanyListItem, SalesCompanyDetail, SalesEndpoint, SalesCompanyInsights } from '@/types/sales';
+import type { SalesCompanyListItem, SalesCompanyDetail, SalesEndpoint, SalesCompanyInsights, SalesActivity } from '@/types/sales';
 import { ContactForm } from '@/components/sales/ContactForm';
 
 const ACTIVITY_LABEL: Record<string, string> = {
@@ -12,7 +12,7 @@ const ACTIVITY_LABEL: Record<string, string> = {
 };
 
 const SIGNAL_LABEL: Record<string, string> = {
-  hot: '🔥 Hot', warm: '🌡 Warm', cold: '❄️ Kalt', unknown: '?',
+  hot: 'Hot', warm: 'Warm', cold: 'Kalt', unknown: 'Unbekannt',
 };
 
 function daysAgo(iso: string): string {
@@ -22,67 +22,141 @@ function daysAgo(iso: string): string {
   return `vor ${days}d`;
 }
 
-function InsightsPanel({ insights }: { insights: SalesCompanyInsights | null }) {
-  if (!insights) {
-    return (
-      <div className="sales-insights-empty">
-        <span className="sales-muted">Noch keine KI-Auswertung verfügbar.</span>
-      </div>
-    );
-  }
+// ── KI-Analyse Panel ──────────────────────────────────────────────────────────
+
+function KIPanel({ insights }: { insights: SalesCompanyInsights | null }) {
+  const signal = insights?.buying_signal ?? 'unknown';
+  const hasData = insights && (
+    (insights.pain_points?.length ?? 0) > 0 ||
+    (insights.interests?.length ?? 0) > 0 ||
+    (insights.software_used?.length ?? 0) > 0 ||
+    insights.notes ||
+    insights.employee_count != null
+  );
+
   return (
-    <div className="sales-insights-grid">
-      {insights.employee_count != null && (
-        <div className="sales-insight-item">
-          <span className="ovr">Mitarbeiter</span>
-          <strong>{insights.employee_count}</strong>
-        </div>
-      )}
-      {insights.buying_signal && insights.buying_signal !== 'unknown' && (
-        <div className="sales-insight-item">
-          <span className="ovr">Kaufinteresse</span>
-          <strong>{SIGNAL_LABEL[insights.buying_signal] ?? insights.buying_signal}</strong>
-        </div>
-      )}
-      {insights.software_used?.length > 0 && (
-        <div className="sales-insight-item sales-insight-wide">
-          <span className="ovr">Software</span>
-          <div className="sales-tag-row">
-            {insights.software_used.map((s) => (
-              <span key={s} className="sales-badge tone-neutral">{s}</span>
-            ))}
-          </div>
-        </div>
-      )}
-      {insights.interests?.length > 0 && (
-        <div className="sales-insight-item sales-insight-wide">
-          <span className="ovr">Interessen</span>
-          <div className="sales-tag-row">
-            {insights.interests.map((s) => (
-              <span key={s} className="sales-badge tone-brand">{s}</span>
-            ))}
-          </div>
-        </div>
-      )}
-      {insights.pain_points?.length > 0 && (
-        <div className="sales-insight-item sales-insight-wide">
-          <span className="ovr">Pain Points</span>
-          <div className="sales-tag-row">
-            {insights.pain_points.map((s) => (
-              <span key={s} className="sales-badge tone-warn">{s}</span>
-            ))}
-          </div>
-        </div>
-      )}
-      {insights.notes && (
-        <div className="sales-insight-item sales-insight-wide">
-          <span className="ovr">Notiz</span>
-          <p className="sales-insights-notes">{insights.notes}</p>
+    <div className="sales-ki-panel">
+      <div className="sales-ki-header">
+        <span className="sales-ki-title">KI-Analyse</span>
+        {insights?.last_analyzed_at && (
+          <span className="sales-ki-ts">Stand: {insights.last_analyzed_at.slice(0, 10)}</span>
+        )}
+        {signal !== 'unknown' && (
+          <span className={`sales-ki-signal signal-${signal}`}>
+            {signal === 'hot' ? '🔥' : signal === 'warm' ? '🌡' : '❄️'} {SIGNAL_LABEL[signal]}
+          </span>
+        )}
+      </div>
+      {!hasData ? (
+        <p className="sales-ki-empty">
+          {!insights
+            ? 'Noch keine Analyse — Notion-Checkbox setzen um erstes Transkript zu importieren.'
+            : 'Zu wenig Gesprächsdaten für eine Auswertung.'}
+        </p>
+      ) : (
+        <div className="sales-ki-grid">
+          {insights.employee_count != null && (
+            <div className="sales-ki-item">
+              <span className="sales-ki-label">Mitarbeiter</span>
+              <strong className="sales-ki-value">{insights.employee_count}</strong>
+            </div>
+          )}
+          {(insights.pain_points?.length ?? 0) > 0 && (
+            <div className="sales-ki-item sales-ki-full">
+              <span className="sales-ki-label">Pain Points</span>
+              <div className="sales-tag-row">
+                {insights!.pain_points.map((s) => (
+                  <span key={s} className="sales-badge tone-warn">{s}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          {(insights.interests?.length ?? 0) > 0 && (
+            <div className="sales-ki-item sales-ki-full">
+              <span className="sales-ki-label">Interessen</span>
+              <div className="sales-tag-row">
+                {insights!.interests.map((s) => (
+                  <span key={s} className="sales-badge tone-brand">{s}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          {(insights.software_used?.length ?? 0) > 0 && (
+            <div className="sales-ki-item sales-ki-full">
+              <span className="sales-ki-label">Aktuelle Software</span>
+              <div className="sales-tag-row">
+                {insights!.software_used.map((s) => (
+                  <span key={s} className="sales-badge tone-neutral">{s}</span>
+                ))}
+              </div>
+            </div>
+          )}
+          {insights.notes && (
+            <div className="sales-ki-item sales-ki-full">
+              <span className="sales-ki-label">Notiz</span>
+              <p className="sales-ki-notes">{insights.notes}</p>
+            </div>
+          )}
         </div>
       )}
     </div>
   );
 }
+
+// ── Transcript Modal ───────────────────────────────────────────────────────────
+
+function TranscriptModal({ activity, onClose }: { activity: SalesActivity; onClose: () => void }) {
+  const meta = activity.meta as Record<string, string>;
+  const kt = meta?.key_takeaways;
+  const notionUrl = meta?.notion_url;
+
+  return (
+    <div className="sales-modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label={activity.title}>
+      <div className="sales-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="sales-modal-header">
+          <div>
+            <span className="sales-ki-label">{activity.occurred_at.slice(0, 10)}</span>
+            <h3 className="sales-modal-title">{activity.title}</h3>
+          </div>
+          <button
+            type="button"
+            className="sales-modal-close"
+            onClick={onClose}
+            aria-label="Schließen"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="sales-modal-body">
+          {activity.summary && (
+            <div className="sales-modal-section">
+              <span className="sales-ki-label">Zusammenfassung</span>
+              <p className="sales-modal-text">{activity.summary}</p>
+            </div>
+          )}
+          {kt && (
+            <div className="sales-modal-section">
+              <span className="sales-ki-label">Key Takeaways</span>
+              <pre className="sales-tx-pre">{kt}</pre>
+            </div>
+          )}
+          {!activity.summary && !kt && (
+            <p className="sales-muted">Keine weiteren Inhalte gespeichert.</p>
+          )}
+        </div>
+        {notionUrl && (
+          <div className="sales-modal-footer">
+            <a href={notionUrl} target="_blank" rel="noreferrer" className="sales-notion-link">
+              In Notion öffnen →
+            </a>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Main Dashboard ─────────────────────────────────────────────────────────────
 
 export function SalesDashboard({
   memberId,
@@ -105,7 +179,9 @@ export function SalesDashboard({
   const [callDurationMin, setCallDurationMin] = useState('');
   const [callNextStep, setCallNextStep] = useState('');
   const [loggingCall, setLoggingCall] = useState(false);
-  const [expandedActivity, setExpandedActivity] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'gespräche' | 'aktivitäten'>('gespräche');
+  const [modalActivity, setModalActivity] = useState<SalesActivity | null>(null);
+  const [showCallDropdown, setShowCallDropdown] = useState(false);
 
   async function logCall() {
     if (!selected || loggingCall) return;
@@ -141,6 +217,7 @@ export function SalesDashboard({
   async function initiateCall(ep: SalesEndpoint) {
     if (!selected || calling) return;
     setCalling(ep.id);
+    setShowCallDropdown(false);
     try {
       const res = await fetch('/api/sales/telephony/call', {
         method: 'POST',
@@ -173,6 +250,9 @@ export function SalesDashboard({
 
   const transcripts = selected?.activities.filter((a) => a.activity_type === 'transcript') ?? [];
   const otherActivities = selected?.activities.filter((a) => a.activity_type !== 'transcript') ?? [];
+  const phoneEndpoints = selected?.endpoints.filter(
+    (ep) => (ep.channel === 'phone' || ep.channel === 'mobile') && !ep.do_not_call
+  ) ?? [];
 
   return (
     <section className="sales-shell">
@@ -182,6 +262,8 @@ export function SalesDashboard({
       </header>
 
       <div className="sales-grid">
+
+        {/* ── Lead List ─────────────────────────────────────────────────────── */}
         <div className="sales-list">
           <input
             value={query}
@@ -200,7 +282,7 @@ export function SalesDashboard({
                 <strong>{c.name}</strong>
                 <div className="sales-lead-badges">
                   {c.transcript_count > 0 && (
-                    <span className="sales-tx-badge" title={`${c.transcript_count} Transkript${c.transcript_count > 1 ? 'e' : ''}`}>
+                    <span className="sales-tx-badge" title={`${c.transcript_count} Gespräch${c.transcript_count > 1 ? 'e' : ''}`}>
                       {c.transcript_count} TX
                     </span>
                   )}
@@ -231,35 +313,67 @@ export function SalesDashboard({
           ))}
         </div>
 
+        {/* ── Detail Panel ──────────────────────────────────────────────────── */}
         <div>
           {!selected ? (
             <p className="sales-muted">Lead auswählen.</p>
           ) : (
             <div className="sales-detail">
+
+              {/* Company header */}
               <div className="sales-detail-header">
                 <div>
                   <h2>{selected.name}</h2>
                   <p>
                     {selected.status}
                     {selected.website ? (
-                      <>
-                        {' · '}
-                        <a href={selected.website} target="_blank" rel="noreferrer">
-                          {selected.website}
-                        </a>
-                      </>
+                      <> · <a href={selected.website} target="_blank" rel="noreferrer">{selected.website}</a></>
                     ) : null}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  className="sales-btn sales-log-call-toggle"
-                  onClick={() => setShowLogCall((v) => !v)}
-                >
-                  {showLogCall ? 'Abbrechen' : 'Call loggen'}
-                </button>
+                <div className="sales-header-actions">
+                  {phoneEndpoints.length > 0 && (
+                    <div className="sales-call-wrap">
+                      <button
+                        type="button"
+                        className="sales-btn sales-call-btn-primary"
+                        onClick={() =>
+                          phoneEndpoints.length === 1
+                            ? initiateCall(phoneEndpoints[0])
+                            : setShowCallDropdown((v) => !v)
+                        }
+                        disabled={calling !== null}
+                      >
+                        {calling ? 'Verbinde…' : 'Anrufen'}
+                      </button>
+                      {showCallDropdown && phoneEndpoints.length > 1 && (
+                        <div className="sales-call-dropdown">
+                          {phoneEndpoints.map((ep) => (
+                            <button
+                              key={ep.id}
+                              type="button"
+                              className="sales-call-dropdown-item"
+                              onClick={() => initiateCall(ep)}
+                            >
+                              <span className="sales-badge tone-neutral">{ep.channel}</span>
+                              <span>{ep.value}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className="sales-btn sales-log-call-toggle"
+                    onClick={() => setShowLogCall((v) => !v)}
+                  >
+                    {showLogCall ? 'Abbrechen' : 'Call loggen'}
+                  </button>
+                </div>
               </div>
 
+              {/* Call log form */}
               {showLogCall && (
                 <section className="sales-section sales-log-call-form">
                   <h3 className="ovr">Call loggen</h3>
@@ -316,120 +430,128 @@ export function SalesDashboard({
                 </section>
               )}
 
-              {/* Kundenprofil — structured insights */}
-              {transcripts.length > 0 && (
-                <section className="sales-section sales-insights-section">
-                  <h3 className="ovr">Kundenprofil</h3>
-                  <InsightsPanel insights={selected.insights_json ?? null} />
+              {/* KI-Analyse — always prominent at top */}
+              <KIPanel insights={selected.insights_json ?? null} />
+
+              {/* Next Step + Contacts — two-column */}
+              <div className="sales-detail-cols">
+                <section className="sales-section">
+                  <h3 className="ovr">Nächster Schritt</h3>
+                  <div className="sales-row">
+                    <input
+                      value={nextStep}
+                      onChange={(e) => setNextStep(e.target.value)}
+                      placeholder="z. B. Freitag 10:00 Rückruf"
+                      className="sales-input"
+                    />
+                    <button type="button" onClick={saveNextStep} disabled={saving} className="sales-btn">
+                      {saving ? '…' : 'OK'}
+                    </button>
+                  </div>
+                </section>
+
+                <section className="sales-section">
+                  <div className="sales-section-head">
+                    <h3 className="ovr">Kontakte</h3>
+                    <button
+                      type="button"
+                      onClick={() => setShowContactForm((v) => !v)}
+                      className="sales-btn sales-btn-sm"
+                    >
+                      + Kontakt
+                    </button>
+                  </div>
+                  {showContactForm && (
+                    <ContactForm
+                      companyId={selected.id}
+                      onDone={() => {
+                        setShowContactForm(false);
+                        router.refresh();
+                      }}
+                    />
+                  )}
+                  {selected.contacts.map((ct) => (
+                    <div key={ct.id} className="sales-contact">
+                      <span>{ct.first_name} {ct.last_name}</span>
+                      {ct.role ? <span className="role"> · {ct.role}</span> : null}
+                      {ct.email ? <span className="role"> · {ct.email}</span> : null}
+                      {!ct.recording_consent && (
+                        <span className="sales-badge tone-warn">kein Consent</span>
+                      )}
+                    </div>
+                  ))}
+                  {selected.contacts.length === 0 && <p className="sales-muted">—</p>}
+                </section>
+              </div>
+
+              {/* Endpoints (compact — call button moved to header) */}
+              {selected.endpoints.length > 0 && (
+                <section className="sales-section">
+                  <h3 className="ovr">Endpoints</h3>
+                  {selected.endpoints.map((ep) => (
+                    <div key={ep.id} className="sales-endpoint-row">
+                      <span className="sales-badge tone-neutral">{ep.channel}</span>
+                      <span>{ep.value}</span>
+                      <span className="meta">{ep.endpoint_type} · {ep.validity_status}</span>
+                      {ep.do_not_call && <span className="sales-badge tone-danger">DNC</span>}
+                    </div>
+                  ))}
                 </section>
               )}
 
-              <section className="sales-section">
-                <h3 className="ovr">Nächster Schritt</h3>
-                <div className="sales-row">
-                  <input
-                    value={nextStep}
-                    onChange={(e) => setNextStep(e.target.value)}
-                    placeholder="z. B. Freitag 10:00 Rückruf"
-                    className="sales-input"
-                  />
-                  <button type="button" onClick={saveNextStep} disabled={saving} className="sales-btn">
-                    {saving ? 'Speichert…' : 'Speichern'}
-                  </button>
-                </div>
-              </section>
+              {/* Tabs */}
+              <div className="sales-tabs">
+                <button
+                  type="button"
+                  className={`sales-tab${activeTab === 'gespräche' ? ' is-active' : ''}`}
+                  onClick={() => setActiveTab('gespräche')}
+                >
+                  Gespräche{transcripts.length > 0 ? ` (${transcripts.length})` : ''}
+                </button>
+                <button
+                  type="button"
+                  className={`sales-tab${activeTab === 'aktivitäten' ? ' is-active' : ''}`}
+                  onClick={() => setActiveTab('aktivitäten')}
+                >
+                  Aktivitäten{otherActivities.length > 0 ? ` (${otherActivities.length})` : ''}
+                </button>
+              </div>
 
-              <section className="sales-section">
-                <div className="sales-section-head">
-                  <h3 className="ovr">Kontakte</h3>
-                  <button
-                    type="button"
-                    onClick={() => setShowContactForm((v) => !v)}
-                    className="sales-btn sales-btn-sm"
-                  >
-                    + Kontakt
-                  </button>
-                </div>
-                {showContactForm && (
-                  <ContactForm
-                    companyId={selected.id}
-                    onDone={() => {
-                      setShowContactForm(false);
-                      router.refresh();
-                    }}
-                  />
-                )}
-                {selected.contacts.map((ct) => (
-                  <div key={ct.id} className="sales-contact">
-                    <span>
-                      {ct.first_name} {ct.last_name}
-                    </span>
-                    {ct.role ? <span className="role"> · {ct.role}</span> : null}
-                    {ct.email ? <span className="role"> · {ct.email}</span> : null}
-                    {!ct.recording_consent && (
-                      <span className="sales-badge tone-warn">kein Recording-Consent</span>
-                    )}
-                  </div>
-                ))}
-                {selected.contacts.length === 0 && <p className="sales-muted">—</p>}
-              </section>
-
-              <section className="sales-section">
-                <h3 className="ovr">Endpoints</h3>
-                {selected.endpoints.map((ep) => (
-                  <div key={ep.id} className="sales-endpoint-row">
-                    <span className="sales-badge tone-neutral">{ep.channel}</span>
-                    <span>{ep.value}</span>
-                    <span className="meta">
-                      {ep.endpoint_type} · {ep.validity_status}
-                    </span>
-                    {ep.do_not_call && <span className="sales-badge tone-danger">do not call</span>}
-                    {(ep.channel === 'phone' || ep.channel === 'mobile') && !ep.do_not_call && (
-                      <button
-                        type="button"
-                        className="sales-btn sales-btn-sm sales-call-btn"
-                        onClick={() => initiateCall(ep)}
-                        disabled={calling !== null}
-                      >
-                        {calling === ep.id ? 'Verbinde…' : '📞 Anrufen'}
-                      </button>
-                    )}
-                  </div>
-                ))}
-                {selected.endpoints.length === 0 && <p className="sales-muted">—</p>}
-              </section>
-
-              {/* Transcripts section — full summaries with key takeaways */}
-              {transcripts.length > 0 && (
-                <section className="sales-section">
-                  <h3 className="ovr">Gespräche ({transcripts.length})</h3>
+              {/* Tab: Gespräche */}
+              {activeTab === 'gespräche' && (
+                transcripts.length === 0 ? (
+                  <p className="sales-muted">Noch keine Gespräche. Notion-Checkbox setzen um Transkript zu importieren.</p>
+                ) : (
                   <ol className="sales-timeline">
                     {transcripts.map((a) => {
-                      const isExpanded = expandedActivity === a.id;
                       const kt = (a.meta as Record<string, string>)?.key_takeaways;
+                      const preview = a.summary ?? kt ?? '';
                       return (
-                        <li key={a.id} className="sales-transcript-entry">
-                          <div className="sales-tx-header" onClick={() => setExpandedActivity(isExpanded ? null : a.id)}>
-                            <div className="meta">{a.occurred_at.slice(0, 10)}</div>
-                            <div className="title">{a.title}</div>
-                            <span className="sales-tx-toggle">{isExpanded ? '▲' : '▼'}</span>
+                        <li
+                          key={a.id}
+                          className="sales-transcript-card"
+                          onClick={() => setModalActivity(a)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => e.key === 'Enter' && setModalActivity(a)}
+                        >
+                          <div className="sales-tx-header">
+                            <span className="meta">{a.occurred_at.slice(0, 10)}</span>
+                            <span className="title">{a.title}</span>
+                            <span className="sales-tx-toggle">→</span>
                           </div>
-                          {a.summary && <p className="summary">{a.summary}</p>}
-                          {isExpanded && kt && (
-                            <div className="sales-tx-kt">
-                              <span className="ovr">Key Takeaways</span>
-                              <pre className="sales-tx-pre">{kt}</pre>
-                            </div>
+                          {preview && (
+                            <p className="summary sales-tx-preview">{preview.slice(0, 220)}{preview.length > 220 ? '…' : ''}</p>
                           )}
                         </li>
                       );
                     })}
                   </ol>
-                </section>
+                )
               )}
 
-              <section className="sales-section">
-                <h3 className="ovr">Aktivitäten{otherActivities.length > 0 ? ` (${otherActivities.length})` : ''}</h3>
+              {/* Tab: Aktivitäten */}
+              {activeTab === 'aktivitäten' && (
                 <ol className="sales-timeline">
                   {otherActivities.map((a) => (
                     <li key={a.id}>
@@ -442,11 +564,20 @@ export function SalesDashboard({
                   ))}
                   {otherActivities.length === 0 && <p className="sales-muted">—</p>}
                 </ol>
-              </section>
+              )}
+
             </div>
           )}
         </div>
       </div>
+
+      {/* Transcript popup modal */}
+      {modalActivity && (
+        <TranscriptModal
+          activity={modalActivity}
+          onClose={() => setModalActivity(null)}
+        />
+      )}
     </section>
   );
 }
