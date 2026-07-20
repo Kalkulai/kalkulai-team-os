@@ -1687,6 +1687,14 @@ html.light .tl-row code { background: rgba(11, 11, 15, 0.05); }
 .sales-tx-kt .ovr { font-size: 10px; color: var(--ink-4); display: block; margin-bottom: 4px; }
 .sales-tx-pre { white-space: pre-wrap; word-break: break-word; color: var(--ink-2); font: 500 12px/1.5 var(--mono); margin: 0; }
 
+/* Pilot status badges */
+.sales-pilot-badge { font: 700 10.5px/1 var(--font); padding: 2px 8px; border-radius: 99px; white-space: nowrap; flex-shrink: 0; }
+.sales-pilot-badge.pilot-active { background: rgba(74,222,128,0.15); color: #4ade80; border: 1px solid rgba(74,222,128,0.35); }
+.sales-pilot-badge.pilot-committed { background: rgba(250,180,50,0.12); color: #fab432; border: 1px solid rgba(250,180,50,0.3); }
+.sales-pilot-badge-lg { font-size: 12px; padding: 3px 10px; }
+.sales-company-name-row { display: flex; align-items: center; gap: 10px; }
+.sales-company-name-row h2 { margin: 0; }
+
 /* KI-Analyse Panel */
 .sales-ki-panel { background: rgba(91,140,255,0.05); border: 1px solid rgba(91,140,255,0.16); border-radius: 12px; padding: 14px 16px; }
 .sales-ki-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }

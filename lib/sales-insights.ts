@@ -20,7 +20,8 @@ Gewünschtes JSON-Format:
   "interests": ["<feature/thema>", ...],
   "buying_signal": "<hot|warm|cold|unknown>",
   "pain_points": ["<problem>", ...],
-  "notes": "<1-2 Sätze Kernaussage über den Kunden>"
+  "notes": "<1-2 Sätze Kernaussage über den Kunden>",
+  "pilot_committed": <true wenn der Kunde explizit einer Pilot-Teilnahme zugestimmt hat, sonst false>
 }`;
 }
 
@@ -56,11 +57,12 @@ export async function runExtraction(opts: { force?: boolean; companyId?: string 
   const ids = [...byCompany.keys()];
   const { data: companies } = await supabaseAdmin
     .from('sales_companies')
-    .select('id,name,insights_json')
+    .select('id,name,insights_json,pilot_status')
     .in('id', ids);
 
   const companyName = new Map((companies ?? []).map((c) => [c.id, c.name as string]));
   const companyInsights = new Map((companies ?? []).map((c) => [c.id, c.insights_json as Record<string, unknown> | null]));
+  const companyPilotStatus = new Map((companies ?? []).map((c) => [c.id, c.pilot_status as string | null]));
 
   const results: ExtractionResult['results'] = [];
 
@@ -99,11 +101,21 @@ export async function runExtraction(opts: { force?: boolean; companyId?: string 
         newInsights = JSON.parse(match[0]);
       }
 
+      // pilot_committed is a KI hint — strip it from insights_json, persist in pilot_status column
+      const pilotCommitted = Boolean(newInsights.pilot_committed);
+      delete newInsights.pilot_committed;
+
       newInsights.last_analyzed_at = new Date().toISOString();
+
+      const dbUpdate: Record<string, unknown> = { insights_json: newInsights };
+      // Only set 'committed' if not already confirmed as 'active' by humans
+      if (pilotCommitted && companyPilotStatus.get(cid) !== 'active') {
+        dbUpdate.pilot_status = 'committed';
+      }
 
       await supabaseAdmin
         .from('sales_companies')
-        .update({ insights_json: newInsights })
+        .update(dbUpdate)
         .eq('id', cid);
 
       results.push({ name, status: 'updated' });

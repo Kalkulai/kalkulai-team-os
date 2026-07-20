@@ -23,6 +23,7 @@ export interface SalesCompany {
   status: SalesCompanyStatus;
   next_step: string | null;
   insights_json: SalesCompanyInsights | null;
+  pilot_status: 'active' | 'committed' | null;
   created_at: string;
   updated_at: string;
 }

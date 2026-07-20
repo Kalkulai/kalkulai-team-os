@@ -15,6 +15,16 @@ const SIGNAL_LABEL: Record<string, string> = {
   hot: 'Hot', warm: 'Warm', cold: 'Kalt', unknown: 'Unbekannt',
 };
 
+const PILOT_LABEL: Record<string, string> = {
+  active: 'Pilot',
+  committed: 'Pilot zugesagt',
+};
+
+const PILOT_CLASS: Record<string, string> = {
+  active: 'pilot-active',
+  committed: 'pilot-committed',
+};
+
 function daysAgo(iso: string): string {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
   if (days === 0) return 'heute';
@@ -298,6 +308,11 @@ export function SalesDashboard({
                 {c.industry ? ` · ${c.industry}` : ''}
                 {c.contact_count > 0 ? ` · ${c.contact_count} Kontakt${c.contact_count > 1 ? 'e' : ''}` : ''}
               </span>
+              {c.pilot_status && (
+                <span className={`sales-pilot-badge ${PILOT_CLASS[c.pilot_status]}`}>
+                  {PILOT_LABEL[c.pilot_status]}
+                </span>
+              )}
               {c.insights_json?.buying_signal && c.insights_json.buying_signal !== 'unknown' && (
                 <span className={`sales-signal-badge signal-${c.insights_json.buying_signal}`}>
                   {SIGNAL_LABEL[c.insights_json.buying_signal]}
@@ -323,7 +338,14 @@ export function SalesDashboard({
               {/* Company header */}
               <div className="sales-detail-header">
                 <div>
-                  <h2>{selected.name}</h2>
+                  <div className="sales-company-name-row">
+                    <h2>{selected.name}</h2>
+                    {selected.pilot_status && (
+                      <span className={`sales-pilot-badge sales-pilot-badge-lg ${PILOT_CLASS[selected.pilot_status]}`}>
+                        {PILOT_LABEL[selected.pilot_status]}
+                      </span>
+                    )}
+                  </div>
                   <p>
                     {selected.status}
                     {selected.website ? (
