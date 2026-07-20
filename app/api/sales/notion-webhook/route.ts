@@ -158,8 +158,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ challenge: payload.challenge });
   }
 
+  console.log('[notion-webhook] payload type:', payload.type, 'entity:', JSON.stringify(payload.entity));
+
   // Only care about page events
   if (payload.entity?.type !== 'page') {
+    console.log('[notion-webhook] skipped: not a page event, entity type:', payload.entity?.type);
     return NextResponse.json({ ok: true, skipped: 'not a page event' });
   }
 
@@ -167,7 +170,9 @@ export async function POST(req: NextRequest) {
 
   // Fast-path: if updated_properties is present and doesn't include our checkbox, skip early
   const updatedProps = payload.data?.updated_properties;
+  console.log('[notion-webhook] pageId:', pageId, 'updated_properties:', updatedProps);
   if (updatedProps && !updatedProps.includes(CHECKBOX_PROP)) {
+    console.log('[notion-webhook] skipped: checkbox not in updated_properties:', updatedProps);
     return NextResponse.json({ ok: true, skipped: 'checkbox not in updated_properties' });
   }
 
@@ -176,13 +181,17 @@ export async function POST(req: NextRequest) {
 
     // Verify page belongs to the Conversations DB
     const parentDbId = page.parent?.database_id?.replace(/-/g, '') ?? '';
+    console.log('[notion-webhook] parentDbId:', parentDbId, 'expected:', CONVERSATIONS_DB_ID.replace(/-/g, ''));
     if (parentDbId !== CONVERSATIONS_DB_ID) {
+      console.log('[notion-webhook] skipped: not conversations db');
       return NextResponse.json({ ok: true, skipped: 'not conversations db' });
     }
 
     // Only proceed if "Call beendet 1" is checked
     const checkboxProp = page.properties?.[CHECKBOX_PROP];
+    console.log('[notion-webhook] checkbox value:', checkboxProp?.checkbox);
     if (!checkboxProp?.checkbox) {
+      console.log('[notion-webhook] skipped: checkbox not ticked');
       return NextResponse.json({ ok: true, skipped: 'checkbox not ticked' });
     }
 
