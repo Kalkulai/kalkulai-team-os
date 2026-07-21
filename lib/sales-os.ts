@@ -12,7 +12,7 @@ export async function listCompaniesForMember(memberId: string): Promise<SalesCom
   if (companies.length === 0) return [];
 
   // Join-based queries to avoid .in() URL-length limit with many company IDs
-  const [contactsRes, activitiesRes] = await Promise.all([
+  const [contactsRes, activitiesRes, phonesRes] = await Promise.all([
     supabaseAdmin
       .from('sales_contacts')
       .select('company_id, sales_companies!inner(owner_member_id)')
@@ -23,9 +23,17 @@ export async function listCompaniesForMember(memberId: string): Promise<SalesCom
       .eq('sales_companies.owner_member_id', memberId)
       .neq('activity_type', 'sync')
       .order('occurred_at', { ascending: false }),
+    supabaseAdmin
+      .from('sales_endpoints')
+      .select('company_id, value, channel, sales_companies!inner(owner_member_id)')
+      .eq('sales_companies.owner_member_id', memberId)
+      .in('channel', ['phone', 'mobile'])
+      .eq('do_not_call', false)
+      .order('priority', { ascending: false }),
   ]);
   if (contactsRes.error) throw new Error(`sales_contacts count failed: ${contactsRes.error.message}`);
   if (activitiesRes.error) throw new Error(`sales_activities list failed: ${activitiesRes.error.message}`);
+  if (phonesRes.error) throw new Error(`sales_endpoints phone query failed: ${phonesRes.error.message}`);
 
   const contactCount = new Map<string, number>();
   for (const row of contactsRes.data ?? []) {
@@ -39,6 +47,12 @@ export async function listCompaniesForMember(memberId: string): Promise<SalesCom
     }
     if (!lastActivity.has(row.company_id)) {
       lastActivity.set(row.company_id, { occurred_at: row.occurred_at, activity_type: row.activity_type });
+    }
+  }
+  const firstPhone = new Map<string, { value: string; channel: string }>();
+  for (const ep of phonesRes.data ?? []) {
+    if (!firstPhone.has(ep.company_id)) {
+      firstPhone.set(ep.company_id, { value: ep.value, channel: ep.channel });
     }
   }
 
@@ -64,6 +78,8 @@ export async function listCompaniesForMember(memberId: string): Promise<SalesCom
       days_since_contact: daysSince,
       priority_score: priority,
       transcript_count: txCount,
+      first_phone: firstPhone.get(c.id)?.value ?? null,
+      first_phone_channel: firstPhone.get(c.id)?.channel ?? null,
     };
   }).sort((a, b) => b.priority_score - a.priority_score || a.name.localeCompare(b.name, 'de'));
 }
@@ -149,6 +165,19 @@ export async function updateCompanyNextStep(companyId: string, memberId: string,
     .eq('id', companyId)
     .eq('owner_member_id', memberId);
   if (error) throw new Error(`sales_companies next_step failed: ${error.message}`);
+}
+
+export async function updateCompanyPilotStatus(
+  companyId: string,
+  memberId: string,
+  pilotStatus: 'active' | 'committed' | null,
+): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('sales_companies')
+    .update({ pilot_status: pilotStatus, updated_at: new Date().toISOString() })
+    .eq('id', companyId)
+    .eq('owner_member_id', memberId);
+  if (error) throw new Error(`pilot_status update failed: ${error.message}`);
 }
 
 export async function upsertEndpoint(companyId: string, contactId: string | null, draft: {
