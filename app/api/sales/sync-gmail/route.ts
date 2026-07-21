@@ -83,6 +83,9 @@ export async function POST(req: NextRequest) {
   if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const memberId = PAUL_MEMBER_ID;
+  const body = await req.json().catch(() => ({})) as { offset?: number; limit?: number };
+  const offset = Math.max(0, body.offset ?? 0);
+  const limit = Math.min(100, Math.max(1, body.limit ?? 75));
 
   // Fetch Paul's stored refresh token
   const { data: member, error: memberErr } = await supabaseAdmin
@@ -106,21 +109,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });
   }
 
-  // Get all email endpoints grouped by company (Paul's companies only)
+  // Get all email endpoints grouped by company (Paul's companies only), ordered for stable pagination
   const { data: endpoints, error: epErr } = await supabaseAdmin
     .from('sales_endpoints')
     .select('company_id, value, sales_companies!inner(owner_member_id)')
     .eq('channel', 'email')
-    .eq('sales_companies.owner_member_id', memberId);
+    .eq('sales_companies.owner_member_id', memberId)
+    .order('company_id');
 
   if (epErr) return NextResponse.json({ error: epErr.message }, { status: 500 });
 
+  // Build ordered list of unique company IDs
   const emailsByCompany = new Map<string, string[]>();
   for (const ep of endpoints ?? []) {
     const list = emailsByCompany.get(ep.company_id) ?? [];
     list.push(ep.value);
     emailsByCompany.set(ep.company_id, list);
   }
+  const companyIds = [...emailsByCompany.keys()];
+  const batch = companyIds.slice(offset, offset + limit);
+  const nextOffset = offset + limit < companyIds.length ? offset + limit : null;
 
   const paulEmail = member.google_calendar_email ?? 'paul@kalkulai.de';
   let synced = 0;
@@ -128,7 +136,8 @@ export async function POST(req: NextRequest) {
   const errors: string[] = [];
   let firstGmailError: string | null = null;
 
-  for (const [companyId, emails] of emailsByCompany) {
+  for (const companyId of batch) {
+    const emails = emailsByCompany.get(companyId)!;
     // Build search query: find threads involving any of the company's email addresses
     const emailTerms = emails.map((e) => `from:${e} OR to:${e}`).join(' OR ');
     const { threads, gmailError } = await searchThreads(accessToken, emailTerms);
@@ -186,5 +195,15 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, synced, skipped, errors, firstGmailError });
+  return NextResponse.json({
+    ok: true,
+    synced,
+    skipped,
+    errors,
+    firstGmailError,
+    offset,
+    limit,
+    total: companyIds.length,
+    nextOffset,
+  });
 }
