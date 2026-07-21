@@ -93,15 +93,17 @@ export async function POST(req: NextRequest) {
     cursor?: string;
     limit?: number;
     conversations?: DirectConversation[];
+    allowEmpty?: boolean;
   };
 
   // Direct mode: conversations passed in body (bypasses Notion DB query)
   if (body.conversations) {
     let imported = 0, skipped = 0, failed = 0;
     const details: { title: string; status: string; reason?: string }[] = [];
+    const allowEmpty = body.allowEmpty === true;
 
     for (const conv of body.conversations) {
-      if (!conv.summary && !conv.keyTakeaways) {
+      if (!allowEmpty && !conv.summary && !conv.keyTakeaways) {
         skipped++; details.push({ title: conv.title, status: 'skipped', reason: 'no content' }); continue;
       }
       const companyId = await resolveCompanyId(conv.customerPageId);
