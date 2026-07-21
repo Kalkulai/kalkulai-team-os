@@ -43,16 +43,22 @@ async function getAccessToken(refreshToken: string): Promise<string> {
   return data.access_token;
 }
 
-async function searchThreads(accessToken: string, query: string): Promise<GmailThread[]> {
+async function searchThreads(
+  accessToken: string,
+  query: string,
+): Promise<{ threads: GmailThread[]; gmailError?: string }> {
   const url = new URL('https://gmail.googleapis.com/gmail/v1/users/me/threads');
   url.searchParams.set('q', query);
   url.searchParams.set('maxResults', '5');
   const res = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
-  if (!res.ok) return [];
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    return { threads: [], gmailError: `HTTP ${res.status}: ${body.slice(0, 300)}` };
+  }
   const data = (await res.json()) as { threads?: GmailThread[] };
-  return data.threads ?? [];
+  return { threads: data.threads ?? [] };
 }
 
 async function getThreadDetail(accessToken: string, threadId: string): Promise<GmailThreadDetail | null> {
@@ -120,12 +126,16 @@ export async function POST(req: NextRequest) {
   let synced = 0;
   let skipped = 0;
   const errors: string[] = [];
+  let firstGmailError: string | null = null;
 
   for (const [companyId, emails] of emailsByCompany) {
     // Build search query: find threads involving any of the company's email addresses
-    const emailTerms = emails.map((e) => `{from:${e} to:${e}}`).join(' OR ');
-    const threads = await searchThreads(accessToken, emailTerms);
+    const emailTerms = emails.map((e) => `from:${e} OR to:${e}`).join(' OR ');
+    const { threads, gmailError } = await searchThreads(accessToken, emailTerms);
 
+    if (gmailError && !firstGmailError) {
+      firstGmailError = gmailError;
+    }
     if (threads.length === 0) { skipped++; continue; }
 
     // Take the most recent thread (Gmail returns newest first)
@@ -176,5 +186,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, synced, skipped, errors });
+  return NextResponse.json({ ok: true, synced, skipped, errors, firstGmailError });
 }
