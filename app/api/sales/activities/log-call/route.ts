@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
 
-const OUTCOMES = ['reached', 'voicemail', 'no_answer', 'busy'] as const;
+const OUTCOMES = ['reached', 'voicemail', 'no_answer', 'busy', 'not_interested', 'appointment'] as const;
 type Outcome = (typeof OUTCOMES)[number];
 
 function isOutcome(v: unknown): v is Outcome {
@@ -30,6 +30,8 @@ export async function POST(req: NextRequest) {
   if (outcome === 'voicemail') titleParts.push('(Voicemail)');
   else if (outcome === 'no_answer') titleParts.push('(Kein Anschluss)');
   else if (outcome === 'busy') titleParts.push('(Besetzt)');
+  else if (outcome === 'not_interested') titleParts.push('(Kein Interesse)');
+  else if (outcome === 'appointment') titleParts.push('(Termin vereinbart)');
   if (durationMin) titleParts.push(`${durationMin} Min`);
   const title = titleParts.join(' ');
 
