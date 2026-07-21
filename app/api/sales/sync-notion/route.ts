@@ -74,11 +74,63 @@ async function resolveCompanyId(customerPageId: string): Promise<string | null> 
   return data?.id ?? null;
 }
 
+interface DirectConversation {
+  notionUrl: string;
+  title: string;
+  summary: string | null;
+  keyTakeaways: string | null;
+  date: string | null;
+  tags: string[];
+  callType: string;
+  customerPageId: string;
+}
+
 export async function POST(req: NextRequest) {
   const actor = await requireActor(req, { scopes: ['sales:write'] });
   if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const body = await req.json().catch(() => ({})) as { cursor?: string; limit?: number };
+  const body = await req.json().catch(() => ({})) as {
+    cursor?: string;
+    limit?: number;
+    conversations?: DirectConversation[];
+  };
+
+  // Direct mode: conversations passed in body (bypasses Notion DB query)
+  if (body.conversations) {
+    let imported = 0, skipped = 0, failed = 0;
+    const details: { title: string; status: string; reason?: string }[] = [];
+
+    for (const conv of body.conversations) {
+      if (!conv.summary && !conv.keyTakeaways) {
+        skipped++; details.push({ title: conv.title, status: 'skipped', reason: 'no content' }); continue;
+      }
+      const companyId = await resolveCompanyId(conv.customerPageId);
+      if (!companyId) {
+        failed++; details.push({ title: conv.title, status: 'failed', reason: 'company not found' }); continue;
+      }
+      const pageIdClean = conv.notionUrl.split('/').pop()?.replace(/-/g, '') ?? '';
+      const providerId = `notion-${pageIdClean}`;
+      const { error: upsertErr } = await supabaseAdmin.from('sales_activities').upsert(
+        {
+          company_id: companyId,
+          contact_id: null,
+          activity_type: 'transcript',
+          direction: 'inbound',
+          occurred_at: conv.date ? new Date(conv.date).toISOString() : new Date().toISOString(),
+          source_system: 'notion',
+          provider_event_id: providerId,
+          title: conv.title,
+          summary: conv.summary || null,
+          meta: { key_takeaways: conv.keyTakeaways || null, tags: conv.tags, call_type: conv.callType, notion_url: conv.notionUrl },
+        },
+        { onConflict: 'provider_event_id', ignoreDuplicates: false },
+      );
+      if (upsertErr) { failed++; details.push({ title: conv.title, status: 'failed', reason: upsertErr.message }); }
+      else { imported++; details.push({ title: conv.title, status: 'imported' }); }
+    }
+    return NextResponse.json({ ok: true, imported, skipped, failed, details });
+  }
+
   const pageSize = Math.min(body.limit ?? 20, 20);
   const startCursor = body.cursor as string | undefined;
 
