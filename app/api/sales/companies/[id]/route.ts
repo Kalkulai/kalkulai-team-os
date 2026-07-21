@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthActor, requireActor } from '@/lib/auth-context';
-import { getCompanyDetail, updateCompanyNextStep } from '@/lib/sales-os';
+import { getCompanyDetail, updateCompanyNextStep, updateCompanyPilotStatus } from '@/lib/sales-os';
 import { PAUL_MEMBER_ID } from '@/lib/sales-access';
 
 export const dynamic = 'force-dynamic';
@@ -25,9 +25,20 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const { id } = await params;
   const body = await req.json();
+  const memberId = resolveMemberId(actor, req);
+
+  if ('pilot_status' in body) {
+    const ps = body.pilot_status as unknown;
+    if (ps !== null && ps !== 'active' && ps !== 'committed') {
+      return NextResponse.json({ error: 'Invalid pilot_status' }, { status: 400 });
+    }
+    await updateCompanyPilotStatus(id, memberId, ps as 'active' | 'committed' | null);
+    return NextResponse.json({ ok: true });
+  }
+
   if (typeof body.next_step !== 'string' && body.next_step !== null) {
     return NextResponse.json({ error: 'next_step (string|null) required' }, { status: 400 });
   }
-  await updateCompanyNextStep(id, resolveMemberId(actor, req), body.next_step);
+  await updateCompanyNextStep(id, memberId, body.next_step);
   return NextResponse.json({ ok: true });
 }

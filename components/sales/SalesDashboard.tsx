@@ -216,7 +216,7 @@ function ColdCallSession({
           next_step: ns,
         }),
       });
-      setStats((s) => ({ ...s, total: (s as Record<string, number>).total ?? 0, [outcome]: ((s as Record<string, number>)[outcome] ?? 0) + 1 }));
+      setStats((prev) => ({ ...prev, [outcome as keyof typeof prev]: (prev[outcome as keyof typeof prev] ?? 0) + 1 }));
       advance();
     } finally {
       setLogging(false);
@@ -300,6 +300,11 @@ function ColdCallSession({
               ? ` · letzter Kontakt vor ${current.days_since_contact}d`
               : ' · noch kein Kontakt'}
           </p>
+          {current.first_phone && (
+            <a href={`tel:${current.first_phone}`} className="ccs-phone-link">
+              📞 {current.first_phone}{current.first_phone_channel === 'mobile' ? ' (Mobil)' : ''}
+            </a>
+          )}
           {current.next_step && (
             <div className="ccs-next-step">→ {current.next_step}</div>
           )}
@@ -432,8 +437,11 @@ function PilotPipeline({ companies, memberId }: { companies: SalesCompanyListIte
   const interested = companies.filter(
     (c) =>
       !c.pilot_status &&
-      c.transcript_count > 0 &&
-      (c.insights_json?.buying_signal === 'hot' || c.insights_json?.buying_signal === 'warm'),
+      (
+        c.insights_json?.buying_signal === 'hot' ||
+        c.insights_json?.buying_signal === 'warm' ||
+        c.transcript_count >= 3
+      ),
   );
   const contacted = companies.filter(
     (c) =>
@@ -500,6 +508,8 @@ export function SalesDashboard({
   const [modalActivity, setModalActivity] = useState<SalesActivity | null>(null);
   const [showCallDropdown, setShowCallDropdown] = useState(false);
   const [showColdCall, setShowColdCall] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'call' | 'gespräche' | 'hot' | 'pilots'>('all');
+  const [settingPilot, setSettingPilot] = useState(false);
 
   async function logCall() {
     if (!selected || loggingCall) return;
@@ -550,9 +560,26 @@ export function SalesDashboard({
     }
   }
 
-  const filtered = query
-    ? companies.filter((c) => c.name.toLowerCase().includes(query.toLowerCase()))
-    : companies;
+  const filtered = companies.filter((c) => {
+    if (query && !c.name.toLowerCase().includes(query.toLowerCase())) return false;
+    if (activeFilter === 'call') return !c.pilot_status && (c.days_since_contact === null || c.days_since_contact >= 7);
+    if (activeFilter === 'gespräche') return c.transcript_count > 0;
+    if (activeFilter === 'hot') return c.insights_json?.buying_signal === 'hot';
+    if (activeFilter === 'pilots') return !!c.pilot_status;
+    return true;
+  });
+
+  async function setPilotStatus(status: 'active' | 'committed' | null) {
+    if (!selected || settingPilot) return;
+    setSettingPilot(true);
+    await fetch(`/api/sales/companies/${selected.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pilot_status: status }),
+    });
+    setSettingPilot(false);
+    router.refresh();
+  }
 
   async function saveNextStep() {
     if (!selected) return;
@@ -581,10 +608,26 @@ export function SalesDashboard({
     active: companies.filter((c) => c.pilot_status === 'active').length,
     committed: companies.filter((c) => c.pilot_status === 'committed').length,
     interested: companies.filter(
-      (c) => !c.pilot_status && c.transcript_count > 0 &&
-        (c.insights_json?.buying_signal === 'hot' || c.insights_json?.buying_signal === 'warm'),
+      (c) => !c.pilot_status && (
+        c.insights_json?.buying_signal === 'hot' ||
+        c.insights_json?.buying_signal === 'warm' ||
+        c.transcript_count >= 3
+      ),
     ).length,
   };
+  const statCounts = {
+    total: companies.length,
+    withConversations: companies.filter((c) => c.transcript_count > 0).length,
+    hot: companies.filter((c) => c.insights_json?.buying_signal === 'hot').length,
+    callQueue: coldCallQueue.length,
+  };
+  const FILTER_TABS: { key: typeof activeFilter; label: string; count: number }[] = [
+    { key: 'all', label: 'Alle', count: companies.length },
+    { key: 'call', label: 'Anrufen', count: coldCallQueue.length },
+    { key: 'gespräche', label: 'Gespräche', count: statCounts.withConversations },
+    { key: 'hot', label: '🔥 Hot', count: statCounts.hot },
+    { key: 'pilots', label: 'Pilots', count: pilotCounts.active + pilotCounts.committed },
+  ];
 
   return (
     <section className="sales-shell">
@@ -613,6 +656,38 @@ export function SalesDashboard({
         </div>
       </header>
 
+      {/* Stats bar */}
+      <div className="sales-stats-bar">
+        <div className="sales-stat-item">
+          <span className="sales-stat-num">{statCounts.total}</span>
+          <span className="sales-stat-lbl">Leads</span>
+        </div>
+        <div className="sales-stat-item">
+          <span className="sales-stat-num">{statCounts.withConversations}</span>
+          <span className="sales-stat-lbl">Gespräche</span>
+        </div>
+        <div className="sales-stat-item sales-stat-highlight">
+          <span className="sales-stat-num">{pilotCounts.active}</span>
+          <span className="sales-stat-lbl">Aktive Pilots</span>
+        </div>
+        {pilotCounts.committed > 0 && (
+          <div className="sales-stat-item">
+            <span className="sales-stat-num">{pilotCounts.committed}</span>
+            <span className="sales-stat-lbl">Zugesagt</span>
+          </div>
+        )}
+        {statCounts.hot > 0 && (
+          <div className="sales-stat-item">
+            <span className="sales-stat-num">{statCounts.hot}</span>
+            <span className="sales-stat-lbl">Hot 🔥</span>
+          </div>
+        )}
+        <div className="sales-stat-item">
+          <span className="sales-stat-num">{statCounts.callQueue}</span>
+          <span className="sales-stat-lbl">In Queue</span>
+        </div>
+      </div>
+
       {/* Pipeline View */}
       {view === 'pipeline' && (
         <PilotPipeline companies={companies} memberId={memberId} />
@@ -639,6 +714,21 @@ export function SalesDashboard({
               >
                 Kaltakquise
               </button>
+            </div>
+            <div className="sales-filter-tabs" role="tablist">
+              {FILTER_TABS.map((t) => (
+                <button
+                  key={t.key}
+                  role="tab"
+                  type="button"
+                  aria-selected={activeFilter === t.key}
+                  className={`sales-filter-tab${activeFilter === t.key ? ' is-active' : ''}`}
+                  onClick={() => setActiveFilter(t.key)}
+                >
+                  {t.label}
+                  {t.count > 0 && <span className="sales-filter-count">{t.count}</span>}
+                </button>
+              ))}
             </div>
             {filtered.length === 0 && <p className="sales-muted">Keine Leads gefunden.</p>}
             {filtered.map((c) => (
@@ -706,6 +796,20 @@ export function SalesDashboard({
                           {PILOT_LABEL[selected.pilot_status]}
                         </span>
                       )}
+                      <select
+                        className="sales-pilot-select"
+                        value={selected.pilot_status ?? ''}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setPilotStatus(v === '' ? null : v as 'active' | 'committed');
+                        }}
+                        disabled={settingPilot}
+                        aria-label="Pilot-Status setzen"
+                      >
+                        <option value="">— Kein Pilot</option>
+                        <option value="committed">Pilot zugesagt</option>
+                        <option value="active">Aktiver Pilot</option>
+                      </select>
                     </div>
                     <p>
                       {selected.status}

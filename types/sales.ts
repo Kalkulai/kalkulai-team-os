@@ -73,6 +73,8 @@ export interface SalesCompanyListItem extends SalesCompany {
   days_since_contact: number | null;
   priority_score: number;
   transcript_count: number;
+  first_phone: string | null;
+  first_phone_channel: string | null;
 }
 
 export interface SalesCompanyDetail extends SalesCompany {
