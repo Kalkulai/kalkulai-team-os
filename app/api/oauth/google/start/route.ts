@@ -4,6 +4,7 @@ import { signGoogleOAuthState } from '@/lib/oauth-state';
 
 const SCOPE = [
   'https://www.googleapis.com/auth/calendar.readonly',
+  'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/userinfo.email',
   'openid',
 ].join(' ');
