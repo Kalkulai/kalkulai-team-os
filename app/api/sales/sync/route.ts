@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireActor } from '@/lib/auth-context';
+import { requireActor, hasValidServiceBearer } from '@/lib/auth-context';
 import {
   mapHubspotCompany, mapHubspotContact, extractEndpoints, mapHubspotEngagementV1,
   HubspotObject,
@@ -99,7 +99,7 @@ async function fetchEngagementsV1(companyId: string): Promise<unknown[]> {
 
 export async function POST(req: NextRequest) {
   const actor = await requireActor(req, { allowMember: true, scopes: ['sales:write'] });
-  if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!actor && !hasValidServiceBearer(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
     const stats = { companies: 0, contacts: 0, endpoints: 0, activities: 0 };
