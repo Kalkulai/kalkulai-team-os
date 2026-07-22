@@ -23,7 +23,6 @@ export async function GET(req: NextRequest) {
   const usersMeData = usersMeRes.ok ? await usersMeRes.json() : { status: usersMeRes.status, body: await usersMeRes.text() };
   const accountData = accountRes.ok ? await accountRes.json() : await accountRes.text();
 
-  // Try devices for each user if we got users
   const userDevices: Record<string, unknown> = {};
   const userList = (usersData as { items?: { id: string }[] })?.items ?? [];
   for (const u of userList.slice(0, 5)) {
