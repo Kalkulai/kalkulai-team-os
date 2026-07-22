@@ -3,27 +3,73 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { SalesCompanyListItem, SalesCompanyDetail, SalesEndpoint, SalesCompanyInsights, SalesActivity } from '@/types/sales';
+import type {
+  SalesCompanyListItem, SalesCompanyDetail, SalesEndpoint,
+  SalesCompanyInsights, SalesActivity, SalesStage,
+} from '@/types/sales';
 import { ContactForm } from '@/components/sales/ContactForm';
 
-const ACTIVITY_LABEL: Record<string, string> = {
-  call: 'Call', email: 'E-Mail', note: 'Notiz', task: 'Task',
-  meeting: 'Meeting', whatsapp: 'WhatsApp', transcript: 'Transkript',
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const STAGE_LABELS: Record<SalesStage, string> = {
+  prospecting:   'Akquise',
+  discovery:     'Erstgespräch',
+  evaluation:    'Evaluation',
+  pilot:         'Aktiver Pilot',
+  expansion:     'Expansion',
+  customer:      'Kunde',
+  disqualified:  'Disqualifiziert',
+};
+
+const STAGE_CLASS: Record<SalesStage, string> = {
+  prospecting:   'stage-prospecting',
+  discovery:     'stage-discovery',
+  evaluation:    'stage-evaluation',
+  pilot:         'stage-pilot',
+  expansion:     'stage-expansion',
+  customer:      'stage-customer',
+  disqualified:  'stage-disqualified',
+};
+
+const PIPELINE_STAGES: SalesStage[] = ['discovery', 'evaluation', 'pilot'];
+
+const ACTIVITY_ICON: Record<string, string> = {
+  call: '📞', email: '✉', whatsapp: '💬', meeting: '📅',
+  task: '✓', note: '📝', transcript: '🎙', sync: '↻',
 };
 
 const SIGNAL_LABEL: Record<string, string> = {
   hot: 'Hot', warm: 'Warm', cold: 'Kalt', unknown: 'Unbekannt',
 };
 
-const PILOT_LABEL: Record<string, string> = {
-  active: 'Aktiver Pilot',
-  committed: 'Pilot zugesagt',
-};
+const OBJECTIONS = [
+  {
+    q: 'Kein Budget',
+    a: 'Verstehe ich. Wie viel verliert Ihr Team monatlich durch manuelles Tracking? Unsere Pilots starten kostenfrei.',
+  },
+  {
+    q: 'Zu viel zu tun',
+    a: 'Genau deshalb gebaut — Setup < 2 h, danach sparen Sie Zeit statt verlieren. Wann wäre 30 Min für einen Test?',
+  },
+  {
+    q: 'Schicken Sie erstmal Infos',
+    a: 'Mache ich. Was ist Ihr wichtigstes Kriterium? Dann schicke ich Ihnen gezielt das Relevanteste.',
+  },
+  {
+    q: 'Referenzen?',
+    a: 'Wir haben aktive Pilots in Ihrer Branche. Kann ich Sie mit einem vernetzen?',
+  },
+  {
+    q: 'Können wir selbst bauen',
+    a: 'Wie lange hat Ihr Team für ähnliche Projekte gebraucht? Wir haben das in 6 Monaten gebaut.',
+  },
+  {
+    q: 'Nutzen schon XYZ',
+    a: 'Was schätzen Sie daran? Was nervt am meisten? Oft ergänzen wir XYZ statt es zu ersetzen.',
+  },
+];
 
-const PILOT_CLASS: Record<string, string> = {
-  active: 'pilot-active',
-  committed: 'pilot-committed',
-};
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function daysAgo(iso: string): string {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
@@ -128,14 +174,7 @@ function TranscriptModal({ activity, onClose }: { activity: SalesActivity; onClo
             <span className="sales-ki-label">{activity.occurred_at.slice(0, 10)}</span>
             <h3 className="sales-modal-title">{activity.title}</h3>
           </div>
-          <button
-            type="button"
-            className="sales-modal-close"
-            onClick={onClose}
-            aria-label="Schließen"
-          >
-            ✕
-          </button>
+          <button type="button" className="sales-modal-close" onClick={onClose} aria-label="Schließen">✕</button>
         </div>
         <div className="sales-modal-body">
           {activity.summary && (
@@ -166,15 +205,215 @@ function TranscriptModal({ activity, onClose }: { activity: SalesActivity; onClo
   );
 }
 
+// ── Objection Drawer ──────────────────────────────────────────────────────────
+
+function ObjectionDrawer({ onClose }: { onClose: () => void }) {
+  const [open, setOpen] = useState<number | null>(null);
+  return (
+    <div className="obj-drawer" role="complementary" aria-label="Einwand-Bibliothek">
+      <div className="obj-drawer-head">
+        <span className="obj-drawer-title">Einwände</span>
+        <button type="button" className="ccs-close-btn" onClick={onClose} aria-label="Schließen">✕</button>
+      </div>
+      <ul className="obj-list">
+        {OBJECTIONS.map((o, i) => (
+          <li key={i} className="obj-item">
+            <button
+              type="button"
+              className={`obj-q${open === i ? ' is-open' : ''}`}
+              onClick={() => setOpen(open === i ? null : i)}
+            >
+              {o.q}
+            </button>
+            {open === i && <p className="obj-a">{o.a}</p>}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// ── Stage Funnel (Pipeline Header) ────────────────────────────────────────────
+
+const FUNNEL_STAGES: SalesStage[] = ['prospecting', 'discovery', 'evaluation', 'pilot', 'customer'];
+
+function StageFunnel({
+  companies,
+  activeStage,
+  onStageClick,
+}: {
+  companies: SalesCompanyListItem[];
+  activeStage: SalesStage | null;
+  onStageClick: (s: SalesStage | null) => void;
+}) {
+  const counts = FUNNEL_STAGES.reduce<Record<string, number>>((acc, s) => {
+    acc[s] = companies.filter((c) => c.stage === s).length;
+    return acc;
+  }, {});
+  return (
+    <div className="sf-funnel" role="tablist" aria-label="Sales-Funnel">
+      {FUNNEL_STAGES.map((s, i) => (
+        <button
+          key={s}
+          role="tab"
+          type="button"
+          aria-selected={activeStage === s}
+          className={`sf-stage${activeStage === s ? ' is-active' : ''} ${STAGE_CLASS[s]}`}
+          onClick={() => onStageClick(activeStage === s ? null : s)}
+        >
+          {i > 0 && <span className="sf-arrow" aria-hidden="true">›</span>}
+          <span className="sf-count">{counts[s]}</span>
+          <span className="sf-label">{STAGE_LABELS[s]}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Pipeline Kanban ───────────────────────────────────────────────────────────
+
+function PipelineCard({ company, memberId }: { company: SalesCompanyListItem; memberId: string }) {
+  const ins = company.insights_json;
+  const signal = ins?.buying_signal;
+  const daysSince = company.days_since_contact;
+  return (
+    <Link href={`/dashboard/sales?member=${memberId}&company=${company.id}`} className="pp-card">
+      <div className="pp-card-head">
+        <strong className="pp-card-name">{company.name}</strong>
+        {signal && signal !== 'unknown' && (
+          <span className={`pp-signal signal-${signal}`}>
+            {signal === 'hot' ? '🔥' : signal === 'warm' ? '🌡' : '❄️'}
+          </span>
+        )}
+      </div>
+      {company.industry && <span className="pp-meta">{company.industry}</span>}
+      <div className="pp-badges">
+        {company.transcript_count > 0 && (
+          <span className="sales-tx-badge">{company.transcript_count} TX</span>
+        )}
+        {daysSince !== null && (
+          <span className={`sales-days-badge${daysSince >= 14 ? ' tone-warn' : ''}`}>
+            {daysSince === 0 ? 'heute' : `${daysSince}d`}
+          </span>
+        )}
+        {company.cold_streak > 1 && (
+          <span className="sales-badge tone-danger" title={`${company.cold_streak}× kein Anschluss`}>
+            {company.cold_streak}× kalt
+          </span>
+        )}
+      </div>
+      {ins?.employee_count != null && <span className="pp-employees">{ins.employee_count} MA</span>}
+      {(ins?.software_used?.length ?? 0) > 0 && (
+        <span className="pp-software">{ins!.software_used.slice(0, 2).join(', ')}</span>
+      )}
+      {company.next_step && <span className="pp-nextstep">→ {company.next_step}</span>}
+    </Link>
+  );
+}
+
+function PipelineKanban({ companies, memberId }: { companies: SalesCompanyListItem[]; memberId: string }) {
+  const cols = PIPELINE_STAGES.map((stage) => ({
+    stage,
+    label: STAGE_LABELS[stage],
+    items: companies.filter((c) => c.stage === stage),
+  }));
+
+  return (
+    <div className="pp-pipeline">
+      {cols.map((col) => (
+        <div key={col.stage} className={`pp-col ${STAGE_CLASS[col.stage]}`}>
+          <div className="pp-col-head">
+            <span className="pp-col-title">{col.label}</span>
+            <span className="pp-col-count">{col.items.length}</span>
+          </div>
+          <div className="pp-col-cards">
+            {col.items.length === 0 ? (
+              <p className="pp-empty">—</p>
+            ) : (
+              col.items.map((c) => <PipelineCard key={c.id} company={c} memberId={memberId} />)
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Cold Call Session ─────────────────────────────────────────────────────────
 
 const CALL_OUTCOMES = [
-  { value: 'reached', label: 'Erreicht', cls: 'ccs-outcome-reached' },
-  { value: 'voicemail', label: 'Voicemail', cls: 'ccs-outcome-voicemail' },
-  { value: 'no_answer', label: 'Kein Anschluss', cls: 'ccs-outcome-miss' },
-  { value: 'not_interested', label: 'Kein Interesse', cls: 'ccs-outcome-reject' },
-  { value: 'appointment', label: 'Termin vereinbart', cls: 'ccs-outcome-appt' },
+  { value: 'reached',      label: 'Erreicht',         cls: 'ccs-outcome-reached' },
+  { value: 'voicemail',    label: 'Voicemail',         cls: 'ccs-outcome-voicemail' },
+  { value: 'no_answer',    label: 'Kein Anschluss',    cls: 'ccs-outcome-miss' },
+  { value: 'not_interested', label: 'Kein Interesse',  cls: 'ccs-outcome-reject' },
+  { value: 'appointment',  label: 'Termin vereinbart', cls: 'ccs-outcome-appt' },
 ];
+
+function buildCcsQueue(companies: SalesCompanyListItem[]): SalesCompanyListItem[] {
+  const eligible = companies.filter(
+    (c) => c.stage !== 'customer' && c.stage !== 'disqualified' && c.stage !== 'pilot',
+  );
+  // Tier 1: next_step present + last contact >= 3d (overdue)
+  const t1 = eligible.filter((c) => c.next_step && (c.days_since_contact === null || c.days_since_contact >= 3));
+  // Tier 2: discovery/evaluation + 7–21 days since contact
+  const t2 = eligible.filter(
+    (c) => !t1.includes(c) &&
+      (c.stage === 'discovery' || c.stage === 'evaluation') &&
+      c.days_since_contact !== null && c.days_since_contact >= 7,
+  );
+  // Tier 3: everything else not recently contacted
+  const t3 = eligible.filter(
+    (c) => !t1.includes(c) && !t2.includes(c) &&
+      (c.days_since_contact === null || c.days_since_contact >= 3),
+  );
+  return [...t1, ...t2, ...t3];
+}
+
+function CcsPreCallBrief({
+  company,
+  memberId,
+}: {
+  company: SalesCompanyListItem;
+  memberId: string;
+}) {
+  const [briefText, setBriefText] = useState<string | null>(company.ai_summary);
+  const [loading, setLoading] = useState(false);
+
+  async function generate() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/sales/companies/${company.id}/brief?memberId=${memberId}`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (data.summary) setBriefText(data.summary);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="ccs-brief">
+      <div className="ccs-brief-head">
+        <span className="ccs-brief-title">Pre-Call Brief</span>
+        <button
+          type="button"
+          className="ccs-brief-gen-btn"
+          onClick={generate}
+          disabled={loading}
+        >
+          {loading ? '…' : briefText ? '↻' : 'Generieren'}
+        </button>
+      </div>
+      {briefText ? (
+        <p className="ccs-brief-text">{briefText}</p>
+      ) : (
+        <p className="ccs-brief-empty">Klick &quot;Generieren&quot; für KI-Zusammenfassung.</p>
+      )}
+      {/* Last 3 activities */}
+    </div>
+  );
+}
 
 function ColdCallSession({
   queue,
@@ -191,7 +430,10 @@ function ColdCallSession({
   const [outcome, setOutcome] = useState('reached');
   const [nextStepNote, setNextStepNote] = useState('');
   const [logging, setLogging] = useState(false);
-  const [stats, setStats] = useState({ reached: 0, voicemail: 0, no_answer: 0, not_interested: 0, appointment: 0, skipped: 0 });
+  const [showObjDrawer, setShowObjDrawer] = useState(false);
+  const [stats, setStats] = useState({
+    reached: 0, voicemail: 0, no_answer: 0, not_interested: 0, appointment: 0, skipped: 0,
+  });
 
   const current = queue[index];
   const done = !current || index >= queue.length;
@@ -204,17 +446,12 @@ function ColdCallSession({
         nextStepNote.trim() ||
         (outcome === 'appointment' ? 'Termin vorbereiten' :
          outcome === 'reached' ? 'Follow-up planen' :
-         outcome === 'voicemail' || outcome === 'no_answer' ? 'Nochmal anrufen' : undefined);
+         (outcome === 'voicemail' || outcome === 'no_answer') ? 'Nochmal anrufen' : undefined);
 
       await fetch('/api/sales/activities/log-call', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          companyId: current.id,
-          notes: notes || undefined,
-          outcome,
-          next_step: ns,
-        }),
+        body: JSON.stringify({ companyId: current.id, notes: notes || undefined, outcome, next_step: ns }),
       });
       setStats((prev) => ({ ...prev, [outcome as keyof typeof prev]: (prev[outcome as keyof typeof prev] ?? 0) + 1 }));
       advance();
@@ -235,10 +472,7 @@ function ColdCallSession({
     advance();
   }
 
-  function handleClose() {
-    router.refresh();
-    onClose();
-  }
+  function handleClose() { router.refresh(); onClose(); }
 
   const total = stats.reached + stats.voicemail + stats.no_answer + stats.not_interested + stats.appointment;
 
@@ -267,220 +501,150 @@ function ColdCallSession({
 
   return (
     <div className="ccs-overlay" role="dialog" aria-modal="true">
-      <div className="ccs-modal">
-        {/* Progress bar */}
-        <div className="ccs-topbar">
-          <div className="ccs-progress-wrap">
-            <div className="ccs-progress-bar" style={{ width: `${(index / queue.length) * 100}%` }} />
-          </div>
-          <div className="ccs-topbar-meta">
-            <span className="ccs-counter">{index + 1} / {queue.length}</span>
-            <div className="ccs-mini-stats">
-              <span className="ccs-reached">✓ {stats.reached + stats.appointment}</span>
-              <span>📞 {stats.voicemail}</span>
-              <span>✗ {stats.no_answer}</span>
+      <div className={`ccs-modal${showObjDrawer ? ' ccs-modal-split' : ''}`}>
+        {/* Main call panel */}
+        <div className="ccs-main">
+          {/* Progress bar */}
+          <div className="ccs-topbar">
+            <div className="ccs-progress-wrap">
+              <div className="ccs-progress-bar" style={{ width: `${(index / queue.length) * 100}%` }} />
             </div>
-            <button type="button" className="ccs-close-btn" onClick={handleClose} aria-label="Session beenden">✕</button>
+            <div className="ccs-topbar-meta">
+              <span className="ccs-counter">{index + 1} / {queue.length}</span>
+              <div className="ccs-mini-stats">
+                <span className="ccs-reached">✓ {stats.reached + stats.appointment}</span>
+                <span>📞 {stats.voicemail}</span>
+                <span>✗ {stats.no_answer}</span>
+              </div>
+              <button
+                type="button"
+                className={`ccs-obj-btn${showObjDrawer ? ' is-active' : ''}`}
+                onClick={() => setShowObjDrawer((v) => !v)}
+                title="Einwand-Bibliothek"
+              >
+                Einwände
+              </button>
+              <button type="button" className="ccs-close-btn" onClick={handleClose} aria-label="Session beenden">✕</button>
+            </div>
           </div>
-        </div>
 
-        {/* Company info */}
-        <div className="ccs-company">
-          <div className="ccs-company-head">
-            <h2 className="ccs-company-name">{current.name}</h2>
-            {signal && signal !== 'unknown' && (
-              <span className={`sales-ki-signal signal-${signal}`}>
-                {signal === 'hot' ? '🔥' : signal === 'warm' ? '🌡' : '❄️'} {SIGNAL_LABEL[signal]}
+          {/* Company info */}
+          <div className="ccs-company">
+            <div className="ccs-company-head">
+              <h2 className="ccs-company-name">{current.name}</h2>
+              <span className={`sales-stage-badge ${STAGE_CLASS[current.stage]}`}>
+                {STAGE_LABELS[current.stage]}
               </span>
-            )}
-          </div>
-          <p className="ccs-company-meta">
-            {current.status}{current.industry ? ` · ${current.industry}` : ''}
-            {current.days_since_contact !== null
-              ? ` · letzter Kontakt vor ${current.days_since_contact}d`
-              : ' · noch kein Kontakt'}
-          </p>
-          {current.first_phone && (
-            <a href={`tel:${current.first_phone}`} className="ccs-phone-link">
-              📞 {current.first_phone}{current.first_phone_channel === 'mobile' ? ' (Mobil)' : ''}
-            </a>
-          )}
-          {current.next_step && (
-            <div className="ccs-next-step">→ {current.next_step}</div>
-          )}
-          {ins && (
-            <div className="ccs-insights-row">
-              {ins.employee_count != null && (
-                <span className="ccs-insight-chip">{ins.employee_count} MA</span>
-              )}
-              {(ins.software_used?.length ?? 0) > 0 && (
-                <span className="ccs-insight-chip ccs-software">{ins.software_used.slice(0, 2).join(', ')}</span>
-              )}
-              {(ins.pain_points?.length ?? 0) > 0 && (
-                <span className="ccs-insight-chip ccs-pain">{ins.pain_points[0]}</span>
+              {signal && signal !== 'unknown' && (
+                <span className={`sales-ki-signal signal-${signal}`}>
+                  {signal === 'hot' ? '🔥' : signal === 'warm' ? '🌡' : '❄️'} {SIGNAL_LABEL[signal]}
+                </span>
               )}
             </div>
-          )}
-          {current.transcript_count > 0 && (
-            <Link
-              href={`/dashboard/sales?member=${memberId}&company=${current.id}`}
-              target="_blank"
-              className="ccs-open-link"
-            >
-              {current.transcript_count} Gespräch{current.transcript_count > 1 ? 'e' : ''} · Detail öffnen →
-            </Link>
-          )}
-        </div>
-
-        {/* Outcome buttons */}
-        <div className="ccs-outcomes">
-          {CALL_OUTCOMES.map((o) => (
-            <button
-              key={o.value}
-              type="button"
-              className={`ccs-outcome-btn ${o.cls}${outcome === o.value ? ' is-active' : ''}`}
-              onClick={() => {
-                setOutcome(o.value);
-                if ((o.value === 'voicemail' || o.value === 'no_answer') && !nextStepNote) {
-                  setNextStepNote('Nochmal anrufen');
-                } else if (o.value === 'appointment' && !nextStepNote) {
-                  setNextStepNote('Termin vorbereiten');
-                } else if (nextStepNote === 'Nochmal anrufen' && o.value !== 'voicemail' && o.value !== 'no_answer') {
-                  setNextStepNote('');
-                }
-              }}
-            >
-              {o.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Notes */}
-        <textarea
-          className="sales-input sales-textarea ccs-notes"
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="Gesprächsnotizen (optional)…"
-          rows={2}
-        />
-
-        {/* Next step */}
-        <input
-          className="sales-input ccs-nextstep"
-          value={nextStepNote}
-          onChange={(e) => setNextStepNote(e.target.value)}
-          placeholder="Nächster Schritt…"
-        />
-
-        {/* Actions */}
-        <div className="ccs-actions">
-          <button type="button" className="ccs-skip-btn" onClick={skip}>
-            Überspringen
-          </button>
-          <button
-            type="button"
-            className="ccs-save-btn"
-            onClick={logAndNext}
-            disabled={logging}
-          >
-            {logging ? 'Speichert…' : 'Speichern & Weiter →'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Pilot Pipeline ─────────────────────────────────────────────────────────────
-
-function PilotCard({ company, memberId }: { company: SalesCompanyListItem; memberId: string }) {
-  const ins = company.insights_json;
-  const signal = ins?.buying_signal;
-  return (
-    <Link
-      href={`/dashboard/sales?member=${memberId}&company=${company.id}`}
-      className="pp-card"
-    >
-      <div className="pp-card-head">
-        <strong className="pp-card-name">{company.name}</strong>
-        {signal && signal !== 'unknown' && (
-          <span className={`pp-signal signal-${signal}`}>
-            {signal === 'hot' ? '🔥' : signal === 'warm' ? '🌡' : '❄️'}
-          </span>
-        )}
-      </div>
-      {company.industry && <span className="pp-meta">{company.industry}</span>}
-      <div className="pp-badges">
-        {company.transcript_count > 0 && (
-          <span className="sales-tx-badge">{company.transcript_count} TX</span>
-        )}
-        {company.last_activity_at && (
-          <span className="sales-days-badge">{daysAgo(company.last_activity_at)}</span>
-        )}
-      </div>
-      {ins?.employee_count != null && (
-        <span className="pp-employees">{ins.employee_count} Mitarbeiter</span>
-      )}
-      {(ins?.software_used?.length ?? 0) > 0 && (
-        <span className="pp-software">{ins!.software_used.slice(0, 2).join(', ')}</span>
-      )}
-      {company.next_step && (
-        <span className="pp-nextstep">→ {company.next_step}</span>
-      )}
-    </Link>
-  );
-}
-
-function PilotPipeline({ companies, memberId }: { companies: SalesCompanyListItem[]; memberId: string }) {
-  const active = companies.filter((c) => c.pilot_status === 'active');
-  const committed = companies.filter((c) => c.pilot_status === 'committed');
-  const interested = companies.filter(
-    (c) =>
-      !c.pilot_status &&
-      (
-        c.insights_json?.buying_signal === 'hot' ||
-        c.insights_json?.buying_signal === 'warm' ||
-        c.transcript_count >= 3
-      ),
-  );
-  const contacted = companies.filter(
-    (c) =>
-      !c.pilot_status &&
-      c.transcript_count > 0 &&
-      (c.insights_json?.buying_signal === 'cold' || !c.insights_json?.buying_signal || c.insights_json?.buying_signal === 'unknown'),
-  );
-
-  const cols = [
-    { key: 'contacted', label: 'Kontaktiert', items: contacted, cls: 'pp-col-contacted' },
-    { key: 'interested', label: 'Pilot-Interessiert', items: interested, cls: 'pp-col-interested' },
-    { key: 'committed', label: 'Pilot zugesagt', items: committed, cls: 'pp-col-committed' },
-    { key: 'active', label: 'Aktive Pilots', items: active, cls: 'pp-col-active' },
-  ];
-
-  return (
-    <div className="pp-pipeline">
-      {cols.map((col) => (
-        <div key={col.key} className={`pp-col ${col.cls}`}>
-          <div className="pp-col-head">
-            <span className="pp-col-title">{col.label}</span>
-            <span className="pp-col-count">{col.items.length}</span>
-          </div>
-          <div className="pp-col-cards">
-            {col.items.length === 0 ? (
-              <p className="pp-empty">—</p>
-            ) : (
-              col.items.map((c) => (
-                <PilotCard key={c.id} company={c} memberId={memberId} />
-              ))
+            <p className="ccs-company-meta">
+              {current.industry}
+              {current.days_since_contact !== null
+                ? ` · letzter Kontakt vor ${current.days_since_contact}d`
+                : ' · noch kein Kontakt'}
+              {current.cold_streak > 0 && (
+                <span className="ccs-streak-badge"> · {current.cold_streak}× kalt</span>
+              )}
+            </p>
+            {current.first_phone && (
+              <a href={`tel:${current.first_phone}`} className="ccs-phone-link">
+                📞 {current.first_phone}{current.first_phone_channel === 'mobile' ? ' (Mobil)' : ''}
+              </a>
+            )}
+            {current.next_step && <div className="ccs-next-step">→ {current.next_step}</div>}
+            {ins && (
+              <div className="ccs-insights-row">
+                {ins.employee_count != null && (
+                  <span className="ccs-insight-chip">{ins.employee_count} MA</span>
+                )}
+                {(ins.software_used?.length ?? 0) > 0 && (
+                  <span className="ccs-insight-chip ccs-software">{ins.software_used.slice(0, 2).join(', ')}</span>
+                )}
+                {(ins.pain_points?.length ?? 0) > 0 && (
+                  <span className="ccs-insight-chip ccs-pain">{ins.pain_points[0]}</span>
+                )}
+              </div>
+            )}
+            {current.transcript_count > 0 && (
+              <Link
+                href={`/dashboard/sales?member=${memberId}&company=${current.id}`}
+                target="_blank"
+                className="ccs-open-link"
+              >
+                {current.transcript_count} Gespräch{current.transcript_count > 1 ? 'e' : ''} · Detail öffnen →
+              </Link>
             )}
           </div>
+
+          {/* Pre-Call Brief */}
+          <CcsPreCallBrief company={current} memberId={memberId} />
+
+          {/* Outcome buttons */}
+          <div className="ccs-outcomes">
+            {CALL_OUTCOMES.map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                className={`ccs-outcome-btn ${o.cls}${outcome === o.value ? ' is-active' : ''}`}
+                onClick={() => {
+                  setOutcome(o.value);
+                  if ((o.value === 'voicemail' || o.value === 'no_answer') && !nextStepNote) {
+                    setNextStepNote('Nochmal anrufen');
+                  } else if (o.value === 'appointment' && !nextStepNote) {
+                    setNextStepNote('Termin vorbereiten');
+                  } else if (nextStepNote === 'Nochmal anrufen' && o.value !== 'voicemail' && o.value !== 'no_answer') {
+                    setNextStepNote('');
+                  }
+                }}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Notes */}
+          <textarea
+            className="sales-input sales-textarea ccs-notes"
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            placeholder="Gesprächsnotizen (optional)…"
+            rows={2}
+          />
+
+          {/* Next step */}
+          <input
+            className="sales-input ccs-nextstep"
+            value={nextStepNote}
+            onChange={(e) => setNextStepNote(e.target.value)}
+            placeholder="Nächster Schritt…"
+          />
+
+          {/* Actions */}
+          <div className="ccs-actions">
+            <button type="button" className="ccs-skip-btn" onClick={skip}>Überspringen</button>
+            <button type="button" className="ccs-save-btn" onClick={logAndNext} disabled={logging}>
+              {logging ? 'Speichert…' : 'Speichern & Weiter →'}
+            </button>
+          </div>
         </div>
-      ))}
+
+        {/* Objection Drawer (side panel) */}
+        {showObjDrawer && (
+          <ObjectionDrawer onClose={() => setShowObjDrawer(false)} />
+        )}
+      </div>
     </div>
   );
 }
 
 // ── Main Dashboard ─────────────────────────────────────────────────────────────
+
+type DetailTab = 'gespräche' | 'aktivitäten' | 'summary';
+type FilterKey = 'all' | 'call' | 'discovery' | 'evaluation' | 'pilot' | 'hot';
 
 export function SalesDashboard({
   memberId,
@@ -504,12 +668,45 @@ export function SalesDashboard({
   const [callDurationMin, setCallDurationMin] = useState('');
   const [callNextStep, setCallNextStep] = useState('');
   const [loggingCall, setLoggingCall] = useState(false);
-  const [activeTab, setActiveTab] = useState<'gespräche' | 'aktivitäten'>('gespräche');
+  const [activeTab, setActiveTab] = useState<DetailTab>('gespräche');
   const [modalActivity, setModalActivity] = useState<SalesActivity | null>(null);
   const [showCallDropdown, setShowCallDropdown] = useState(false);
   const [showColdCall, setShowColdCall] = useState(false);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'call' | 'gespräche' | 'hot' | 'pilots'>('all');
-  const [settingPilot, setSettingPilot] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
+  const [settingStage, setSettingStage] = useState(false);
+  const [pipelineStage, setPipelineStage] = useState<SalesStage | null>(null);
+  // AI summary state (separate from DB value so we can update inline)
+  const [briefText, setBriefText] = useState<string | null>(selected?.ai_summary ?? null);
+  const [briefLoading, setBriefLoading] = useState(false);
+
+  // Sync state when selected company changes
+  const selectedStage = selected?.stage ?? 'prospecting';
+
+  async function setStage(stage: SalesStage) {
+    if (!selected || settingStage) return;
+    setSettingStage(true);
+    await fetch(`/api/sales/companies/${selected.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stage }),
+    });
+    setSettingStage(false);
+    router.refresh();
+  }
+
+  async function generateBrief() {
+    if (!selected || briefLoading) return;
+    setBriefLoading(true);
+    try {
+      const res = await fetch(`/api/sales/companies/${selected.id}/brief?memberId=${memberId}`, {
+        method: 'POST',
+      });
+      const data = await res.json();
+      if (data.summary) setBriefText(data.summary);
+    } finally {
+      setBriefLoading(false);
+    }
+  }
 
   async function logCall() {
     if (!selected || loggingCall) return;
@@ -560,27 +757,6 @@ export function SalesDashboard({
     }
   }
 
-  const filtered = companies.filter((c) => {
-    if (query && !c.name.toLowerCase().includes(query.toLowerCase())) return false;
-    if (activeFilter === 'call') return !c.pilot_status && (c.days_since_contact === null || c.days_since_contact >= 7);
-    if (activeFilter === 'gespräche') return c.transcript_count > 0;
-    if (activeFilter === 'hot') return c.insights_json?.buying_signal === 'hot';
-    if (activeFilter === 'pilots') return !!c.pilot_status;
-    return true;
-  });
-
-  async function setPilotStatus(status: 'active' | 'committed' | null) {
-    if (!selected || settingPilot) return;
-    setSettingPilot(true);
-    await fetch(`/api/sales/companies/${selected.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pilot_status: status }),
-    });
-    setSettingPilot(false);
-    router.refresh();
-  }
-
   async function saveNextStep() {
     if (!selected) return;
     setSaving(true);
@@ -593,56 +769,65 @@ export function SalesDashboard({
     router.refresh();
   }
 
+  // Computed list item for selected company (relationship_health etc.)
+  const selectedListItem = selected ? companies.find((c) => c.id === selected.id) : null;
+
+  // Filter tabs
+  const coldCallQueue = buildCcsQueue(companies);
+
+  const FILTER_TABS: { key: FilterKey; label: string; count: number }[] = [
+    { key: 'all',       label: 'Alle',            count: companies.length },
+    { key: 'call',      label: 'Anrufen',          count: coldCallQueue.length },
+    { key: 'discovery', label: 'Erstgespräch',     count: companies.filter((c) => c.stage === 'discovery').length },
+    { key: 'evaluation',label: 'Evaluation',       count: companies.filter((c) => c.stage === 'evaluation').length },
+    { key: 'pilot',     label: 'Pilots',           count: companies.filter((c) => c.stage === 'pilot').length },
+    { key: 'hot',       label: '🔥 Hot',           count: companies.filter((c) => c.insights_json?.buying_signal === 'hot').length },
+  ];
+
+  const filtered = companies.filter((c) => {
+    if (query && !c.name.toLowerCase().includes(query.toLowerCase())) return false;
+    if (activeFilter === 'call')       return coldCallQueue.includes(c);
+    if (activeFilter === 'discovery')  return c.stage === 'discovery';
+    if (activeFilter === 'evaluation') return c.stage === 'evaluation';
+    if (activeFilter === 'pilot')      return c.stage === 'pilot';
+    if (activeFilter === 'hot')        return c.insights_json?.buying_signal === 'hot';
+    return true;
+  });
+
+  // Stats
+  const stageCounts = FUNNEL_STAGES.reduce<Record<string, number>>((acc, s) => {
+    acc[s] = companies.filter((c) => c.stage === s).length;
+    return acc;
+  }, {});
+
   const transcripts = selected?.activities.filter((a) => a.activity_type === 'transcript') ?? [];
-  const otherActivities = selected?.activities.filter((a) => a.activity_type !== 'transcript') ?? [];
+  const otherActivities = selected?.activities.filter((a) => a.activity_type !== 'transcript' && a.activity_type !== 'sync') ?? [];
+  const allActivities = selected?.activities.filter((a) => a.activity_type !== 'sync') ?? [];
   const phoneEndpoints = selected?.endpoints.filter(
-    (ep) => (ep.channel === 'phone' || ep.channel === 'mobile') && !ep.do_not_call
+    (ep) => (ep.channel === 'phone' || ep.channel === 'mobile') && !ep.do_not_call,
   ) ?? [];
 
-  // Queue for cold call session: non-pilot leads, not contacted recently, highest priority first
-  const coldCallQueue = companies.filter(
-    (c) => !c.pilot_status && (c.days_since_contact === null || c.days_since_contact >= 3),
-  );
+  const health = selectedListItem?.relationship_health;
 
-  const pilotCounts = {
-    active: companies.filter((c) => c.pilot_status === 'active').length,
-    committed: companies.filter((c) => c.pilot_status === 'committed').length,
-    interested: companies.filter(
-      (c) => !c.pilot_status && (
-        c.insights_json?.buying_signal === 'hot' ||
-        c.insights_json?.buying_signal === 'warm' ||
-        c.transcript_count >= 3
-      ),
-    ).length,
-  };
-  const statCounts = {
-    total: companies.length,
-    withConversations: companies.filter((c) => c.transcript_count > 0).length,
-    hot: companies.filter((c) => c.insights_json?.buying_signal === 'hot').length,
-    callQueue: coldCallQueue.length,
-  };
-  const FILTER_TABS: { key: typeof activeFilter; label: string; count: number }[] = [
-    { key: 'all', label: 'Alle', count: companies.length },
-    { key: 'call', label: 'Anrufen', count: coldCallQueue.length },
-    { key: 'gespräche', label: 'Gespräche', count: statCounts.withConversations },
-    { key: 'hot', label: '🔥 Hot', count: statCounts.hot },
-    { key: 'pilots', label: 'Pilots', count: pilotCounts.active + pilotCounts.committed },
-  ];
+  // Pipeline view filtered by pipelineStage click
+  const pipelineFiltered = pipelineStage
+    ? companies.filter((c) => c.stage === pipelineStage)
+    : companies;
 
   return (
     <section className="sales-shell">
       <header>
         <p className="ovr">Sales OS</p>
         <div className="sales-top-row">
-          <h1>{view === 'pipeline' ? 'Pilot-Pipeline' : 'Leads'}</h1>
+          <h1>{view === 'pipeline' ? 'Sales Pipeline' : 'Leads'}</h1>
           <div className="sales-top-actions">
             <div className="sales-pipeline-summary">
-              <span className="sales-badge pilot-active">{pilotCounts.active} Pilots</span>
-              {pilotCounts.committed > 0 && (
-                <span className="sales-badge pilot-committed">{pilotCounts.committed} zugesagt</span>
+              <span className="sales-badge stage-pilot">{stageCounts['pilot'] ?? 0} Pilots</span>
+              {(stageCounts['evaluation'] ?? 0) > 0 && (
+                <span className="sales-badge stage-evaluation">{stageCounts['evaluation']} Evaluation</span>
               )}
-              {pilotCounts.interested > 0 && (
-                <span className="sales-badge tone-brand">{pilotCounts.interested} interessiert</span>
+              {(stageCounts['discovery'] ?? 0) > 0 && (
+                <span className="sales-badge stage-discovery">{stageCounts['discovery']} Erstgespräch</span>
               )}
             </div>
             <button
@@ -658,39 +843,30 @@ export function SalesDashboard({
 
       {/* Stats bar */}
       <div className="sales-stats-bar">
-        <div className="sales-stat-item">
-          <span className="sales-stat-num">{statCounts.total}</span>
-          <span className="sales-stat-lbl">Leads</span>
-        </div>
-        <div className="sales-stat-item">
-          <span className="sales-stat-num">{statCounts.withConversations}</span>
-          <span className="sales-stat-lbl">Gespräche</span>
-        </div>
-        <div className="sales-stat-item sales-stat-highlight">
-          <span className="sales-stat-num">{pilotCounts.active}</span>
-          <span className="sales-stat-lbl">Aktive Pilots</span>
-        </div>
-        {pilotCounts.committed > 0 && (
-          <div className="sales-stat-item">
-            <span className="sales-stat-num">{pilotCounts.committed}</span>
-            <span className="sales-stat-lbl">Zugesagt</span>
+        {FUNNEL_STAGES.map((s) => (
+          <div key={s} className="sales-stat-item">
+            <span className={`sales-stat-num${s === 'pilot' ? ' sales-stat-highlight-num' : ''}`}>
+              {stageCounts[s] ?? 0}
+            </span>
+            <span className="sales-stat-lbl">{STAGE_LABELS[s]}</span>
           </div>
-        )}
-        {statCounts.hot > 0 && (
-          <div className="sales-stat-item">
-            <span className="sales-stat-num">{statCounts.hot}</span>
-            <span className="sales-stat-lbl">Hot 🔥</span>
-          </div>
-        )}
+        ))}
         <div className="sales-stat-item">
-          <span className="sales-stat-num">{statCounts.callQueue}</span>
-          <span className="sales-stat-lbl">In Queue</span>
+          <span className="sales-stat-num">{companies.filter((c) => c.insights_json?.buying_signal === 'hot').length}</span>
+          <span className="sales-stat-lbl">Hot 🔥</span>
         </div>
       </div>
 
       {/* Pipeline View */}
       {view === 'pipeline' && (
-        <PilotPipeline companies={companies} memberId={memberId} />
+        <div className="sf-view">
+          <StageFunnel
+            companies={companies}
+            activeStage={pipelineStage}
+            onStageClick={setPipelineStage}
+          />
+          <PipelineKanban companies={pipelineStage ? pipelineFiltered : companies} memberId={memberId} />
+        </div>
       )}
 
       {/* Leads View */}
@@ -735,19 +911,20 @@ export function SalesDashboard({
               <Link
                 key={c.id}
                 href={`/dashboard/sales?member=${memberId}&company=${c.id}`}
-                className={`sales-lead-card${selected?.id === c.id ? ' is-active' : ''}${c.priority_score >= 4 ? ' is-urgent' : ''}`}
+                className={`sales-lead-card${selected?.id === c.id ? ' is-active' : ''}${c.priority_score >= 5 ? ' is-urgent' : ''}`}
               >
                 <div className="sales-lead-top">
                   <strong>{c.name}</strong>
                   <div className="sales-lead-badges">
-                    {c.pilot_status && (
-                      <span className={`sales-pilot-badge ${PILOT_CLASS[c.pilot_status]}`}>
-                        {c.pilot_status === 'active' ? '✓ Pilot' : 'Zugesagt'}
-                      </span>
+                    <span className={`sales-stage-badge-sm ${STAGE_CLASS[c.stage]}`}>
+                      {STAGE_LABELS[c.stage]}
+                    </span>
+                    {c.relationship_health !== 'green' && (
+                      <span className={`sales-health-dot health-${c.relationship_health}`} title={c.relationship_health === 'red' ? 'Kein Kontakt > 30d' : 'Kontakt > 14d'} />
                     )}
                     {!c.pilot_status && c.insights_json?.buying_signal && c.insights_json.buying_signal !== 'unknown' && (
                       <span className={`sales-signal-badge signal-${c.insights_json.buying_signal}`}>
-                        {c.insights_json.buying_signal === 'hot' ? '🔥' : c.insights_json.buying_signal === 'warm' ? '🌡' : ''}
+                        {c.insights_json.buying_signal === 'hot' ? '🔥' : '🌡'}
                         {SIGNAL_LABEL[c.insights_json.buying_signal]}
                       </span>
                     )}
@@ -756,22 +933,21 @@ export function SalesDashboard({
                         {c.transcript_count} TX
                       </span>
                     )}
-                    {c.days_since_contact !== null && (
-                      <span className={`sales-days-badge${c.days_since_contact >= 14 ? ' tone-warn' : ''}`}>
-                        {c.days_since_contact === 0 ? 'heute' : `${c.days_since_contact}d`}
+                    {c.cold_streak > 1 && (
+                      <span className="sales-badge tone-danger" title={`${c.cold_streak}× kein Anschluss`}>
+                        {c.cold_streak}×
                       </span>
                     )}
                   </div>
                 </div>
                 <span className="sales-lead-meta">
-                  {c.status}
-                  {c.industry ? ` · ${c.industry}` : ''}
+                  {c.industry ?? c.status}
                   {c.contact_count > 0 ? ` · ${c.contact_count} Kontakt${c.contact_count > 1 ? 'e' : ''}` : ''}
                   {c.insights_json?.employee_count != null ? ` · ${c.insights_json.employee_count} MA` : ''}
                 </span>
                 {c.last_activity_at && (
                   <span className="meta">
-                    {ACTIVITY_LABEL[c.last_activity_type ?? ''] ?? c.last_activity_type} {daysAgo(c.last_activity_at)}
+                    {ACTIVITY_ICON[c.last_activity_type ?? ''] ?? ''} {daysAgo(c.last_activity_at)}
                   </span>
                 )}
                 {c.next_step && <span className="meta next-step">→ {c.next_step}</span>}
@@ -788,36 +964,54 @@ export function SalesDashboard({
 
                 {/* Company header */}
                 <div className="sales-detail-header">
-                  <div>
-                    <div className="sales-company-name-row">
-                      <h2>{selected.name}</h2>
-                      {selected.pilot_status && (
-                        <span className={`sales-pilot-badge sales-pilot-badge-lg ${PILOT_CLASS[selected.pilot_status]}`}>
-                          {PILOT_LABEL[selected.pilot_status]}
-                        </span>
-                      )}
-                      <select
-                        className="sales-pilot-select"
-                        value={selected.pilot_status ?? ''}
-                        onChange={(e) => {
-                          const v = e.target.value;
-                          setPilotStatus(v === '' ? null : v as 'active' | 'committed');
-                        }}
-                        disabled={settingPilot}
-                        aria-label="Pilot-Status setzen"
-                      >
-                        <option value="">— Kein Pilot</option>
-                        <option value="committed">Pilot zugesagt</option>
-                        <option value="active">Aktiver Pilot</option>
-                      </select>
-                    </div>
-                    <p>
-                      {selected.status}
-                      {selected.website ? (
-                        <> · <a href={selected.website} target="_blank" rel="noreferrer">{selected.website}</a></>
-                      ) : null}
-                    </p>
+                  <div className="sales-company-name-row">
+                    <h2>{selected.name}</h2>
+                    {health && (
+                      <span className={`sales-health-badge health-${health}`} title={
+                        health === 'green' ? 'Aktiver Kontakt' :
+                        health === 'yellow' ? 'Kontakt > 14 Tage' :
+                        'Kein Kontakt > 30 Tage'
+                      }>
+                        {health === 'green' ? '●' : health === 'yellow' ? '●' : '●'}
+                      </span>
+                    )}
                   </div>
+                  <div className="sales-detail-meta-row">
+                    {selected.website ? (
+                      <a href={selected.website} target="_blank" rel="noreferrer" className="sales-website-link">
+                        {selected.website.replace(/^https?:\/\//, '')}
+                      </a>
+                    ) : (
+                      <span className="sales-muted">{selected.industry ?? selected.status}</span>
+                    )}
+                    {selectedListItem?.days_since_contact !== null && selectedListItem?.days_since_contact !== undefined && (
+                      <span className={`sales-days-badge${(selectedListItem.days_since_contact ?? 0) >= 14 ? ' tone-warn' : ''}`}>
+                        {selectedListItem.days_since_contact === 0 ? 'heute' : `vor ${selectedListItem.days_since_contact}d`}
+                      </span>
+                    )}
+                    {selected.cold_streak > 0 && (
+                      <span className="sales-badge tone-danger" title="Aufeinanderfolgende Anrufversuche ohne Erfolg">
+                        {selected.cold_streak}× kalt
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Stage Selector */}
+                  <div className="sales-stage-row">
+                    <select
+                      className="sales-stage-select"
+                      value={selectedStage}
+                      onChange={(e) => setStage(e.target.value as SalesStage)}
+                      disabled={settingStage}
+                      aria-label="Sales-Stage setzen"
+                    >
+                      {(Object.keys(STAGE_LABELS) as SalesStage[]).map((s) => (
+                        <option key={s} value={s}>{STAGE_LABELS[s]}</option>
+                      ))}
+                    </select>
+                    {settingStage && <span className="sales-muted">…</span>}
+                  </div>
+
                   <div className="sales-header-actions">
                     {phoneEndpoints.length > 0 && (
                       <div className="sales-call-wrap">
@@ -907,22 +1101,17 @@ export function SalesDashboard({
                         value={callNextStep}
                         onChange={(e) => setCallNextStep(e.target.value)}
                       />
-                      <button
-                        type="button"
-                        className="sales-btn"
-                        onClick={logCall}
-                        disabled={loggingCall}
-                      >
+                      <button type="button" className="sales-btn" onClick={logCall} disabled={loggingCall}>
                         {loggingCall ? 'Speichert…' : 'Speichern'}
                       </button>
                     </div>
                   </section>
                 )}
 
-                {/* KI-Analyse — always prominent at top */}
+                {/* KI-Analyse */}
                 <KIPanel insights={selected.insights_json ?? null} />
 
-                {/* Next Step + Contacts — two-column */}
+                {/* Next Step + Contacts */}
                 <div className="sales-detail-cols">
                   <section className="sales-section">
                     <h3 className="ovr">Nächster Schritt</h3>
@@ -953,10 +1142,7 @@ export function SalesDashboard({
                     {showContactForm && (
                       <ContactForm
                         companyId={selected.id}
-                        onDone={() => {
-                          setShowContactForm(false);
-                          router.refresh();
-                        }}
+                        onDone={() => { setShowContactForm(false); router.refresh(); }}
                       />
                     )}
                     {selected.contacts.map((ct) => (
@@ -973,7 +1159,7 @@ export function SalesDashboard({
                   </section>
                 </div>
 
-                {/* Endpoints (compact — call button moved to header) */}
+                {/* Endpoints */}
                 {selected.endpoints.length > 0 && (
                   <section className="sales-section">
                     <h3 className="ovr">Endpoints</h3>
@@ -1004,12 +1190,19 @@ export function SalesDashboard({
                   >
                     Aktivitäten{otherActivities.length > 0 ? ` (${otherActivities.length})` : ''}
                   </button>
+                  <button
+                    type="button"
+                    className={`sales-tab${activeTab === 'summary' ? ' is-active' : ''}`}
+                    onClick={() => setActiveTab('summary')}
+                  >
+                    KI-Brief
+                  </button>
                 </div>
 
                 {/* Tab: Gespräche */}
                 {activeTab === 'gespräche' && (
                   transcripts.length === 0 ? (
-                    <p className="sales-muted">Noch keine Gespräche. Notion-Checkbox setzen um Transkript zu importieren.</p>
+                    <p className="sales-muted">Noch keine Gespräche.</p>
                   ) : (
                     <ol className="sales-timeline">
                       {transcripts.map((a) => {
@@ -1030,7 +1223,9 @@ export function SalesDashboard({
                               <span className="sales-tx-toggle">→</span>
                             </div>
                             {preview && (
-                              <p className="summary sales-tx-preview">{preview.slice(0, 220)}{preview.length > 220 ? '…' : ''}</p>
+                              <p className="summary sales-tx-preview">
+                                {preview.slice(0, 220)}{preview.length > 220 ? '…' : ''}
+                              </p>
                             )}
                           </li>
                         );
@@ -1039,20 +1234,50 @@ export function SalesDashboard({
                   )
                 )}
 
-                {/* Tab: Aktivitäten */}
+                {/* Tab: Aktivitäten (unified) */}
                 {activeTab === 'aktivitäten' && (
                   <ol className="sales-timeline">
-                    {otherActivities.map((a) => (
-                      <li key={a.id}>
-                        <div className="meta">
-                          {a.occurred_at.slice(0, 10)} · {ACTIVITY_LABEL[a.activity_type] ?? a.activity_type}
+                    {allActivities.map((a) => (
+                      <li key={a.id} className="sales-activity-item">
+                        <div className="sales-activity-meta">
+                          <span className="sales-activity-icon" aria-hidden="true">
+                            {ACTIVITY_ICON[a.activity_type] ?? '·'}
+                          </span>
+                          <span className="meta">{a.occurred_at.slice(0, 10)}</span>
+                          <span className="meta sales-activity-dir">
+                            {a.direction === 'inbound' ? '↙' : a.direction === 'outbound' ? '↗' : ''}
+                          </span>
                         </div>
                         <div className="title">{a.title}</div>
-                        {a.summary && <p className="summary">{a.summary}</p>}
+                        {a.summary && <p className="summary">{a.summary.slice(0, 300)}{a.summary.length > 300 ? '…' : ''}</p>}
                       </li>
                     ))}
-                    {otherActivities.length === 0 && <p className="sales-muted">—</p>}
+                    {allActivities.length === 0 && <p className="sales-muted">—</p>}
                   </ol>
+                )}
+
+                {/* Tab: KI-Brief */}
+                {activeTab === 'summary' && (
+                  <div className="sales-brief-section">
+                    <div className="sales-brief-head">
+                      <span className="sales-ki-label">KI-Zusammenfassung</span>
+                      <button
+                        type="button"
+                        className="sales-btn sales-btn-sm"
+                        onClick={generateBrief}
+                        disabled={briefLoading}
+                      >
+                        {briefLoading ? '…' : briefText ? '↻ Aktualisieren' : '✦ Generieren'}
+                      </button>
+                    </div>
+                    {briefText ? (
+                      <p className="sales-brief-text">{briefText}</p>
+                    ) : (
+                      <p className="sales-muted">
+                        Klick &ldquo;Generieren&rdquo; für eine KI-Zusammenfassung basierend auf allen Aktivitäten.
+                      </p>
+                    )}
+                  </div>
                 )}
 
               </div>

@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AuthActor, requireActor } from '@/lib/auth-context';
-import { getCompanyDetail, updateCompanyNextStep, updateCompanyPilotStatus } from '@/lib/sales-os';
+import { getCompanyDetail, updateCompanyNextStep, updateCompanyPilotStatus, updateCompanyStage } from '@/lib/sales-os';
 import { PAUL_MEMBER_ID } from '@/lib/sales-access';
+import type { SalesStage } from '@/types/sales';
 
 export const dynamic = 'force-dynamic';
+
+const VALID_STAGES: SalesStage[] = [
+  'prospecting', 'discovery', 'evaluation', 'pilot', 'expansion', 'customer', 'disqualified',
+];
 
 function resolveMemberId(actor: AuthActor, req: NextRequest): string {
   return actor.type === 'member' && actor.memberId
@@ -26,6 +31,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   const body = await req.json();
   const memberId = resolveMemberId(actor, req);
+
+  if ('stage' in body) {
+    const s = body.stage as unknown;
+    if (!VALID_STAGES.includes(s as SalesStage)) {
+      return NextResponse.json({ error: 'Ungültige Stage' }, { status: 400 });
+    }
+    await updateCompanyStage(id, memberId, s as SalesStage);
+    return NextResponse.json({ ok: true });
+  }
 
   if ('pilot_status' in body) {
     const ps = body.pilot_status as unknown;
