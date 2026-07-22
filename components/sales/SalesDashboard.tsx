@@ -9,6 +9,21 @@ import type {
 } from '@/types/sales';
 import { ContactForm } from '@/components/sales/ContactForm';
 
+const INTENT_LABEL: Record<string, string> = {
+  definite: 'Definitiv',
+  likely: 'Wahrscheinlich',
+  maybe: 'Vielleicht',
+  unlikely: 'Unwahrscheinlich',
+  unknown: 'Unklar',
+};
+const INTENT_CLASS: Record<string, string> = {
+  definite: 'intent-definite',
+  likely: 'intent-likely',
+  maybe: 'intent-maybe',
+  unlikely: 'intent-unlikely',
+  unknown: 'intent-unknown',
+};
+
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const STAGE_LABELS: Record<SalesStage, string> = {
@@ -78,130 +93,267 @@ function daysAgo(iso: string): string {
   return `vor ${days}d`;
 }
 
-// ── KI-Analyse Panel ──────────────────────────────────────────────────────────
+// ── Customer Profile Panel ────────────────────────────────────────────────────
 
-function KIPanel({ insights }: { insights: SalesCompanyInsights | null }) {
+function CustomerProfilePanel({
+  insights,
+  companyId,
+  memberId,
+  pilotStatus,
+}: {
+  insights: SalesCompanyInsights | null;
+  companyId: string;
+  memberId: string;
+  pilotStatus?: 'active' | 'committed' | null;
+}) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+
+  async function refresh() {
+    setLoading(true);
+    try {
+      await fetch('/api/sales/extract-insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ companyId, force: true, limit: 1 }),
+      });
+      router.refresh();
+    } finally {
+      setLoading(false);
+    }
+  }
+
   const signal = insights?.buying_signal ?? 'unknown';
-  const hasData = insights && (
-    (insights.pain_points?.length ?? 0) > 0 ||
-    (insights.interests?.length ?? 0) > 0 ||
-    (insights.software_used?.length ?? 0) > 0 ||
-    insights.notes ||
-    insights.employee_count != null
-  );
+  const intent = insights?.purchase_intent ?? 'unknown';
+  const hasAny = insights != null;
 
   return (
-    <div className="sales-ki-panel">
-      <div className="sales-ki-header">
-        <span className="sales-ki-title">KI-Analyse</span>
-        {insights?.last_analyzed_at && (
-          <span className="sales-ki-ts">Stand: {insights.last_analyzed_at.slice(0, 10)}</span>
-        )}
-        {signal !== 'unknown' && (
-          <span className={`sales-ki-signal signal-${signal}`}>
-            {signal === 'hot' ? '🔥' : signal === 'warm' ? '🌡' : '❄️'} {SIGNAL_LABEL[signal]}
-          </span>
-        )}
+    <div className="cust-profile">
+      <div className="cust-profile-head">
+        <span className="cust-profile-title">Kundenprofil</span>
+        <div className="cust-profile-meta">
+          {insights?.last_analyzed_at && (
+            <span className="cust-ts">
+              {insights.transcript_count_analyzed != null
+                ? `${insights.transcript_count_analyzed} TX · `
+                : ''}
+              {insights.last_analyzed_at.slice(0, 10)}
+            </span>
+          )}
+          <button
+            type="button"
+            className="cust-update-btn"
+            onClick={refresh}
+            disabled={loading}
+            title="KI-Analyse aus allen Transkripten neu erstellen"
+          >
+            {loading ? '…' : hasAny ? '↻ Profil aktualisieren' : '✦ Analysieren'}
+          </button>
+        </div>
       </div>
-      {!hasData ? (
+
+      {!hasAny ? (
         <p className="sales-ki-empty">
-          {!insights
-            ? 'Noch keine Analyse — Notion-Checkbox setzen um erstes Transkript zu importieren.'
-            : 'Zu wenig Gesprächsdaten für eine Auswertung.'}
+          Noch keine Analyse. &ldquo;Analysieren&rdquo; startet die KI-Auswertung aller Transkripte.
         </p>
       ) : (
-        <div className="sales-ki-grid">
-          {insights.employee_count != null && (
-            <div className="sales-ki-item">
-              <span className="sales-ki-label">Mitarbeiter</span>
-              <strong className="sales-ki-value">{insights.employee_count}</strong>
+        <>
+          {/* Kaufsignale */}
+          <div className="cust-signal-row">
+            {signal !== 'unknown' && (
+              <span className={`sales-ki-signal signal-${signal}`}>
+                {signal === 'hot' ? '🔥' : signal === 'warm' ? '🌡' : '❄️'} {SIGNAL_LABEL[signal]}
+              </span>
+            )}
+            {intent !== 'unknown' && (
+              <span className={`cust-intent-badge ${INTENT_CLASS[intent]}`}>
+                Kaufabsicht: {INTENT_LABEL[intent]}
+              </span>
+            )}
+            {(pilotStatus === 'committed' || pilotStatus === 'active') && (
+              <span className="sales-badge stage-pilot">
+                {pilotStatus === 'active' ? 'Pilot aktiv' : 'Pilot zugesagt'}
+              </span>
+            )}
+            {insights?.decision_maker_identified && (
+              <span className="sales-badge tone-ok">Entscheider bekannt</span>
+            )}
+          </div>
+
+          {/* Firmensteckbrief */}
+          <div className="cust-section">
+            <span className="cust-section-title">Firmensteckbrief</span>
+            <div className="cust-fields">
+              {insights.employee_count != null && (
+                <div className="cust-field">
+                  <span className="cust-field-label">Mitarbeiter</span>
+                  <strong className="cust-field-value">{insights.employee_count}</strong>
+                </div>
+              )}
+              {insights.current_workflow && (
+                <div className="cust-field cust-field-full">
+                  <span className="cust-field-label">Aktueller Workflow</span>
+                  <span className="cust-field-value">{insights.current_workflow}</span>
+                </div>
+              )}
+              {insights.supplier_info && (
+                <div className="cust-field cust-field-full">
+                  <span className="cust-field-label">Einkauf / Lieferant</span>
+                  <span className="cust-field-value">{insights.supplier_info}</span>
+                </div>
+              )}
+              {(insights.software_used?.length ?? 0) > 0 && (
+                <div className="cust-field cust-field-full">
+                  <span className="cust-field-label">Aktuelle Software</span>
+                  <div className="sales-tag-row">
+                    {insights.software_used!.map((s) => (
+                      <span key={s} className="sales-badge tone-neutral">{s}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
-          )}
-          {(insights.pain_points?.length ?? 0) > 0 && (
-            <div className="sales-ki-item sales-ki-full">
-              <span className="sales-ki-label">Pain Points</span>
-              <div className="sales-tag-row">
-                {insights!.pain_points.map((s) => (
-                  <span key={s} className="sales-badge tone-warn">{s}</span>
-                ))}
+          </div>
+
+          {/* KalkulAI-Potenzial */}
+          {((insights.use_cases?.length ?? 0) > 0 || (insights.interests?.length ?? 0) > 0) && (
+            <div className="cust-section">
+              <span className="cust-section-title">KalkulAI-Potenzial</span>
+              <div className="cust-fields">
+                {(insights.use_cases?.length ?? 0) > 0 && (
+                  <div className="cust-field cust-field-full">
+                    <span className="cust-field-label">Use Cases</span>
+                    <div className="sales-tag-row">
+                      {insights.use_cases!.map((s) => (
+                        <span key={s} className="sales-badge tone-brand">{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {(insights.interests?.length ?? 0) > 0 && (
+                  <div className="cust-field cust-field-full">
+                    <span className="cust-field-label">Interessen</span>
+                    <div className="sales-tag-row">
+                      {insights.interests!.map((s) => (
+                        <span key={s} className="sales-badge tone-brand" style={{ opacity: 0.7 }}>{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
-          {(insights.interests?.length ?? 0) > 0 && (
-            <div className="sales-ki-item sales-ki-full">
-              <span className="sales-ki-label">Interessen</span>
-              <div className="sales-tag-row">
-                {insights!.interests.map((s) => (
-                  <span key={s} className="sales-badge tone-brand">{s}</span>
-                ))}
+
+          {/* Pain Points + Einwände */}
+          {((insights.pain_points?.length ?? 0) > 0 || (insights.objections?.length ?? 0) > 0) && (
+            <div className="cust-section">
+              <span className="cust-section-title">Pain Points & Einwände</span>
+              <div className="cust-fields">
+                {(insights.pain_points?.length ?? 0) > 0 && (
+                  <div className="cust-field cust-field-full">
+                    <span className="cust-field-label">Pain Points</span>
+                    <div className="sales-tag-row">
+                      {insights.pain_points!.map((s) => (
+                        <span key={s} className="sales-badge tone-warn">{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {(insights.objections?.length ?? 0) > 0 && (
+                  <div className="cust-field cust-field-full">
+                    <span className="cust-field-label">Einwände</span>
+                    <div className="sales-tag-row">
+                      {insights.objections!.map((s) => (
+                        <span key={s} className="sales-badge tone-danger" style={{ opacity: 0.8 }}>{s}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
-          {(insights.software_used?.length ?? 0) > 0 && (
-            <div className="sales-ki-item sales-ki-full">
-              <span className="sales-ki-label">Aktuelle Software</span>
+
+          {/* Stakeholder */}
+          {(insights.key_stakeholders?.length ?? 0) > 0 && (
+            <div className="cust-section">
+              <span className="cust-section-title">Stakeholder</span>
               <div className="sales-tag-row">
-                {insights!.software_used.map((s) => (
+                {insights.key_stakeholders!.map((s) => (
                   <span key={s} className="sales-badge tone-neutral">{s}</span>
                 ))}
               </div>
             </div>
           )}
-          {insights.notes && (
-            <div className="sales-ki-item sales-ki-full">
-              <span className="sales-ki-label">Notiz</span>
-              <p className="sales-ki-notes">{insights.notes}</p>
+
+          {/* KI-Empfehlung */}
+          {(insights.next_best_action || insights.notes) && (
+            <div className="cust-section">
+              <span className="cust-section-title">KI-Empfehlung</span>
+              {insights.next_best_action && (
+                <p className="cust-recommendation">{insights.next_best_action}</p>
+              )}
+              {insights.notes && (
+                <p className="sales-ki-notes cust-notes">{insights.notes}</p>
+              )}
             </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );
 }
 
-// ── Transcript Modal ───────────────────────────────────────────────────────────
+// ── Transcript Card (inline expandable) ───────────────────────────────────────
 
-function TranscriptModal({ activity, onClose }: { activity: SalesActivity; onClose: () => void }) {
+function TranscriptCard({ activity }: { activity: SalesActivity }) {
+  const [expanded, setExpanded] = useState(false);
   const meta = activity.meta as Record<string, string>;
   const kt = meta?.key_takeaways;
   const notionUrl = meta?.notion_url;
+  const summary = activity.summary;
+  const preview = summary ?? kt ?? '';
 
   return (
-    <div className="sales-modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label={activity.title}>
-      <div className="sales-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="sales-modal-header">
-          <div>
-            <span className="sales-ki-label">{activity.occurred_at.slice(0, 10)}</span>
-            <h3 className="sales-modal-title">{activity.title}</h3>
-          </div>
-          <button type="button" className="sales-modal-close" onClick={onClose} aria-label="Schließen">✕</button>
-        </div>
-        <div className="sales-modal-body">
-          {activity.summary && (
-            <div className="sales-modal-section">
-              <span className="sales-ki-label">Zusammenfassung</span>
-              <p className="sales-modal-text">{activity.summary}</p>
-            </div>
-          )}
+    <li className="sales-transcript-card">
+      <button
+        type="button"
+        className="sales-tx-header"
+        onClick={() => setExpanded((v) => !v)}
+        aria-expanded={expanded}
+      >
+        <span className="meta">{activity.occurred_at.slice(0, 10)}</span>
+        <span className="title">{activity.title}</span>
+        <span className="sales-tx-toggle">{expanded ? '▲' : '▼'}</span>
+      </button>
+      {!expanded && preview && (
+        <p className="summary sales-tx-preview">
+          {preview.slice(0, 220)}{preview.length > 220 ? '…' : ''}
+        </p>
+      )}
+      {expanded && (
+        <div className="sales-tx-expanded">
+          {summary && <p className="sales-tx-summary">{summary}</p>}
           {kt && (
-            <div className="sales-modal-section">
+            <div className="sales-tx-kt">
               <span className="sales-ki-label">Key Takeaways</span>
               <pre className="sales-tx-pre">{kt}</pre>
             </div>
           )}
-          {!activity.summary && !kt && (
-            <p className="sales-muted">Keine weiteren Inhalte gespeichert.</p>
-          )}
-        </div>
-        {notionUrl && (
-          <div className="sales-modal-footer">
-            <a href={notionUrl} target="_blank" rel="noreferrer" className="sales-notion-link">
+          {!summary && !kt && <p className="sales-muted">Keine Inhalte gespeichert.</p>}
+          {notionUrl && (
+            <a
+              href={notionUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="sales-notion-link"
+              onClick={(e) => e.stopPropagation()}
+            >
               In Notion öffnen →
             </a>
-          </div>
-        )}
-      </div>
-    </div>
+          )}
+        </div>
+      )}
+    </li>
   );
 }
 
@@ -643,7 +795,7 @@ function ColdCallSession({
 
 // ── Main Dashboard ─────────────────────────────────────────────────────────────
 
-type DetailTab = 'gespräche' | 'aktivitäten' | 'summary';
+type DetailTab = 'gespräche' | 'aktivitäten' | 'brief';
 type FilterKey = 'all' | 'call' | 'discovery' | 'evaluation' | 'pilot' | 'hot';
 
 export function SalesDashboard({
@@ -669,7 +821,6 @@ export function SalesDashboard({
   const [callNextStep, setCallNextStep] = useState('');
   const [loggingCall, setLoggingCall] = useState(false);
   const [activeTab, setActiveTab] = useState<DetailTab>('gespräche');
-  const [modalActivity, setModalActivity] = useState<SalesActivity | null>(null);
   const [showCallDropdown, setShowCallDropdown] = useState(false);
   const [showColdCall, setShowColdCall] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterKey>('all');
@@ -1108,8 +1259,13 @@ export function SalesDashboard({
                   </section>
                 )}
 
-                {/* KI-Analyse */}
-                <KIPanel insights={selected.insights_json ?? null} />
+                {/* KI-Kundenprofil */}
+                <CustomerProfilePanel
+                  insights={selected.insights_json ?? null}
+                  companyId={selected.id}
+                  memberId={memberId}
+                  pilotStatus={selected.pilot_status}
+                />
 
                 {/* Next Step + Contacts */}
                 <div className="sales-detail-cols">
@@ -1192,10 +1348,10 @@ export function SalesDashboard({
                   </button>
                   <button
                     type="button"
-                    className={`sales-tab${activeTab === 'summary' ? ' is-active' : ''}`}
-                    onClick={() => setActiveTab('summary')}
+                    className={`sales-tab${activeTab === 'brief' ? ' is-active' : ''}`}
+                    onClick={() => setActiveTab('brief')}
                   >
-                    KI-Brief
+                    Pre-Call Brief
                   </button>
                 </div>
 
@@ -1205,31 +1361,9 @@ export function SalesDashboard({
                     <p className="sales-muted">Noch keine Gespräche.</p>
                   ) : (
                     <ol className="sales-timeline">
-                      {transcripts.map((a) => {
-                        const kt = (a.meta as Record<string, string>)?.key_takeaways;
-                        const preview = a.summary ?? kt ?? '';
-                        return (
-                          <li
-                            key={a.id}
-                            className="sales-transcript-card"
-                            onClick={() => setModalActivity(a)}
-                            role="button"
-                            tabIndex={0}
-                            onKeyDown={(e) => e.key === 'Enter' && setModalActivity(a)}
-                          >
-                            <div className="sales-tx-header">
-                              <span className="meta">{a.occurred_at.slice(0, 10)}</span>
-                              <span className="title">{a.title}</span>
-                              <span className="sales-tx-toggle">→</span>
-                            </div>
-                            {preview && (
-                              <p className="summary sales-tx-preview">
-                                {preview.slice(0, 220)}{preview.length > 220 ? '…' : ''}
-                              </p>
-                            )}
-                          </li>
-                        );
-                      })}
+                      {transcripts.map((a) => (
+                        <TranscriptCard key={a.id} activity={a} />
+                      ))}
                     </ol>
                   )
                 )}
@@ -1256,11 +1390,11 @@ export function SalesDashboard({
                   </ol>
                 )}
 
-                {/* Tab: KI-Brief */}
-                {activeTab === 'summary' && (
+                {/* Tab: Pre-Call Brief */}
+                {activeTab === 'brief' && (
                   <div className="sales-brief-section">
                     <div className="sales-brief-head">
-                      <span className="sales-ki-label">KI-Zusammenfassung</span>
+                      <span className="sales-ki-label">Pre-Call Brief</span>
                       <button
                         type="button"
                         className="sales-btn sales-btn-sm"
@@ -1274,7 +1408,7 @@ export function SalesDashboard({
                       <p className="sales-brief-text">{briefText}</p>
                     ) : (
                       <p className="sales-muted">
-                        Klick &ldquo;Generieren&rdquo; für eine KI-Zusammenfassung basierend auf allen Aktivitäten.
+                        3-Satz-Zusammenfassung für das nächste Gespräch — klick &ldquo;Generieren&rdquo;.
                       </p>
                     )}
                   </div>
@@ -1295,13 +1429,6 @@ export function SalesDashboard({
         />
       )}
 
-      {/* Transcript popup modal */}
-      {modalActivity && (
-        <TranscriptModal
-          activity={modalActivity}
-          onClose={() => setModalActivity(null)}
-        />
-      )}
     </section>
   );
 }

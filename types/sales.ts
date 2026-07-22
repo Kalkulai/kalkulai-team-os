@@ -21,6 +21,16 @@ export interface SalesCompanyInsights {
   pain_points: string[];
   notes: string | null;
   last_analyzed_at: string | null;
+  // Extended fields — present after Iteration 4 extraction
+  use_cases?: string[];
+  current_workflow?: string | null;
+  supplier_info?: string | null;
+  purchase_intent?: 'definite' | 'likely' | 'maybe' | 'unlikely' | 'unknown';
+  decision_maker_identified?: boolean;
+  key_stakeholders?: string[];
+  objections?: string[];
+  next_best_action?: string | null;
+  transcript_count_analyzed?: number;
 }
 
 export interface SalesCompany {
