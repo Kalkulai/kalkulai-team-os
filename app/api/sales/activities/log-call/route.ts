@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireActor } from '@/lib/auth-context';
 import { supabaseAdmin } from '@/lib/supabase';
+import { updateColdStreak } from '@/lib/sales-os';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,9 @@ type Outcome = (typeof OUTCOMES)[number];
 function isOutcome(v: unknown): v is Outcome {
   return typeof v === 'string' && (OUTCOMES as readonly string[]).includes(v);
 }
+
+const COLD_STREAK_OUTCOMES: Outcome[] = ['voicemail', 'no_answer', 'busy'];
+const STREAK_RESET_OUTCOMES: Outcome[] = ['reached', 'appointment'];
 
 export async function POST(req: NextRequest) {
   const actor = await requireActor(req, { allowMember: true, scopes: ['sales:write'] });
@@ -56,6 +60,13 @@ export async function POST(req: NextRequest) {
       .from('sales_companies')
       .update({ next_step: nextStepInput, updated_at: now })
       .eq('id', body.companyId);
+  }
+
+  // cold_streak update (fire-and-forget, non-blocking)
+  if (outcome && COLD_STREAK_OUTCOMES.includes(outcome)) {
+    updateColdStreak(body.companyId, 'increment').catch(() => undefined);
+  } else if (outcome && STREAK_RESET_OUTCOMES.includes(outcome)) {
+    updateColdStreak(body.companyId, 'reset').catch(() => undefined);
   }
 
   return NextResponse.json({ ok: true });

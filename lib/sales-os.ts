@@ -1,5 +1,12 @@
 import { supabaseAdmin } from '@/lib/supabase';
-import type { SalesCompany, SalesCompanyDetail, SalesCompanyListItem, SalesContact } from '@/types/sales';
+import type { SalesCompany, SalesCompanyDetail, SalesCompanyListItem, SalesContact, SalesStage, RelationshipHealth } from '@/types/sales';
+
+function computeRelationshipHealth(daysSince: number | null, hasInbound: boolean): RelationshipHealth {
+  if (daysSince === null) return 'red';
+  if (daysSince <= 14) return hasInbound ? 'green' : 'green';
+  if (daysSince <= 30) return 'yellow';
+  return 'red';
+}
 
 export async function listCompaniesForMember(memberId: string): Promise<SalesCompanyListItem[]> {
   const { data, error } = await supabaseAdmin
@@ -11,8 +18,7 @@ export async function listCompaniesForMember(memberId: string): Promise<SalesCom
   const companies = (data ?? []) as SalesCompany[];
   if (companies.length === 0) return [];
 
-  // Join-based queries to avoid .in() URL-length limit with many company IDs
-  const [contactsRes, activitiesRes, phonesRes] = await Promise.all([
+  const [contactsRes, activitiesRes, phonesRes, inboundRes] = await Promise.all([
     supabaseAdmin
       .from('sales_contacts')
       .select('company_id, sales_companies!inner(owner_member_id)')
@@ -30,10 +36,16 @@ export async function listCompaniesForMember(memberId: string): Promise<SalesCom
       .in('channel', ['phone', 'mobile'])
       .eq('do_not_call', false)
       .order('priority', { ascending: false }),
+    supabaseAdmin
+      .from('sales_activities')
+      .select('company_id, sales_companies!inner(owner_member_id)')
+      .eq('sales_companies.owner_member_id', memberId)
+      .eq('direction', 'inbound'),
   ]);
   if (contactsRes.error) throw new Error(`sales_contacts count failed: ${contactsRes.error.message}`);
   if (activitiesRes.error) throw new Error(`sales_activities list failed: ${activitiesRes.error.message}`);
   if (phonesRes.error) throw new Error(`sales_endpoints phone query failed: ${phonesRes.error.message}`);
+  if (inboundRes.error) throw new Error(`sales_activities inbound query failed: ${inboundRes.error.message}`);
 
   const contactCount = new Map<string, number>();
   for (const row of contactsRes.data ?? []) {
@@ -55,9 +67,20 @@ export async function listCompaniesForMember(memberId: string): Promise<SalesCom
       firstPhone.set(ep.company_id, { value: ep.value, channel: ep.channel });
     }
   }
+  const hasInbound = new Set<string>();
+  for (const row of inboundRes.data ?? []) {
+    hasInbound.add(row.company_id);
+  }
 
   const now = Date.now();
-  return companies.map((c) => {
+  return companies.map((raw) => {
+    // Defensive: migration 037 adds stage/cold_streak/ai_summary — may not exist yet in DB
+    const c = raw as SalesCompany & Record<string, unknown>;
+    const stage: SalesStage = (typeof c.stage === 'string' ? c.stage : 'prospecting') as SalesStage;
+    const coldStreak: number = typeof c.cold_streak === 'number' ? c.cold_streak : 0;
+    const aiSummary: string | null = typeof c.ai_summary === 'string' ? c.ai_summary : null;
+    const stageEnteredAt: string | null = typeof c.stage_entered_at === 'string' ? c.stage_entered_at : null;
+
     const lastAt = lastActivity.get(c.id)?.occurred_at ?? null;
     const daysSince = lastAt ? Math.floor((now - new Date(lastAt).getTime()) / 86400000) : null;
     const txCount = transcriptCount.get(c.id) ?? 0;
@@ -69,9 +92,15 @@ export async function listCompaniesForMember(memberId: string): Promise<SalesCom
     else if (daysSince >= 14) priority += 2;
     else if (daysSince >= 7) priority += 1;
     else if (daysSince < 2) priority -= 1;
+    if (stage === 'evaluation' || stage === 'pilot') priority += 2;
+    if (stage === 'discovery') priority += 1;
 
     return {
       ...c,
+      stage,
+      cold_streak: coldStreak,
+      ai_summary: aiSummary,
+      stage_entered_at: stageEnteredAt,
       contact_count: contactCount.get(c.id) ?? 0,
       last_activity_at: lastAt,
       last_activity_type: lastActivity.get(c.id)?.activity_type ?? null,
@@ -80,6 +109,7 @@ export async function listCompaniesForMember(memberId: string): Promise<SalesCom
       transcript_count: txCount,
       first_phone: firstPhone.get(c.id)?.value ?? null,
       first_phone_channel: firstPhone.get(c.id)?.channel ?? null,
+      relationship_health: computeRelationshipHealth(daysSince, hasInbound.has(c.id)),
     };
   }).sort((a, b) => b.priority_score - a.priority_score || a.name.localeCompare(b.name, 'de'));
 }
@@ -103,12 +133,75 @@ export async function getCompanyDetail(companyId: string, memberId: string): Pro
   for (const res of [contacts, endpoints, activities]) {
     if (res.error) throw new Error(`sales detail failed: ${res.error.message}`);
   }
+  const raw = company as SalesCompany & Record<string, unknown>;
   return {
-    ...(company as SalesCompany),
+    ...raw,
+    stage: (typeof raw.stage === 'string' ? raw.stage : 'prospecting') as SalesStage,
+    cold_streak: typeof raw.cold_streak === 'number' ? raw.cold_streak : 0,
+    ai_summary: typeof raw.ai_summary === 'string' ? raw.ai_summary : null,
+    stage_entered_at: typeof raw.stage_entered_at === 'string' ? raw.stage_entered_at : null,
     contacts: contacts.data ?? [],
     endpoints: endpoints.data ?? [],
     activities: activities.data ?? [],
   } as SalesCompanyDetail;
+}
+
+export async function updateCompanyStage(
+  companyId: string,
+  memberId: string,
+  stage: SalesStage,
+): Promise<void> {
+  const update: Record<string, unknown> = {
+    stage,
+    stage_entered_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  // Keep pilot_status in sync for insights-extraction backward compat
+  if (stage === 'pilot') update.pilot_status = 'active';
+  else if (stage === 'customer' || stage === 'disqualified') update.pilot_status = null;
+
+  const { error } = await supabaseAdmin
+    .from('sales_companies')
+    .update(update)
+    .eq('id', companyId)
+    .eq('owner_member_id', memberId);
+  if (error) throw new Error(`sales stage update failed: ${error.message}`);
+}
+
+export async function updateAiSummary(companyId: string, summary: string): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('sales_companies')
+    .update({ ai_summary: summary, updated_at: new Date().toISOString() })
+    .eq('id', companyId);
+  if (error) throw new Error(`ai_summary update failed: ${error.message}`);
+}
+
+export async function updateColdStreak(
+  companyId: string,
+  action: 'increment' | 'reset',
+): Promise<void> {
+  if (action === 'reset') {
+    await supabaseAdmin
+      .from('sales_companies')
+      .update({ cold_streak: 0, updated_at: new Date().toISOString() })
+      .eq('id', companyId);
+    return;
+  }
+  // increment via raw RPC to avoid race condition
+  const { error } = await supabaseAdmin.rpc('increment_cold_streak', { company_id_input: companyId });
+  if (error) {
+    // Fallback: fetch and update
+    const { data } = await supabaseAdmin
+      .from('sales_companies')
+      .select('cold_streak')
+      .eq('id', companyId)
+      .single();
+    const current = (data?.cold_streak as number) ?? 0;
+    await supabaseAdmin
+      .from('sales_companies')
+      .update({ cold_streak: current + 1, updated_at: new Date().toISOString() })
+      .eq('id', companyId);
+  }
 }
 
 export async function upsertCompanyFromHubspot(row: Record<string, unknown>): Promise<string> {

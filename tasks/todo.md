@@ -1,25 +1,33 @@
-# Plan B — Implementation Todo
+# Iteration 3 — Sales OS v3 (Stage Pipeline + CCS + Profile)
 
-Spec: `docs/superpowers/plans/2026-05-03-team-os-phase2-plan-b.md`
+Stand: 2026-07-22 | Branch: feat/sales-v3
 
-## User-Actions (parallel zu Code möglich)
-- [ ] **U1** Vercel Password Protect aktivieren — https://vercel.com/leons-projects-1a41e692/kalkulai-team-os/settings/deployment-protection → "Vercel Authentication" → Standard Protection
-- [ ] **U2** Telegram-Bot anschreiben (alle Personen `/start`) → `getUpdates` lesen → chat_ids in Supabase eintragen
-- [ ] **U3** GitHub-Webhook für Hauptrepo registrieren (nach Task 7 Code-Push)
-- [ ] **U4** `CRON_SECRET` + `GITHUB_WEBHOOK_SECRET` in Vercel ENV-Vars eintragen
-- [ ] **U5** Vercel "Protection Bypass for Automation" Token erzeugen (für Webhook)
+## Ziel
+Vollständige Sales-OS-Überarbeitung: nativer `stage`-Funnel (7 Stufen), überarbeitete
+Cold-Call-Session mit Pre-Call-Brief, deutlich reicheres Lead-Profil.
 
-## Code-Tasks (Claude)
-- [ ] **C3** `lib/telegram.ts` — Telegram-Sender
-- [ ] **C4** `lib/briefing-format.ts` — Markdown-Formatter
-- [ ] **C5** `app/api/briefing/send/route.ts` — Cron-Endpoint mit CRON_SECRET-Auth
-- [ ] **C6** `lib/branch-parser.ts` — Branch → Linear-ID Regex
-- [ ] **C7** `app/api/webhooks/github/pr-merged/route.ts` — HMAC-verify + Linear-Close
-- [ ] **C8** `kalkulai/.claude/hooks/conflict-check.js` — Pre-Bash-Hook (anderer Repo)
-- [ ] **C9** Tests + Push beider Repos
+## DB-Migration (037_sales_stage.sql)
+- [x] `stage text NOT NULL DEFAULT 'prospecting' CHECK (enum)` + `stage_entered_at`
+- [x] `ai_summary text` (gecachte KI-Zusammenfassung)
+- [x] `cold_streak int DEFAULT 0` (aufeinanderfolgende No-Answer-Calls)
+- [x] Backfill stage aus pilot_status + HubSpot-status
 
-## Verify
-- [ ] **V1** `curl -H "Bearer $CRON_SECRET" .../api/briefing/send` → 200 + Telegrams
-- [ ] **V2** Vercel-Cron Job zeigt "Active" mit Schedule
-- [ ] **V3** Test-PR mit `kal-99-*` Branch mergen → Linear-Issue auf Done
-- [ ] **V4** `git checkout -b kal-1-test` im Hauptrepo → stderr-Warnung
+## Backend
+- [x] types/sales.ts — SalesStage type, neue Felder, relationship_health
+- [x] lib/sales-os.ts — updateCompanyStage, updateAiSummary, updateColdStreak
+- [x] PATCH /api/sales/companies/[id] — stage handler
+- [x] POST /api/sales/companies/[id]/brief — AI-Zusammenfassung via Hermes
+- [x] POST /api/sales/activities/log-call — cold_streak-Update nach Outcome
+
+## Frontend
+- [x] SalesDashboard.tsx — kompletter Rebuild:
+       • Funnel-View (7 Stufen, Counts, Klick filtert)
+       • Kanban-Pipeline (discovery / evaluation / pilot)
+       • ColdCallSession: tiered queue, pre-call brief, Einwand-Drawer
+       • Lead-Profil: stage-select, health-badge, ai_summary-Tab, cold_streak
+- [x] globals.css — neue CSS-Klassen
+
+## Deploy
+- [ ] supabase db push (Migration via Supabase CLI)
+- [ ] TypeScript-Check sauber
+- [ ] PR + Merge zu master → Vercel auto-deploy

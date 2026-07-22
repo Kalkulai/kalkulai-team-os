@@ -1,7 +1,17 @@
-export type SalesCompanyStatus = string; // HubSpot lifecyclestage passthrough
+export type SalesCompanyStatus = string; // HubSpot lifecyclestage passthrough (raw)
+export type SalesStage =
+  | 'prospecting'
+  | 'discovery'
+  | 'evaluation'
+  | 'pilot'
+  | 'expansion'
+  | 'customer'
+  | 'disqualified';
+
 export type EndpointChannel = 'phone' | 'mobile' | 'whatsapp' | 'email' | 'linkedin';
 export type EndpointType = 'direct' | 'mobile' | 'switchboard' | 'assistant' | 'location' | 'generic';
 export type ActivityType = 'call' | 'email' | 'whatsapp' | 'meeting' | 'task' | 'note' | 'transcript' | 'sync';
+export type RelationshipHealth = 'green' | 'yellow' | 'red';
 
 export interface SalesCompanyInsights {
   employee_count: number | null;
@@ -11,6 +21,16 @@ export interface SalesCompanyInsights {
   pain_points: string[];
   notes: string | null;
   last_analyzed_at: string | null;
+  // Extended fields — present after Iteration 4 extraction
+  use_cases?: string[];
+  current_workflow?: string | null;
+  supplier_info?: string | null;
+  purchase_intent?: 'definite' | 'likely' | 'maybe' | 'unlikely' | 'unknown';
+  decision_maker_identified?: boolean;
+  key_stakeholders?: string[];
+  objections?: string[];
+  next_best_action?: string | null;
+  transcript_count_analyzed?: number;
 }
 
 export interface SalesCompany {
@@ -21,9 +41,13 @@ export interface SalesCompany {
   website: string | null;
   industry: string | null;
   status: SalesCompanyStatus;
+  stage: SalesStage;
+  stage_entered_at: string | null;
   next_step: string | null;
   insights_json: SalesCompanyInsights | null;
   pilot_status: 'active' | 'committed' | null;
+  ai_summary: string | null;
+  cold_streak: number;
   created_at: string;
   updated_at: string;
 }
@@ -75,6 +99,7 @@ export interface SalesCompanyListItem extends SalesCompany {
   transcript_count: number;
   first_phone: string | null;
   first_phone_channel: string | null;
+  relationship_health: RelationshipHealth;
 }
 
 export interface SalesCompanyDetail extends SalesCompany {

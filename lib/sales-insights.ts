@@ -8,20 +8,29 @@ export interface ExtractionResult {
   results: { name: string; status: 'updated' | 'skipped' | 'failed'; error?: string }[];
 }
 
-function buildPrompt(name: string, summaries: string): string {
-  return `Du bist ein Sales-Analyst. Analysiere diese Gesprächsnotizen für Firma "${name}" und antworte NUR mit einem validen JSON-Objekt (kein Markdown, keine Erklärung):
+function buildPrompt(name: string, summaries: string, txCount: number): string {
+  return `Du bist Sales-Analyst bei KalkulAI (Kalkulationssoftware für Handwerk/Fertigung/Bau).
+Analysiere alle ${txCount} Gesprächsnotizen für Firma "${name}" und antworte NUR mit einem validen JSON-Objekt (kein Markdown, keine Erklärung):
 
 ${summaries}
 
-Gewünschtes JSON-Format:
+JSON-Format (alle Felder pflicht, leere Arrays statt null erlaubt):
 {
   "employee_count": <integer oder null>,
-  "software_used": ["<software>", ...],
-  "interests": ["<feature/thema>", ...],
+  "current_workflow": "<wie kalkulieren sie heute: Excel/Papier/Software X/manuell — oder null>",
+  "supplier_info": "<wo kaufen sie Materialien/Produkte ein, wichtige Lieferanten — oder null>",
+  "software_used": ["<aktuelle Software, z.B. Excel, SAP, Lexware>"],
+  "interests": ["<konkrete Features/Themen die sie interessieren>"],
+  "use_cases": ["<wie würden sie KalkulAI konkret nutzen, z.B. Angebotserstellung, Nachkalkulation>"],
   "buying_signal": "<hot|warm|cold|unknown>",
-  "pain_points": ["<problem>", ...],
-  "notes": "<1-2 Sätze Kernaussage über den Kunden>",
-  "pilot_committed": <true wenn der Kunde explizit einer Pilot-Teilnahme zugestimmt hat, sonst false>
+  "purchase_intent": "<definite|likely|maybe|unlikely|unknown — Kaufabsicht einschätzen>",
+  "pilot_committed": <true wenn Kunde explizit Pilot-Teilnahme zugesagt hat, sonst false>,
+  "decision_maker_identified": <true wenn Entscheider bekannt und kontaktiert>,
+  "key_stakeholders": ["<Name (Rolle) bekannter Entscheider/Beeinflusser>"],
+  "pain_points": ["<konkrete Probleme/Schmerzpunkte>"],
+  "objections": ["<geäußerte Einwände gegen KalkulAI>"],
+  "next_best_action": "<konkreter nächster Sales-Schritt — oder null>",
+  "notes": "<1-2 Sätze Kernaussage über diesen Kunden>"
 }`;
 }
 
@@ -32,8 +41,12 @@ function isStale(insightsJson: Record<string, unknown> | null, latestTxAt: strin
   return new Date(latestTxAt) > new Date(analyzedAt);
 }
 
-export async function runExtraction(opts: { force?: boolean; companyId?: string }): Promise<ExtractionResult> {
-  const { force = false, companyId } = opts;
+export async function runExtraction(opts: {
+  force?: boolean;
+  companyId?: string;
+  limit?: number;
+}): Promise<ExtractionResult> {
+  const { force = false, companyId, limit = 10 } = opts;
 
   const { data: transcripts, error: txError } = await supabaseAdmin
     .from('sales_activities')
@@ -65,6 +78,7 @@ export async function runExtraction(opts: { force?: boolean; companyId?: string 
   const companyPilotStatus = new Map((companies ?? []).map((c) => [c.id, c.pilot_status as string | null]));
 
   const results: ExtractionResult['results'] = [];
+  let processed = 0;
 
   for (const [cid, txList] of byCompany) {
     const name = companyName.get(cid) ?? 'Unbekannt';
@@ -72,6 +86,12 @@ export async function runExtraction(opts: { force?: boolean; companyId?: string 
     const newest = latestTxAt.get(cid) ?? '';
 
     if (!force && !isStale(insights, newest)) {
+      results.push({ name, status: 'skipped' });
+      continue;
+    }
+
+    // Enforce per-run limit to avoid 300s Vercel timeout
+    if (processed >= limit) {
       results.push({ name, status: 'skipped' });
       continue;
     }
@@ -89,8 +109,10 @@ export async function runExtraction(opts: { force?: boolean; companyId?: string 
 
     if (!summaries.trim()) { results.push({ name, status: 'skipped' }); continue; }
 
+    const txCount = (txList ?? []).length;
+
     try {
-      const reply = await sendToHermes({ message: buildPrompt(name, summaries) });
+      const reply = await sendToHermes({ message: buildPrompt(name, summaries, txCount) });
 
       let newInsights: Record<string, unknown>;
       try {
@@ -101,11 +123,12 @@ export async function runExtraction(opts: { force?: boolean; companyId?: string 
         newInsights = JSON.parse(match[0]);
       }
 
-      // pilot_committed is a KI hint — strip it from insights_json, persist in pilot_status column
+      // pilot_committed is an AI hint — strip from insights_json, persist in pilot_status column
       const pilotCommitted = Boolean(newInsights.pilot_committed);
       delete newInsights.pilot_committed;
 
       newInsights.last_analyzed_at = new Date().toISOString();
+      newInsights.transcript_count_analyzed = txCount;
 
       const dbUpdate: Record<string, unknown> = { insights_json: newInsights };
       // Only set 'committed' if not already confirmed as 'active' by humans
@@ -118,8 +141,10 @@ export async function runExtraction(opts: { force?: boolean; companyId?: string 
         .update(dbUpdate)
         .eq('id', cid);
 
+      processed++;
       results.push({ name, status: 'updated' });
     } catch (e) {
+      processed++;
       results.push({ name, status: 'failed', error: (e as Error).message });
     }
   }

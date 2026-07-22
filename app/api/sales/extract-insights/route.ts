@@ -21,9 +21,9 @@ export async function POST(req: NextRequest) {
   if (!sessionActor && !hasValidServiceBearer(req)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-  const { force, companyId } = await req.json().catch(() => ({})) as { force?: boolean; companyId?: string };
+  const { force, companyId, limit } = await req.json().catch(() => ({})) as { force?: boolean; companyId?: string; limit?: number };
   try {
-    return NextResponse.json(await runExtraction({ force, companyId }));
+    return NextResponse.json(await runExtraction({ force, companyId, limit: companyId ? 1 : limit }));
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
