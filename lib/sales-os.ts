@@ -13,7 +13,8 @@ export async function listCompaniesForMember(memberId: string): Promise<SalesCom
     .from('sales_companies')
     .select('*')
     .eq('owner_member_id', memberId)
-    .order('updated_at', { ascending: false });
+    .order('updated_at', { ascending: false })
+    .limit(5000);
   if (error) throw new Error(`sales_companies list failed: ${error.message}`);
   const companies = (data ?? []) as SalesCompany[];
   if (companies.length === 0) return [];
@@ -22,25 +23,29 @@ export async function listCompaniesForMember(memberId: string): Promise<SalesCom
     supabaseAdmin
       .from('sales_contacts')
       .select('company_id, sales_companies!inner(owner_member_id)')
-      .eq('sales_companies.owner_member_id', memberId),
+      .eq('sales_companies.owner_member_id', memberId)
+      .limit(10000),
     supabaseAdmin
       .from('sales_activities')
       .select('company_id, occurred_at, activity_type, sales_companies!inner(owner_member_id)')
       .eq('sales_companies.owner_member_id', memberId)
       .neq('activity_type', 'sync')
-      .order('occurred_at', { ascending: false }),
+      .order('occurred_at', { ascending: false })
+      .limit(10000),
     supabaseAdmin
       .from('sales_endpoints')
       .select('company_id, value, channel, sales_companies!inner(owner_member_id)')
       .eq('sales_companies.owner_member_id', memberId)
       .in('channel', ['phone', 'mobile'])
       .eq('do_not_call', false)
-      .order('priority', { ascending: false }),
+      .order('priority', { ascending: false })
+      .limit(10000),
     supabaseAdmin
       .from('sales_activities')
       .select('company_id, sales_companies!inner(owner_member_id)')
       .eq('sales_companies.owner_member_id', memberId)
-      .eq('direction', 'inbound'),
+      .eq('direction', 'inbound')
+      .limit(10000),
   ]);
   if (contactsRes.error) throw new Error(`sales_contacts count failed: ${contactsRes.error.message}`);
   if (activitiesRes.error) throw new Error(`sales_activities list failed: ${activitiesRes.error.message}`);
@@ -216,7 +221,7 @@ export async function createCompany(input: {
       owner_member_id: input.ownerMemberId,
       name: input.name.trim(),
       website: input.website?.trim() || null,
-      stage: 'prospecting',
+      // stage omitted — DB DEFAULT 'prospecting' applies; avoids PostgREST cache-miss on ALTER'd column
     })
     .select('id')
     .single();
