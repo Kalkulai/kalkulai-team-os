@@ -1385,6 +1385,9 @@ export function SalesDashboard({
   const [showNewCompany, setShowNewCompany] = useState(false);
   const [newCompany, setNewCompany] = useState({ name: '', website: '', phone: '' });
   const [savingCompany, setSavingCompany] = useState(false);
+  const [showAddPhone, setShowAddPhone] = useState(false);
+  const [newPhone, setNewPhone] = useState({ value: '', channel: 'phone' as 'phone' | 'mobile' });
+  const [savingPhone, setSavingPhone] = useState(false);
 
   async function submitNewCompany() {
     if (!newCompany.name.trim()) return;
@@ -1403,6 +1406,21 @@ export function SalesDashboard({
       router.refresh();
     }
   }
+
+  async function submitAddPhone() {
+    if (!selected || !newPhone.value.trim()) return;
+    setSavingPhone(true);
+    await fetch(`/api/sales/companies/${selected.id}/endpoints`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ channel: newPhone.channel, value: newPhone.value }),
+    });
+    setSavingPhone(false);
+    setShowAddPhone(false);
+    setNewPhone({ value: '', channel: 'phone' });
+    router.refresh();
+  }
+
   const [callOutcome, setCallOutcome] = useState('reached');
   const [callDurationMin, setCallDurationMin] = useState('');
   const [callNextStep, setCallNextStep] = useState('');
@@ -1940,39 +1958,101 @@ export function SalesDashboard({
                         onDone={() => { setShowContactForm(false); router.refresh(); }}
                       />
                     )}
-                    {selected.contacts.map((ct) => (
-                      <div key={ct.id} className="sales-contact">
-                        <span>{ct.first_name} {ct.last_name}</span>
-                        {ct.role ? <span className="role"> · {ct.role}</span> : null}
-                        {ct.email ? <span className="role"> · {ct.email}</span> : null}
-                        {!ct.recording_consent && (
-                          <span className="sales-badge tone-warn">kein Consent</span>
-                        )}
-                      </div>
-                    ))}
+                    {selected.contacts.map((ct) => {
+                      const ctPhone = selected.endpoints.find(
+                        (ep) => ep.contact_id === ct.id && (ep.channel === 'phone' || ep.channel === 'mobile'),
+                      );
+                      return (
+                        <div key={ct.id} className="sales-contact">
+                          <span>{ct.first_name} {ct.last_name}</span>
+                          {ct.role ? <span className="role"> · {ct.role}</span> : null}
+                          {ct.email ? <span className="role"> · {ct.email}</span> : null}
+                          {ctPhone ? <span className="role"> · {ctPhone.value}{ctPhone.channel === 'mobile' ? ' (Mobil)' : ''}</span> : null}
+                          {!ct.recording_consent && (
+                            <span className="sales-badge tone-warn">kein Consent</span>
+                          )}
+                        </div>
+                      );
+                    })}
                     {selected.contacts.length === 0 && <p className="sales-muted">—</p>}
                   </section>
                 </div>
 
                 {/* Endpoints */}
-                {selected.endpoints.length > 0 && (
-                  <section className="sales-section">
-                    <h3 className="ovr">Endpoints</h3>
-                    {[...selected.endpoints]
-                      .sort((a, b) => (a.channel === 'mobile' ? -1 : b.channel === 'mobile' ? 1 : 0))
-                      .map((ep) => (
+                <section className="sales-section">
+                  <div className="sales-section-head">
+                    <h3 className="ovr">Telefonnummern</h3>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddPhone((v) => !v)}
+                      className="sales-btn sales-btn-sm"
+                    >
+                      + Telefon
+                    </button>
+                  </div>
+                  {showAddPhone && (
+                    <div className="sales-contact-form">
+                      <div className="sales-contact-form-grid">
+                        <input
+                          className="sales-input"
+                          placeholder="Nummer (z. B. +49 211 123456)"
+                          type="tel"
+                          value={newPhone.value}
+                          onChange={(e) => setNewPhone({ ...newPhone, value: e.target.value })}
+                        />
+                        <select
+                          className="sales-input"
+                          value={newPhone.channel}
+                          onChange={(e) => setNewPhone({ ...newPhone, channel: e.target.value as 'phone' | 'mobile' })}
+                        >
+                          <option value="phone">Festnetz</option>
+                          <option value="mobile">Mobil</option>
+                        </select>
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          type="button"
+                          onClick={submitAddPhone}
+                          disabled={savingPhone || !newPhone.value.trim()}
+                          className="sales-btn"
+                        >
+                          {savingPhone ? 'Speichert…' : 'Speichern'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setShowAddPhone(false); setNewPhone({ value: '', channel: 'phone' }); }}
+                          className="sales-btn"
+                        >
+                          Abbrechen
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {[...selected.endpoints]
+                    .filter((ep) => ep.channel === 'phone' || ep.channel === 'mobile')
+                    .sort((a, b) => (a.channel === 'mobile' ? -1 : b.channel === 'mobile' ? 1 : 0))
+                    .map((ep) => {
+                      const linkedContact = ep.contact_id
+                        ? selected.contacts.find((c) => c.id === ep.contact_id)
+                        : null;
+                      return (
                         <div key={ep.id} className={`sales-endpoint-row${ep.channel === 'mobile' ? ' sales-endpoint-mobile' : ''}`}>
-                          <span className={`sales-badge${ep.channel === 'mobile' ? ' tone-brand' : ' tone-neutral'}`}>{ep.channel}</span>
+                          <span className={`sales-badge${ep.channel === 'mobile' ? ' tone-brand' : ' tone-neutral'}`}>
+                            {ep.channel === 'mobile' ? 'Mobil' : 'Festnetz'}
+                          </span>
                           <span className="sales-endpoint-value">{ep.value}</span>
-                          {(ep.channel === 'phone' || ep.channel === 'mobile') && !ep.do_not_call && (
-                            <CopyButton text={ep.value} />
+                          {!ep.do_not_call && <CopyButton text={ep.value} />}
+                          {linkedContact && (
+                            <span className="meta">{linkedContact.first_name} {linkedContact.last_name}</span>
                           )}
-                          <span className="meta">{ep.endpoint_type} · {ep.validity_status}</span>
                           {ep.do_not_call && <span className="sales-badge tone-danger">DNC</span>}
                         </div>
-                      ))}
-                  </section>
-                )}
+                      );
+                    })}
+                  {selected.endpoints.filter((ep) => ep.channel === 'phone' || ep.channel === 'mobile').length === 0 && !showAddPhone && (
+                    <p className="sales-muted">—</p>
+                  )}
+                </section>
 
                 {/* Tabs */}
                 <div className="sales-tabs">
