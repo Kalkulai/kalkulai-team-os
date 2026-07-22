@@ -309,6 +309,24 @@ export async function updateCompanyPilotStatus(
   if (error) throw new Error(`pilot_status update failed: ${error.message}`);
 }
 
+export async function createEndpoint(companyId: string, input: {
+  channel: 'phone' | 'mobile';
+  value: string;
+  contactId?: string | null;
+}): Promise<void> {
+  const { error } = await supabaseAdmin
+    .from('sales_endpoints')
+    .insert({
+      company_id: companyId,
+      contact_id: input.contactId ?? null,
+      channel: input.channel,
+      value: input.value.trim(),
+      endpoint_type: input.channel === 'mobile' ? 'mobile' : 'direct',
+      source: 'manual',
+    });
+  if (error) throw new Error(`sales_endpoints insert failed: ${error.message}`);
+}
+
 export async function upsertEndpoint(companyId: string, contactId: string | null, draft: {
   channel: string; value: string; endpoint_type: string;
 }): Promise<void> {
