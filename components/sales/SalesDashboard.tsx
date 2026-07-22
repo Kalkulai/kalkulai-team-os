@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import type {
@@ -85,6 +85,30 @@ const OBJECTIONS = [
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  function handleCopy() {
+    if (typeof window === 'undefined') return;
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    }).catch(() => { /* ignore permission errors silently */ });
+  }
+
+  return (
+    <button
+      type="button"
+      className={`ccs-copy-btn${copied ? ' copied' : ''}`}
+      onClick={handleCopy}
+      title="In Zwischenablage kopieren"
+      aria-label="Nummer kopieren"
+    >
+      {copied ? '✓' : 'Kopieren'}
+    </button>
+  );
+}
 
 function daysAgo(iso: string): string {
   const days = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
@@ -704,6 +728,90 @@ function CcsPreCallBrief({
   );
 }
 
+// ── CCS Keyword Detection ─────────────────────────────────────────────────────
+
+type CcsActionKey = 'email' | 'appointment' | 'pilot' | 'pricing' | 'callback' | 'notInterested' | 'referral' | 'objection';
+type CcsPriority = 'high' | 'medium' | 'low';
+
+interface CcsKeywordDef {
+  patterns: string[];
+  action: CcsActionKey;
+  label: string;
+  priority: CcsPriority;
+}
+
+const CCS_KEYWORDS: Record<CcsActionKey, CcsKeywordDef> = {
+  email: {
+    patterns: ['e-mail', 'email', 'schicken sie', 'senden sie', 'unterlagen', 'infos schicken', 'two-pager', 'broschüre', 'angebot schicken', 'informationen schicken', 'mail schicken', 'zusenden'],
+    action: 'email',
+    label: '✉ Intro-E-Mail senden',
+    priority: 'high',
+  },
+  appointment: {
+    patterns: ['termin', 'demo', 'präsentation', 'vorstellen', 'zeigen sie', 'wann haben sie zeit', 'kalender', 'meeting', 'teams call', 'besprechen', 'nächste woche'],
+    action: 'appointment',
+    label: '📅 Termin vereinbaren',
+    priority: 'high',
+  },
+  pilot: {
+    patterns: ['pilot', 'test', 'ausprobieren', 'kostenlos', 'probephase', 'testen sie', 'freischalten'],
+    action: 'pilot',
+    label: '🚀 Pilot-Angebot machen',
+    priority: 'high',
+  },
+  pricing: {
+    patterns: ['preis', 'kosten', 'was kostet', 'wie viel', 'budget', 'investition', 'abo', 'lizenz'],
+    action: 'pricing',
+    label: '💰 Preisinfo bereitstellen',
+    priority: 'medium',
+  },
+  callback: {
+    patterns: ['rückruf', 'zurückrufen', 'später', 'gerade beschäftigt', 'schlechter zeitpunkt', 'nochmal anrufen'],
+    action: 'callback',
+    label: '↩ Rückruf einplanen',
+    priority: 'medium',
+  },
+  notInterested: {
+    patterns: ['kein interesse', 'brauchen wir nicht', 'haben schon', 'passt nicht', 'kündigen'],
+    action: 'notInterested',
+    label: '✗ Kein Interesse — disqualifizieren?',
+    priority: 'low',
+  },
+  referral: {
+    patterns: ['kollege', 'chef', 'geschäftsführer', 'zuständig', 'ansprechpartner', 'weiterleiten'],
+    action: 'referral',
+    label: '👤 Richtigen Ansprechpartner notieren',
+    priority: 'medium',
+  },
+  objection: {
+    patterns: ['zu teuer', 'kein budget', 'zu viel aufwand', 'zu komplex', 'haben excel', 'reicht uns'],
+    action: 'objection',
+    label: '🛡 Einwand erkannt — Bibliothek öffnen',
+    priority: 'medium',
+  },
+};
+
+function detectCcsActions(text: string): Set<CcsActionKey> {
+  const lower = text.toLowerCase();
+  const detected = new Set<CcsActionKey>();
+  for (const def of Object.values(CCS_KEYWORDS)) {
+    if (def.patterns.some((p) => lower.includes(p))) {
+      detected.add(def.action);
+    }
+  }
+  return detected;
+}
+
+// Legacy helper kept for logAndNext next-step inference
+function detectNextAction(transcript: string): string | null {
+  const detected = detectCcsActions(transcript);
+  if (detected.has('appointment')) return 'Termin vereinbaren';
+  if (detected.has('pilot')) return 'Pilot vorbereiten';
+  if (detected.has('pricing')) return 'Angebot erstellen';
+  if (detected.has('callback')) return 'Nochmal anrufen';
+  return null;
+}
+
 function ColdCallSession({
   queue,
   memberId,
@@ -724,35 +832,165 @@ function ColdCallSession({
     reached: 0, voicemail: 0, no_answer: 0, not_interested: 0, appointment: 0, skipped: 0,
   });
 
+  // Speech recognition
+  const [transcript, setTranscript] = useState('');
+  const [interimTranscript, setInterimTranscript] = useState('');
+  const [recError, setRecError] = useState<string | null>(null);
+  const [recActive, setRecActive] = useState(false);
+  const recognitionRef = useRef<SpeechRecognition | null>(null);
+
+  // Detected action chips (multiple, dismissable)
+  const [detectedActions, setDetectedActions] = useState<Set<CcsActionKey>>(new Set());
+  const [dismissedActions, setDismissedActions] = useState<Set<CcsActionKey>>(new Set());
+
+  // Email quick panel
+  const [showEmailPanel, setShowEmailPanel] = useState(false);
+  const [emailCopied, setEmailCopied] = useState(false);
+  const [loggingEmail, setLoggingEmail] = useState(false);
+
+  // Appointment quick panel
+  const [showApptPanel, setShowApptPanel] = useState(false);
+  const [apptDate, setApptDate] = useState('');
+
   const current = queue[index];
   const done = !current || index >= queue.length;
+
+  // ── Speech Recognition Setup ─────────────────────────────────────────────────
+
+  const stopRecognition = useCallback(() => {
+    if (recognitionRef.current) {
+      try { recognitionRef.current.stop(); } catch { /* ignore */ }
+      recognitionRef.current = null;
+    }
+    setRecActive(false);
+    setInterimTranscript('');
+  }, []);
+
+  const startRecognition = useCallback(() => {
+    if (typeof window === 'undefined') return;
+    const SR = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    if (!SR) {
+      setRecError('Spracherkennung wird von diesem Browser nicht unterstützt.');
+      return;
+    }
+    if (recognitionRef.current) return; // already running
+
+    const recognition = new SR();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'de-DE';
+
+    recognition.onresult = (event: SpeechRecognitionEvent) => {
+      let interim = '';
+      let final = '';
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const res = event.results[i];
+        if (res.isFinal) {
+          final += res[0].transcript + ' ';
+        } else {
+          interim += res[0].transcript;
+        }
+      }
+      if (final) {
+        setTranscript((prev) => {
+          const updated = prev + final;
+          const newActions = detectCcsActions(updated);
+          setDetectedActions(newActions);
+          return updated;
+        });
+      }
+      setInterimTranscript(interim);
+    };
+
+    recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
+      if (event.error === 'not-allowed') {
+        setRecError('Mikrofon-Zugriff verweigert.');
+      } else if (event.error !== 'aborted') {
+        setRecError(`Fehler: ${event.error}`);
+      }
+      setRecActive(false);
+      recognitionRef.current = null;
+    };
+
+    recognition.onend = () => {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.start(); } catch { /* ignore */ }
+      } else {
+        setRecActive(false);
+      }
+    };
+
+    recognitionRef.current = recognition;
+    try {
+      recognition.start();
+      setRecActive(true);
+      setRecError(null);
+    } catch {
+      setRecError('Spracherkennung konnte nicht gestartet werden.');
+      recognitionRef.current = null;
+    }
+  }, []);
+
+  // Auto-start on mount; stop on unmount
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const SR = window.SpeechRecognition ?? window.webkitSpeechRecognition;
+    if (SR) startRecognition();
+    return () => { stopRecognition(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Helpers ───────────────────────────────────────────────────────────────────
+
+  function resetForNext() {
+    setTranscript('');
+    setInterimTranscript('');
+    setDetectedActions(new Set());
+    setDismissedActions(new Set());
+    setShowEmailPanel(false);
+    setShowApptPanel(false);
+    setEmailCopied(false);
+    setApptDate('');
+    setNotes('');
+    setNextStepNote('');
+    setOutcome('reached');
+  }
+
+  function buildCombinedNotes(): string | undefined {
+    const t = transcript.trim();
+    const n = notes.trim();
+    if (t && n) return `[Transkript] ${t}\n\n[Notizen] ${n}`;
+    return t || n || undefined;
+  }
 
   async function logAndNext() {
     if (!current || logging) return;
     setLogging(true);
     try {
+      const detectedNextStep = detectNextAction(transcript);
       const ns =
         nextStepNote.trim() ||
+        detectedNextStep ||
         (outcome === 'appointment' ? 'Termin vorbereiten' :
          outcome === 'reached' ? 'Follow-up planen' :
          (outcome === 'voicemail' || outcome === 'no_answer') ? 'Nochmal anrufen' : undefined);
 
+      const finalNotes = buildCombinedNotes();
       await fetch('/api/sales/activities/log-call', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ companyId: current.id, notes: notes || undefined, outcome, next_step: ns }),
+        body: JSON.stringify({ companyId: current.id, notes: finalNotes, outcome, next_step: ns }),
       });
       setStats((prev) => ({ ...prev, [outcome as keyof typeof prev]: (prev[outcome as keyof typeof prev] ?? 0) + 1 }));
-      advance();
+      resetForNext();
+      setIndex((i) => i + 1);
     } finally {
       setLogging(false);
     }
   }
 
   function advance() {
-    setNotes('');
-    setNextStepNote('');
-    setOutcome('reached');
+    resetForNext();
     setIndex((i) => i + 1);
   }
 
@@ -761,9 +999,70 @@ function ColdCallSession({
     advance();
   }
 
-  function handleClose() { router.refresh(); onClose(); }
+  function handleClose() {
+    stopRecognition();
+    router.refresh();
+    onClose();
+  }
+
+  function dismissChip(action: CcsActionKey) {
+    setDismissedActions((prev) => new Set([...prev, action]));
+  }
+
+  function handleChipClick(action: CcsActionKey) {
+    if (action === 'email') setShowEmailPanel(true);
+    else if (action === 'appointment') setShowApptPanel(true);
+    else if (action === 'objection') setShowObjDrawer(true);
+    else if (action === 'callback') setNextStepNote('Nochmal anrufen');
+    else if (action === 'pilot') setNextStepNote('Pilot vorbereiten');
+    else if (action === 'pricing') setNextStepNote('Angebot erstellen');
+    dismissChip(action);
+  }
+
+  async function logEmailActivity() {
+    if (!current || loggingEmail) return;
+    setLoggingEmail(true);
+    try {
+      await fetch('/api/sales/activities/log-call', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyId: current.id,
+          outcome: 'reached',
+          notes: 'Intro-E-Mail manuell kopiert und versendet.',
+          activity_type: 'email',
+          direction: 'outbound',
+          title: 'Intro-E-Mail (manuell)',
+        }),
+      });
+    } finally {
+      setLoggingEmail(false);
+    }
+  }
+
+  const emailBody = `Hallo,\n\nschön, dass wir kurz sprechen konnten!\n\nIm Anhang unsere Kurzübersicht zu KalkulAI — ich freue mich auf Ihr Feedback und stehe für Rückfragen gerne zur Verfügung.\n\nViele Grüße\nLeon\nKalkulAI`;
+
+  function copyEmail() {
+    navigator.clipboard.writeText(emailBody).then(() => {
+      setEmailCopied(true);
+      setTimeout(() => setEmailCopied(false), 1500);
+      logEmailActivity();
+    }).catch(() => { /* ignore */ });
+  }
+
+  function saveApptAsNextStep() {
+    const text = apptDate ? `Termin ${apptDate}` : 'Termin vereinbaren';
+    setNextStepNote(text);
+    setShowApptPanel(false);
+  }
+
+  // Visible chips: detected but not dismissed
+  const visibleChips = Object.values(CCS_KEYWORDS).filter(
+    (def) => detectedActions.has(def.action) && !dismissedActions.has(def.action),
+  );
 
   const total = stats.reached + stats.voicemail + stats.no_answer + stats.not_interested + stats.appointment;
+  const fullTranscript = transcript + interimTranscript;
 
   if (done) {
     return (
@@ -805,6 +1104,18 @@ function ColdCallSession({
                 <span>📞 {stats.voicemail}</span>
                 <span>✗ {stats.no_answer}</span>
               </div>
+              {recActive ? (
+                <span className="ccs-rec-indicator" title="Spracherkennung aktiv">⬤ Aufnahme</span>
+              ) : (
+                <button
+                  type="button"
+                  className="ccs-rec-start-btn"
+                  onClick={startRecognition}
+                  title="Spracherkennung starten"
+                >
+                  ⬤ Starten
+                </button>
+              )}
               <button
                 type="button"
                 className={`ccs-obj-btn${showObjDrawer ? ' is-active' : ''}`}
@@ -816,6 +1127,37 @@ function ColdCallSession({
               <button type="button" className="ccs-close-btn" onClick={handleClose} aria-label="Session beenden">✕</button>
             </div>
           </div>
+
+          {/* Mic error toast */}
+          {recError && (
+            <div className="ccs-rec-error" role="alert">
+              {recError}
+              <button type="button" className="ccs-rec-error-dismiss" onClick={() => setRecError(null)} aria-label="Schließen">✕</button>
+            </div>
+          )}
+
+          {/* Action chips from keyword detection */}
+          {visibleChips.length > 0 && (
+            <div className="ccs-chips-row" aria-label="Erkannte Aktionen">
+              {visibleChips.map((def) => (
+                <span key={def.action} className={`ccs-action-chip ccs-chip-${def.priority}`}>
+                  <button
+                    type="button"
+                    className="ccs-chip-label"
+                    onClick={() => handleChipClick(def.action)}
+                  >
+                    {def.label}
+                  </button>
+                  <button
+                    type="button"
+                    className="ccs-chip-dismiss"
+                    onClick={() => dismissChip(def.action)}
+                    aria-label="Schließen"
+                  >✕</button>
+                </span>
+              ))}
+            </div>
+          )}
 
           {/* Company info */}
           <div className="ccs-company">
@@ -840,9 +1182,15 @@ function ColdCallSession({
               )}
             </p>
             {current.first_phone && (
-              <a href={`tel:${current.first_phone}`} className="ccs-phone-link">
-                📞 {current.first_phone}{current.first_phone_channel === 'mobile' ? ' (Mobil)' : ''}
-              </a>
+              <div className="ccs-phone-row">
+                <a
+                  href={`tel:${current.first_phone}`}
+                  className={`ccs-phone-link${current.first_phone_channel === 'mobile' ? ' ccs-phone-mobile' : ''}`}
+                >
+                  📞 {current.first_phone}{current.first_phone_channel === 'mobile' ? ' (Mobil)' : ''}
+                </a>
+                <CopyButton text={current.first_phone} />
+              </div>
             )}
             {current.next_step && <div className="ccs-next-step">→ {current.next_step}</div>}
             {ins && (
@@ -895,14 +1243,95 @@ function ColdCallSession({
             ))}
           </div>
 
-          {/* Notes */}
-          <textarea
-            className="sales-input sales-textarea ccs-notes"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            placeholder="Gesprächsnotizen (optional)…"
-            rows={2}
-          />
+          {/* ── Transcript area (auto, read-only) ── */}
+          <div className="ccs-input-section">
+            <div className="ccs-input-label">
+              <span>Mikrofon-Transkript</span>
+              {transcript && (
+                <button
+                  type="button"
+                  className="ccs-transcript-use-btn"
+                  onClick={() => setNotes((prev) => prev ? `${prev}\n${transcript.trim()}` : transcript.trim())}
+                  title="In Notizen übernehmen"
+                >
+                  → Notizen
+                </button>
+              )}
+            </div>
+            <div
+              className="sales-input sales-textarea ccs-transcript-area"
+              role="log"
+              aria-live="polite"
+              aria-label="Live-Transkript"
+            >
+              {transcript || null}
+              {interimTranscript ? <span className="ccs-transcript-interim"> {interimTranscript}</span> : null}
+              {recActive && !fullTranscript ? <span className="ccs-transcript-interim">Sprechen Sie…</span> : null}
+              {!recActive && !fullTranscript ? <span className="ccs-transcript-placeholder">Spracherkennung inaktiv</span> : null}
+            </div>
+          </div>
+
+          {/* ── Notes area (manual) ── */}
+          <div className="ccs-input-section">
+            <div className="ccs-input-label">Eigene Notizen</div>
+            <textarea
+              className="sales-input sales-textarea ccs-notes"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Eigene Notizen zum Gespräch…"
+              rows={3}
+            />
+          </div>
+
+          {/* Email quick panel */}
+          {showEmailPanel && (
+            <div className="ccs-email-panel">
+              <div className="ccs-email-head">
+                <span className="ccs-email-label">✉ E-Mail-Vorlage</span>
+                <button type="button" className="ccs-email-close" onClick={() => setShowEmailPanel(false)}>✕</button>
+              </div>
+              <pre className="ccs-email-body">{emailBody}</pre>
+              <div className="ccs-email-actions">
+                <button
+                  type="button"
+                  className={`ccs-copy-btn${emailCopied ? ' copied' : ''}`}
+                  onClick={copyEmail}
+                  disabled={loggingEmail}
+                >
+                  {emailCopied ? '✓ Kopiert' : 'E-Mail kopieren'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {!showEmailPanel && (
+            <button
+              type="button"
+              className="ccs-email-trigger-btn"
+              onClick={() => setShowEmailPanel(true)}
+            >
+              ✉ E-Mail-Vorlage
+            </button>
+          )}
+
+          {/* Appointment quick panel */}
+          {showApptPanel && (
+            <div className="ccs-appt-panel">
+              <div className="ccs-email-head">
+                <span className="ccs-email-label">📅 Termin</span>
+                <button type="button" className="ccs-email-close" onClick={() => setShowApptPanel(false)}>✕</button>
+              </div>
+              <input
+                type="datetime-local"
+                className="sales-input"
+                value={apptDate}
+                onChange={(e) => setApptDate(e.target.value)}
+              />
+              <button type="button" className="sales-btn sales-btn-sm" onClick={saveApptAsNextStep}>
+                Als Nächsten Schritt speichern
+              </button>
+            </div>
+          )}
 
           {/* Next step */}
           <input
@@ -1458,14 +1887,19 @@ export function SalesDashboard({
                 {selected.endpoints.length > 0 && (
                   <section className="sales-section">
                     <h3 className="ovr">Endpoints</h3>
-                    {selected.endpoints.map((ep) => (
-                      <div key={ep.id} className="sales-endpoint-row">
-                        <span className="sales-badge tone-neutral">{ep.channel}</span>
-                        <span>{ep.value}</span>
-                        <span className="meta">{ep.endpoint_type} · {ep.validity_status}</span>
-                        {ep.do_not_call && <span className="sales-badge tone-danger">DNC</span>}
-                      </div>
-                    ))}
+                    {[...selected.endpoints]
+                      .sort((a, b) => (a.channel === 'mobile' ? -1 : b.channel === 'mobile' ? 1 : 0))
+                      .map((ep) => (
+                        <div key={ep.id} className={`sales-endpoint-row${ep.channel === 'mobile' ? ' sales-endpoint-mobile' : ''}`}>
+                          <span className={`sales-badge${ep.channel === 'mobile' ? ' tone-brand' : ' tone-neutral'}`}>{ep.channel}</span>
+                          <span className="sales-endpoint-value">{ep.value}</span>
+                          {(ep.channel === 'phone' || ep.channel === 'mobile') && !ep.do_not_call && (
+                            <CopyButton text={ep.value} />
+                          )}
+                          <span className="meta">{ep.endpoint_type} · {ep.validity_status}</span>
+                          {ep.do_not_call && <span className="sales-badge tone-danger">DNC</span>}
+                        </div>
+                      ))}
                   </section>
                 )}
 
