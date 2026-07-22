@@ -5,7 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const CONVERSATIONS_DB_ID = 'bf7cb758-547e-48f1-b64a-a11a75f64203';
+const CONVERSATIONS_DB_ID = process.env.NOTION_TRANSCRIPTS_DB_ID ?? 'bf7cb758-547e-48f1-b64a-a11a75f64203';
 
 interface RichTextItem { plain_text: string }
 interface NotionProp {
