@@ -20,6 +20,11 @@ export async function POST(req: NextRequest) {
   const memberId = actor.type === 'member' ? actor.memberId! : PAUL_MEMBER_ID;
   const body = await req.json().catch(() => ({})) as { name?: string; website?: string; phone?: string };
   if (!body.name?.trim()) return NextResponse.json({ error: 'name required' }, { status: 400 });
-  const id = await createCompany({ name: body.name, website: body.website, phone: body.phone, ownerMemberId: memberId });
-  return NextResponse.json({ id }, { status: 201 });
+  try {
+    const id = await createCompany({ name: body.name, website: body.website, phone: body.phone, ownerMemberId: memberId });
+    return NextResponse.json({ id }, { status: 201 });
+  } catch (err) {
+    console.error('createCompany failed:', err);
+    return NextResponse.json({ error: String(err) }, { status: 500 });
+  }
 }
