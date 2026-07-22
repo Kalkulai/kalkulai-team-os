@@ -45,6 +45,7 @@ export async function POST(req: NextRequest) {
 
   if (!res.ok) {
     const body = await res.text();
+    console.error(`SipGate /v2/sessions/calls failed: HTTP ${res.status} — ${body}`);
     return NextResponse.json({ error: `sipgate error ${res.status}: ${body}` }, { status: 502 });
   }
 
