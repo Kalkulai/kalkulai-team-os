@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireActor } from '@/lib/auth-context';
+import { requireActor, hasValidServiceBearer } from '@/lib/auth-context';
 import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -87,7 +87,7 @@ interface DirectConversation {
 
 export async function POST(req: NextRequest) {
   const actor = await requireActor(req, { scopes: ['sales:write'] });
-  if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!actor && !hasValidServiceBearer(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await req.json().catch(() => ({})) as {
     cursor?: string;
