@@ -1382,6 +1382,27 @@ export function SalesDashboard({
   const [calling, setCalling] = useState<string | null>(null);
   const [showLogCall, setShowLogCall] = useState(false);
   const [callNotes, setCallNotes] = useState('');
+  const [showNewCompany, setShowNewCompany] = useState(false);
+  const [newCompany, setNewCompany] = useState({ name: '', website: '', phone: '' });
+  const [savingCompany, setSavingCompany] = useState(false);
+
+  async function submitNewCompany() {
+    if (!newCompany.name.trim()) return;
+    setSavingCompany(true);
+    const res = await fetch('/api/sales/companies', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newCompany),
+    });
+    setSavingCompany(false);
+    if (res.ok) {
+      const { id } = await res.json() as { id: string };
+      setShowNewCompany(false);
+      setNewCompany({ name: '', website: '', phone: '' });
+      router.push(`/dashboard/sales?member=${memberId}&company=${id}`);
+      router.refresh();
+    }
+  }
   const [callOutcome, setCallOutcome] = useState('reached');
   const [callDurationMin, setCallDurationMin] = useState('');
   const [callNextStep, setCallNextStep] = useState('');
@@ -1603,6 +1624,14 @@ export function SalesDashboard({
               />
               <button
                 type="button"
+                className="sales-btn"
+                onClick={() => setShowNewCompany((v) => !v)}
+                title="Neues Unternehmen anlegen"
+              >
+                + Neu
+              </button>
+              <button
+                type="button"
                 className="sales-btn sales-kaltakquise-btn"
                 onClick={() => setShowColdCall(true)}
                 title={`${coldCallQueue.length} Leads in der Queue`}
@@ -1610,6 +1639,48 @@ export function SalesDashboard({
                 Kaltakquise
               </button>
             </div>
+            {showNewCompany && (
+              <div className="sales-new-company-form">
+                <input
+                  autoFocus
+                  placeholder="Unternehmensname *"
+                  value={newCompany.name}
+                  onChange={(e) => setNewCompany({ ...newCompany, name: e.target.value })}
+                  className="sales-search"
+                  onKeyDown={(e) => e.key === 'Enter' && submitNewCompany()}
+                />
+                <input
+                  placeholder="Website (optional)"
+                  value={newCompany.website}
+                  onChange={(e) => setNewCompany({ ...newCompany, website: e.target.value })}
+                  className="sales-search"
+                />
+                <input
+                  placeholder="Telefon (optional)"
+                  value={newCompany.phone}
+                  onChange={(e) => setNewCompany({ ...newCompany, phone: e.target.value })}
+                  className="sales-search"
+                  onKeyDown={(e) => e.key === 'Enter' && submitNewCompany()}
+                />
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    type="button"
+                    className="sales-btn"
+                    onClick={submitNewCompany}
+                    disabled={savingCompany || !newCompany.name.trim()}
+                  >
+                    {savingCompany ? 'Speichert…' : 'Anlegen'}
+                  </button>
+                  <button
+                    type="button"
+                    className="sales-btn"
+                    onClick={() => { setShowNewCompany(false); setNewCompany({ name: '', website: '', phone: '' }); }}
+                  >
+                    Abbrechen
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="sales-filter-tabs" role="tablist">
               {FILTER_TABS.map((t) => (
                 <button

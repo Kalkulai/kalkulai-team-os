@@ -204,6 +204,37 @@ export async function updateColdStreak(
   }
 }
 
+export async function createCompany(input: {
+  name: string;
+  website?: string | null;
+  phone?: string | null;
+  ownerMemberId: string;
+}): Promise<string> {
+  const { data, error } = await supabaseAdmin
+    .from('sales_companies')
+    .insert({
+      owner_member_id: input.ownerMemberId,
+      name: input.name.trim(),
+      website: input.website?.trim() || null,
+      stage: 'prospecting',
+    })
+    .select('id')
+    .single();
+  if (error) throw new Error(`sales_companies insert failed: ${error.message}`);
+  const companyId = data.id as string;
+  if (input.phone?.trim()) {
+    await supabaseAdmin.from('sales_endpoints').insert({
+      company_id: companyId,
+      contact_id: null,
+      channel: 'phone',
+      value: input.phone.trim(),
+      endpoint_type: 'direct',
+      source: 'manual',
+    });
+  }
+  return companyId;
+}
+
 export async function upsertCompanyFromHubspot(row: Record<string, unknown>): Promise<string> {
   const { data, error } = await supabaseAdmin
     .from('sales_companies')
