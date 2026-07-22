@@ -11,21 +11,31 @@ export async function GET(req: NextRequest) {
   const token = process.env.SIPGATE_TOKEN!;
   const auth = Buffer.from(`${tokenId}:${token}`).toString('base64');
 
-  const [devicesRes, userRes] = await Promise.all([
-    fetch('https://api.sipgate.com/v2/devices', {
-      headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
-    }),
-    fetch('https://api.sipgate.com/v2/account', {
-      headers: { Authorization: `Basic ${auth}`, Accept: 'application/json' },
-    }),
+  const headers = { Authorization: `Basic ${auth}`, Accept: 'application/json' };
+
+  const [usersRes, usersMeRes, accountRes] = await Promise.all([
+    fetch('https://api.sipgate.com/v2/users', { headers }),
+    fetch('https://api.sipgate.com/v2/users/defaultuser', { headers }),
+    fetch('https://api.sipgate.com/v2/account', { headers }),
   ]);
+
+  const usersData = usersRes.ok ? await usersRes.json() : { status: usersRes.status, body: await usersRes.text() };
+  const usersMeData = usersMeRes.ok ? await usersMeRes.json() : { status: usersMeRes.status, body: await usersMeRes.text() };
+  const accountData = accountRes.ok ? await accountRes.json() : await accountRes.text();
+
+  // Try devices for each user if we got users
+  const userDevices: Record<string, unknown> = {};
+  const userList = (usersData as { items?: { id: string }[] })?.items ?? [];
+  for (const u of userList.slice(0, 5)) {
+    const dr = await fetch(`https://api.sipgate.com/v2/${u.id}/devices`, { headers });
+    userDevices[u.id] = dr.ok ? await dr.json() : { status: dr.status };
+  }
 
   return NextResponse.json({
     env_device_id: process.env.SIPGATE_DEVICE_ID,
-    env_caller_id: process.env.SIPGATE_CALLER_ID ?? null,
-    devices_status: devicesRes.status,
-    devices: devicesRes.ok ? await devicesRes.json() : await devicesRes.text(),
-    account_status: userRes.status,
-    account: userRes.ok ? await userRes.json() : await userRes.text(),
+    account: accountData,
+    users: usersData,
+    defaultuser: usersMeData,
+    user_devices: userDevices,
   });
 }
