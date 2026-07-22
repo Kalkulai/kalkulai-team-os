@@ -93,6 +93,143 @@ function daysAgo(iso: string): string {
   return `vor ${days}d`;
 }
 
+// ── Sync Admin Panel ──────────────────────────────────────────────────────────
+
+type SyncStatus = { label: string; error?: string } | null;
+
+function SyncAdminPanel({ memberId }: { memberId: string }) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<SyncStatus>(null);
+
+  async function runHubSpotSync() {
+    setBusy(true);
+    setStatus({ label: 'HubSpot Sync läuft…' });
+    let total = 0;
+    let after: string | undefined = undefined;
+    try {
+      while (true) {
+        const body: { after?: string } = after ? { after } : {};
+        const res = await fetch('/api/sales/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = (await res.json()) as { ok: boolean; stats?: { upserted?: number }; nextAfter: string | null };
+        total += data.stats?.upserted ?? 0;
+        setStatus({ label: `HubSpot: ${total} Firmen importiert…` });
+        if (!data.nextAfter) break;
+        after = data.nextAfter;
+      }
+      setStatus({ label: `HubSpot: ${total} Firmen importiert ✓` });
+      router.refresh();
+    } catch (err) {
+      setStatus({ label: 'HubSpot Sync fehlgeschlagen', error: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runNotionSync() {
+    setBusy(true);
+    setStatus({ label: 'Notion Sync läuft…' });
+    let total = 0;
+    let cursor: string | undefined = undefined;
+    try {
+      while (true) {
+        const body: { cursor?: string; limit: number } = { limit: 20, ...(cursor ? { cursor } : {}) };
+        const res = await fetch('/api/sales/sync-notion', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = (await res.json()) as { ok: boolean; imported: number; skipped: number; failed: number; hasMore: boolean; nextCursor: string | null };
+        total += data.imported;
+        setStatus({ label: `Notion: ${total} Gespräche importiert…` });
+        if (!data.hasMore || !data.nextCursor) break;
+        cursor = data.nextCursor;
+      }
+      setStatus({ label: `Notion: ${total} Gespräche importiert ✓` });
+      router.refresh();
+    } catch (err) {
+      setStatus({ label: 'Notion Sync fehlgeschlagen', error: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function runKiExtraction() {
+    setBusy(true);
+    setStatus({ label: 'KI-Analyse läuft…' });
+    try {
+      const res = await fetch('/api/sales/extract-insights', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ force: false, limit: 10 }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as { updated: number; skipped: number; failed: number; results: unknown[] };
+      setStatus({ label: `KI-Analyse: ${data.updated} aktualisiert, ${data.skipped} übersprungen ✓` });
+      router.refresh();
+    } catch (err) {
+      setStatus({ label: 'KI-Analyse fehlgeschlagen', error: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="sync-admin-panel">
+      <button
+        type="button"
+        className="sync-admin-toggle sales-btn sales-btn-sm"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+      >
+        ↻ Daten
+      </button>
+      {open && (
+        <div className="sync-admin-body">
+          <div className="sync-admin-buttons">
+            <button
+              type="button"
+              className="sync-btn sales-btn sales-btn-sm"
+              onClick={runHubSpotSync}
+              disabled={busy}
+            >
+              HubSpot Sync
+            </button>
+            <button
+              type="button"
+              className="sync-btn sales-btn sales-btn-sm"
+              onClick={runNotionSync}
+              disabled={busy}
+            >
+              Notion Sync
+            </button>
+            <button
+              type="button"
+              className="sync-btn sales-btn sales-btn-sm"
+              onClick={runKiExtraction}
+              disabled={busy}
+            >
+              KI-Analyse aller Leads
+            </button>
+          </div>
+          {status && (
+            <span className={status.error ? 'sync-error' : 'sync-status'}>
+              {status.label}{status.error ? ` — ${status.error}` : ''}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Customer Profile Panel ────────────────────────────────────────────────────
 
 function CustomerProfilePanel({
@@ -991,6 +1128,8 @@ export function SalesDashboard({
           </div>
         </div>
       </header>
+
+      <SyncAdminPanel memberId={memberId} />
 
       {/* Stats bar */}
       <div className="sales-stats-bar">

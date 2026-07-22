@@ -6401,3 +6401,50 @@ html.light .agent-launch-error {
 }
 .sales-notion-link:hover { text-decoration: underline; }
 
+
+/* ── Sync Admin Panel ─────────────────────────────────────────────── */
+
+.sync-admin-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 20px;
+  border-bottom: 1px solid var(--line-1);
+  background: var(--glass-1);
+  flex-wrap: wrap;
+  min-height: 36px;
+}
+
+.sync-admin-toggle {
+  color: var(--ink-3);
+  border-color: var(--line-1);
+  background: transparent;
+}
+.sync-admin-toggle:hover { color: var(--ink-1); background: rgba(255,255,255,0.05); }
+
+.sync-admin-body {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.sync-admin-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.sync-btn {
+  white-space: nowrap;
+}
+
+.sync-status {
+  font: 400 11.5px/1 var(--font);
+  color: var(--ink-3);
+}
+
+.sync-error {
+  font: 400 11.5px/1 var(--font);
+  color: #f87171;
+}
