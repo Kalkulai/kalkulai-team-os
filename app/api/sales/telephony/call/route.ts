@@ -30,11 +30,9 @@ export async function POST(req: NextRequest) {
   if (error || !endpoint) return NextResponse.json({ error: 'Endpoint not found' }, { status: 404 });
   if (endpoint.do_not_call) return NextResponse.json({ error: 'do_not_call' }, { status: 403 });
 
-  const callerNumber = process.env.SIPGATE_CALLER_ID!;
-  const deviceId = process.env.SIPGATE_DEVICE_ID ?? 'e0';
   const callee = endpoint.value.replace(/\s+/g, '');
 
-  const requestBody = { caller: 'p0', callee, callerId: callerNumber, deviceId };
+  const requestBody = { caller: 'e0', callee };
   console.log('SipGate request body:', JSON.stringify(requestBody));
 
   const res = await fetch('https://api.sipgate.com/v2/sessions/calls', {
