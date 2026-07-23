@@ -45,9 +45,9 @@ export async function POST(req: NextRequest) {
 
   if (!res.ok) {
     const body = await res.text();
-    const headers = Object.fromEntries(res.headers.entries());
-    console.error(`SipGate failed: HTTP ${res.status} body=${body} headers=${JSON.stringify(headers)}`);
-    return NextResponse.json({ error: `sipgate error ${res.status}: ${body}`, headers, requestBody }, { status: 502 });
+    const detail = `sipgate ${res.status} | sent: ${JSON.stringify(requestBody)} | response: "${body}"`;
+    console.error(detail);
+    return NextResponse.json({ error: detail }, { status: 502 });
   }
 
   const data = await res.json() as { sessionId?: string };
