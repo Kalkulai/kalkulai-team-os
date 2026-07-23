@@ -45,7 +45,8 @@ export async function POST(req: NextRequest) {
 
   if (!res.ok) {
     const body = await res.text();
-    const detail = `sipgate ${res.status} | sent: ${JSON.stringify(requestBody)} | response: "${body}"`;
+    const responseHeaders = Object.fromEntries(res.headers.entries());
+    const detail = `sipgate ${res.status} | sent: ${JSON.stringify(requestBody)} | response: "${body}" | resp-headers: ${JSON.stringify(responseHeaders)}`;
     console.error(detail);
     return NextResponse.json({ error: detail }, { status: 502 });
   }
