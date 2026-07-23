@@ -24,11 +24,21 @@ export async function GET(req: NextRequest) {
   const accountData = accountRes.ok ? await accountRes.json() : await accountRes.text();
 
   const userDevices: Record<string, unknown> = {};
+  const userPhonelines: Record<string, unknown> = {};
   const userList = (usersData as { items?: { id: string }[] })?.items ?? [];
   for (const u of userList.slice(0, 5)) {
-    const dr = await fetch(`https://api.sipgate.com/v2/${u.id}/devices`, { headers });
-    userDevices[u.id] = dr.ok ? await dr.json() : { status: dr.status };
+    const [dr, pr] = await Promise.all([
+      fetch(`https://api.sipgate.com/v2/${u.id}/devices`, { headers }),
+      fetch(`https://api.sipgate.com/v2/${u.id}/phonelines`, { headers }),
+    ]);
+    userDevices[u.id] = dr.ok ? await dr.json() : { status: dr.status, body: await dr.text() };
+    userPhonelines[u.id] = pr.ok ? await pr.json() : { status: pr.status, body: await pr.text() };
   }
+
+  const [scopesRes, routingsRes] = await Promise.all([
+    fetch('https://api.sipgate.com/v2/authorization/userinfo', { headers }),
+    fetch('https://api.sipgate.com/v2/w0/routings', { headers }),
+  ]);
 
   return NextResponse.json({
     env_device_id: process.env.SIPGATE_DEVICE_ID,
@@ -36,5 +46,8 @@ export async function GET(req: NextRequest) {
     users: usersData,
     defaultuser: usersMeData,
     user_devices: userDevices,
+    user_phonelines: userPhonelines,
+    token_scopes: scopesRes.ok ? await scopesRes.json() : { status: scopesRes.status, body: await scopesRes.text() },
+    routings: routingsRes.ok ? await routingsRes.json() : { status: routingsRes.status },
   });
 }
