@@ -32,7 +32,8 @@ export async function POST(req: NextRequest) {
 
   const callee = endpoint.value.replace(/\s+/g, '');
 
-  const requestBody = { caller: 'e0', callee };
+  const callerNumber = process.env.SIPGATE_CALLER_ID!;
+  const requestBody = { caller: callerNumber, callee, deviceId: 'e0' };
   console.log('SipGate request body:', JSON.stringify(requestBody));
 
   const res = await fetch('https://api.sipgate.com/v2/sessions/calls', {
