@@ -31,24 +31,23 @@ export async function POST(req: NextRequest) {
   if (endpoint.do_not_call) return NextResponse.json({ error: 'do_not_call' }, { status: 403 });
 
   const callerNumber = process.env.SIPGATE_CALLER_ID!;
-  const deviceId = process.env.SIPGATE_DEVICE_ID!;
+  const deviceId = process.env.SIPGATE_DEVICE_ID ?? 'e0';
   const callee = endpoint.value.replace(/\s+/g, '');
+
+  const requestBody = { caller: deviceId, callee, callerId: callerNumber };
+  console.log('SipGate request body:', JSON.stringify(requestBody));
 
   const res = await fetch('https://api.sipgate.com/v2/sessions/calls', {
     method: 'POST',
     headers: sipgateHeaders(),
-    body: JSON.stringify({
-      caller: callerNumber,
-      callee,
-      callerId: callerNumber,
-      deviceId,
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!res.ok) {
     const body = await res.text();
-    console.error(`SipGate /v2/sessions/calls failed: HTTP ${res.status} — ${body}`);
-    return NextResponse.json({ error: `sipgate error ${res.status}: ${body}` }, { status: 502 });
+    const headers = Object.fromEntries(res.headers.entries());
+    console.error(`SipGate failed: HTTP ${res.status} body=${body} headers=${JSON.stringify(headers)}`);
+    return NextResponse.json({ error: `sipgate error ${res.status}: ${body}`, headers, requestBody }, { status: 502 });
   }
 
   const data = await res.json() as { sessionId?: string };
