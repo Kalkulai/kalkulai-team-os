@@ -1,5 +1,5 @@
 'use client';
-import { Suspense } from 'react';
+import { Suspense, useState, useCallback } from 'react';
 import { useActiveMember } from '@/lib/active-member';
 import { KpiManager } from '@/components/KpiManager';
 import type { TeamMember } from '@/types';
@@ -99,6 +99,8 @@ function SettingsContent() {
         </div>
       </section>
 
+      <ImportPanel />
+
       <section className="glass card-rise overflow-hidden">
         <header className="relative z-[1] flex items-baseline justify-between gap-2.5 px-5 pt-[18px] pb-[14px]">
           <span className="ovr">Verbindungs-Status</span>
@@ -162,6 +164,134 @@ function SettingsContent() {
           )}
         </div>
       </section>
+    </div>
+  );
+}
+
+type ImportStatus = 'idle' | 'running' | 'done' | 'error';
+
+interface HubspotImportState { status: ImportStatus; companies: number; pages: number }
+interface NotionImportState  { status: ImportStatus; imported: number; skipped: number; pages: number }
+interface PilotImportState   { status: ImportStatus; seeded: number; companies: string[] }
+
+function ImportPanel() {
+  const [hs, setHs] = useState<HubspotImportState>({ status: 'idle', companies: 0, pages: 0 });
+  const [no, setNo] = useState<NotionImportState>({ status: 'idle', imported: 0, skipped: 0, pages: 0 });
+  const [pi, setPi] = useState<PilotImportState>({ status: 'idle', seeded: 0, companies: [] });
+  const [running, setRunning] = useState(false);
+
+  const startImport = useCallback(async () => {
+    setRunning(true);
+    setHs({ status: 'running', companies: 0, pages: 0 });
+    setNo({ status: 'running', imported: 0, skipped: 0, pages: 0 });
+    setPi({ status: 'idle', seeded: 0, companies: [] });
+
+    const [hubResult, notionResult] = await Promise.allSettled([
+      (async () => {
+        let after: string | undefined;
+        let totalCompanies = 0;
+        let pages = 0;
+        do {
+          const r = await fetch('/api/sales/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ after }),
+          });
+          if (!r.ok) throw new Error(`HubSpot ${r.status}`);
+          const d = await r.json();
+          totalCompanies += d.stats?.companies ?? 0;
+          pages++;
+          after = d.nextAfter ?? undefined;
+          setHs({ status: 'running', companies: totalCompanies, pages });
+        } while (after);
+        return totalCompanies;
+      })(),
+      (async () => {
+        let cursor: string | undefined;
+        let totalImported = 0;
+        let totalSkipped = 0;
+        let pages = 0;
+        do {
+          const r = await fetch('/api/sales/sync-notion', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cursor, limit: 20 }),
+          });
+          if (!r.ok) throw new Error(`Notion ${r.status}`);
+          const d = await r.json();
+          totalImported += d.imported ?? 0;
+          totalSkipped += d.skipped ?? 0;
+          pages++;
+          cursor = d.nextCursor ?? undefined;
+          setNo({ status: 'running', imported: totalImported, skipped: totalSkipped, pages });
+        } while (cursor);
+        return totalImported;
+      })(),
+    ]);
+
+    setHs((s) => ({ ...s, status: hubResult.status === 'fulfilled' ? 'done' : 'error' }));
+    setNo((s) => ({ ...s, status: notionResult.status === 'fulfilled' ? 'done' : 'error' }));
+
+    setPi({ status: 'running', seeded: 0, companies: [] });
+    try {
+      const r = await fetch('/api/sales/seed-pilots', { method: 'POST' });
+      const d = await r.json();
+      setPi({ status: 'done', seeded: d.seeded ?? 0, companies: d.companies ?? [] });
+    } catch {
+      setPi((s) => ({ ...s, status: 'error' }));
+    }
+
+    setRunning(false);
+  }, []);
+
+  return (
+    <section className="glass card-rise overflow-hidden">
+      <header className="relative z-[1] px-5 pt-[18px] pb-[14px]">
+        <span className="ovr">Daten importieren</span>
+      </header>
+      <div className="relative z-[1] px-5 pb-5 space-y-4">
+        <p className="text-[12.5px] text-[var(--ink-3)]">
+          Importiert alle HubSpot-Firmen und Notion-Transkripte in die Datenbank. HubSpot und Notion laufen parallel.
+        </p>
+        <div className="grid gap-2.5 md:grid-cols-3">
+          <ImportStatusCard
+            label="HubSpot Firmen"
+            status={hs.status}
+            detail={hs.status !== 'idle' ? `${hs.companies} Firmen · ${hs.pages} Seiten` : undefined}
+          />
+          <ImportStatusCard
+            label="Notion Transkripte"
+            status={no.status}
+            detail={no.status !== 'idle' ? `${no.imported} importiert · ${no.skipped} übersprungen` : undefined}
+          />
+          <ImportStatusCard
+            label="Pilot-Status"
+            status={pi.status}
+            detail={pi.status === 'done' ? `${pi.seeded} Pilot-Kunden markiert` : undefined}
+          />
+        </div>
+        <button onClick={startImport} disabled={running} className="btn-action disabled:opacity-40">
+          {running ? 'Importiert…' : 'Import starten'}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function ImportStatusCard({ label, status, detail }: { label: string; status: ImportStatus; detail?: string }) {
+  const color =
+    status === 'done' ? 'text-emerald-400' :
+    status === 'error' ? 'text-red-400' :
+    status === 'running' ? 'text-amber-400' :
+    'text-[var(--ink-3)]';
+  const icon = status === 'done' ? '✓' : status === 'error' ? '✗' : status === 'running' ? '…' : '○';
+  return (
+    <div className="rounded-[9px] border border-[var(--line-1)] bg-white/[0.025] p-3">
+      <div className="flex items-center gap-2">
+        <span className={`text-[13px] font-medium ${color}`}>{icon}</span>
+        <span className="text-[13px] font-medium text-[var(--ink-1)]">{label}</span>
+      </div>
+      {detail && <p className="mt-1 text-[11.5px] text-[var(--ink-3)]">{detail}</p>}
     </div>
   );
 }
