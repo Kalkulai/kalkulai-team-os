@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireActor } from '@/lib/auth-context';
+import { requireActor, hasValidServiceBearer } from '@/lib/auth-context';
 import { supabaseAdmin } from '@/lib/supabase';
 
 export const dynamic = 'force-dynamic';
@@ -20,7 +20,7 @@ const PILOT_DOMAIN_TERMS = [
 
 export async function POST(req: NextRequest) {
   const actor = await requireActor(req, { scopes: ['sales:write'] });
-  if (!actor) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!actor && !hasValidServiceBearer(req)) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   // Find companies via email endpoints matching known pilot domains
   const { data: matches, error } = await supabaseAdmin
