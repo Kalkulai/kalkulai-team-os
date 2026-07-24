@@ -30,23 +30,24 @@ export async function POST(req: NextRequest) {
   if (error || !endpoint) return NextResponse.json({ error: 'Endpoint not found' }, { status: 404 });
   if (endpoint.do_not_call) return NextResponse.json({ error: 'do_not_call' }, { status: 403 });
 
-  const deviceId = process.env.SIPGATE_DEVICE_ID!;
-  const callerId = process.env.SIPGATE_CALLER_ID ?? undefined;
+  const callee = endpoint.value.replace(/\s+/g, '');
+
+  const callerNumber = process.env.SIPGATE_CALLER_ID!;
+  const requestBody = { caller: callerNumber, callee, deviceId: 'e0' };
+  console.log('SipGate request body:', JSON.stringify(requestBody));
 
   const res = await fetch('https://api.sipgate.com/v2/sessions/calls', {
     method: 'POST',
     headers: sipgateHeaders(),
-    body: JSON.stringify({
-      caller: deviceId,
-      callee: endpoint.value,
-      ...(callerId ? { callerId } : {}),
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!res.ok) {
     const body = await res.text();
-    console.error(`SipGate /v2/sessions/calls failed: HTTP ${res.status} — ${body}`);
-    return NextResponse.json({ error: `sipgate error ${res.status}: ${body}` }, { status: 502 });
+    const responseHeaders = Object.fromEntries(res.headers.entries());
+    const detail = `sipgate ${res.status} | sent: ${JSON.stringify(requestBody)} | response: "${body}" | resp-headers: ${JSON.stringify(responseHeaders)}`;
+    console.error(detail);
+    return NextResponse.json({ error: detail }, { status: 502 });
   }
 
   const data = await res.json() as { sessionId?: string };
