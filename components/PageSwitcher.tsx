@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Calendar, MessageCircle, Settings, ChevronDown, Check, Building2, Bot, Map, TrendingUp } from 'lucide-react';
+import { Calendar, MessageCircle, Settings, ChevronDown, Check, Building2, Bot, Map, TrendingUp, Network } from 'lucide-react';
 import { useActiveMember } from '@/lib/active-member';
 import { isLeonMemberId } from '@/lib/agent-access';
 import { salesOsEnabledForMember } from '@/lib/sales-access';
@@ -11,6 +11,7 @@ type Route =
   | '/dashboard'
   | '/dashboard/chat'
   | '/dashboard/company'
+  | '/dashboard/network'
   | '/dashboard/agents'
   | '/dashboard/plan'
   | '/dashboard/sales'
@@ -27,6 +28,7 @@ const PAGES: PageDef[] = [
   { href: '/dashboard/plan',    title: 'Plan',          Icon: Map },
   { href: '/dashboard/chat',    title: 'Chat',          Icon: MessageCircle },
   { href: '/dashboard/company', title: 'Firma',         Icon: Building2 },
+  { href: '/dashboard/network', title: 'Netzwerk',      Icon: Network },
   { href: '/dashboard/sales',   title: 'Sales',         Icon: TrendingUp },
   { href: '/dashboard/agents',  title: 'Agents',        Icon: Bot },
   { href: '/settings',          title: 'Einstellungen', Icon: Settings },
@@ -40,6 +42,8 @@ function activePageFor(pathname: string | null, pages: PageDef[]): PageDef {
   if (chat && pathname.startsWith('/dashboard/chat')) return chat;
   const company = pages.find((p) => p.href === '/dashboard/company');
   if (company && pathname.startsWith('/dashboard/company')) return company;
+  const network = pages.find((p) => p.href === '/dashboard/network');
+  if (network && pathname.startsWith('/dashboard/network')) return network;
   const sales = pages.find((p) => p.href === '/dashboard/sales');
   if (sales && pathname.startsWith('/dashboard/sales')) return sales;
   const agents = pages.find((p) => p.href === '/dashboard/agents');
